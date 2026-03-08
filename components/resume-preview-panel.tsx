@@ -1,99 +1,47 @@
 "use client"
 
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
-  Download,
-  Copy,
-  Check,
-  Eye,
-  Loader2,
-  FileText,
-  Share2,
   AlertTriangle,
+  Check,
   CheckCircle,
+  Copy,
+  Download,
+  Eye,
+  FileText,
+  Loader2,
+  Maximize2,
+  Share2,
 } from "lucide-react"
-import { Button } from "@/components/ui/button"
 import { PDFViewer } from "@/components/pdf-viewer"
+import { Button } from "@/components/ui/button"
+import {
+  AUTO_COMPILE_DELAY,
+  MAX_LATEX_LENGTH,
+  validateLaTeX,
+} from "@/lib/latex-editor"
 import { cn } from "@/lib/utils"
-import { useState, useEffect, useMemo, useRef, useCallback } from "react"
-
-const AUTO_COMPILE_DELAY = 900
-const MAX_LATEX_LENGTH = 100000
-
-interface LaTeXError {
-  type: "error" | "warning"
-  message: string
-  line?: number
-}
-
-function validateLaTeX(content: string): LaTeXError[] {
-  const errors: LaTeXError[] = []
-  if (!content.trim()) return errors
-
-  const lines = content.split("\n")
-  const hasDocumentClass = content.includes("\\documentclass")
-  const hasBeginDocument = content.includes("\\begin{document}")
-  const hasEndDocument = content.includes("\\end{document}")
-
-  if (!hasDocumentClass) {
-    errors.push({ type: "error", message: "Missing \\documentclass. Add: \\documentclass{article}", line: 1 })
-  }
-  if (hasBeginDocument && !hasEndDocument) {
-    errors.push({ type: "error", message: "Missing \\end{document}. Add it at the end.", line: lines.findIndex(l => l.includes("\\begin{document}")) + 1 })
-  }
-  if (!hasBeginDocument && hasEndDocument) {
-    errors.push({ type: "error", message: "Missing \\begin{document}. Add it before content.", line: lines.findIndex(l => l.includes("\\end{document}")) + 1 })
-  }
-
-  const envStack: Array<{name: string, line: number}> = []
-  let braceCount = 0, bracketCount = 0
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i], lineNum = i + 1
-    for (let j = 0; j < line.length; j++) {
-      const char = line[j], prev = j > 0 ? line[j-1] : ''
-      if (char === '{' && prev !== '\\') braceCount++
-      if (char === '}' && prev !== '\\') braceCount--
-      if (char === '[' && prev !== '\\') bracketCount++
-      if (char === ']' && prev !== '\\') bracketCount--
-      if (braceCount < 0) { errors.push({ type: "error", message: "Unmatched }. Remove or add {", line: lineNum }); braceCount = 0 }
-      if (bracketCount < 0) { errors.push({ type: "error", message: "Unmatched ]. Remove or add [", line: lineNum }); bracketCount = 0 }
-    }
-    const beginMatch = line.match(/\\begin\{([^}]+)\}/)
-    if (beginMatch) envStack.push({ name: beginMatch[1], line: lineNum })
-    const endMatch = line.match(/\\end\{([^}]+)\}/)
-    if (endMatch) {
-      const envName = endMatch[1]
-      if (envStack.length === 0) {
-        errors.push({ type: "error", message: `Unmatched \\end{${envName}}. Add \\begin{${envName}} before.`, line: lineNum })
-      } else {
-        const last = envStack.pop()!
-        if (last.name !== envName) errors.push({ type: "error", message: `\\begin{${last.name}} at line ${last.line} closed with \\end{${envName}}. Use \\end{${last.name}}.`, line: lineNum })
-      }
-    }
-    if (line.includes('_') && !line.includes('\\_') && !line.match(/\$.*_.*\$/)) errors.push({ type: "warning", message: "Underscore outside math. Use \\_ or $ $", line: lineNum })
-    if (line.includes('&') && !line.includes('\\&') && !line.match(/\\begin\{(tabular|array|align)/)) errors.push({ type: "warning", message: "Ampersand outside table. Use \\&", line: lineNum })
-    if (line.includes('%') && !line.includes('\\%')) errors.push({ type: "warning", message: "Percent sign should be \\%", line: lineNum })
-  }
-  envStack.forEach(env => errors.push({ type: "error", message: `Unclosed \\begin{${env.name}} at line ${env.line}. Add \\end{${env.name}}`, line: env.line }))
-  if (braceCount > 0) errors.push({ type: "error", message: `${braceCount} unclosed {. Add closing }` })
-  if (bracketCount > 0) errors.push({ type: "error", message: `${bracketCount} unclosed [. Add closing ]` })
-  return errors
-}
 
 interface ResumePreviewPanelProps {
   latexContent: string
+  editableLatex?: string
   isGenerating: boolean
+  onEditableLatexChange?: (value: string) => void
+  onOpenSplitWorkspace?: () => void
   statusMessage?: string
 }
 
 export function ResumePreviewPanel({
   latexContent,
+  editableLatex: controlledEditableLatex,
   isGenerating,
+  onEditableLatexChange,
+  onOpenSplitWorkspace,
   statusMessage,
 }: ResumePreviewPanelProps) {
   const [copied, setCopied] = useState(false)
   const [activeTab, setActiveTab] = useState<"edit" | "preview" | "info">("edit")
-  const [editableLatex, setEditableLatex] = useState<string>(latexContent)
+  const [internalEditableLatex, setInternalEditableLatex] = useState<string>(latexContent)
   const [convertingToPDF, setConvertingToPDF] = useState(false)
   const [pdfError, setPdfError] = useState<string | null>(null)
   const [pdfData, setPdfData] = useState<ArrayBuffer | null>(null)
@@ -104,23 +52,38 @@ export function ResumePreviewPanel({
   const lineNumbersRef = useRef<HTMLDivElement>(null)
   const autoCompileTimerRef = useRef<NodeJS.Timeout | null>(null)
 
+  const editableLatex =
+    controlledEditableLatex !== undefined ? controlledEditableLatex : internalEditableLatex
+
+  const setEditableLatex = useCallback(
+    (value: string) => {
+      if (onEditableLatexChange) {
+        onEditableLatexChange(value)
+        return
+      }
+
+      setInternalEditableLatex(value)
+    },
+    [onEditableLatexChange]
+  )
+
   const latexErrors = useMemo(() => validateLaTeX(editableLatex), [editableLatex])
-  const hasErrors = latexErrors.some((e) => e.type === "error")
-  const hasWarnings = latexErrors.some((e) => e.type === "warning")
+  const hasErrors = latexErrors.some((error) => error.type === "error")
+  const hasWarnings = latexErrors.some((error) => error.type === "warning")
 
   const lineNumbers = useMemo(() => {
     if (!editableLatex) return []
     const lineCount = (editableLatex.match(/\n/g) || []).length + 1
-    return Array.from({ length: lineCount }, (_, i) => i + 1)
+    return Array.from({ length: lineCount }, (_, index) => index + 1)
   }, [editableLatex])
 
   const errorLineNumbers = useMemo(() => {
-    return new Set(latexErrors.filter(e => e.line).map(e => e.line!))
+    return new Set(latexErrors.filter((error) => error.line).map((error) => error.line!))
   }, [latexErrors])
 
   const handleEditorScroll = useCallback(() => {
     if (editorRef.current && lineNumbersRef.current) {
-      const child = lineNumbersRef.current.firstElementChild as HTMLElement
+      const child = lineNumbersRef.current.firstElementChild as HTMLElement | null
       if (child) {
         child.style.transform = `translateY(-${editorRef.current.scrollTop}px)`
       }
@@ -128,72 +91,69 @@ export function ResumePreviewPanel({
   }, [])
 
   useEffect(() => {
-    if (latexContent) {
-      setEditableLatex(latexContent)
-      setPdfData(null)
-      setPreviewError(null)
-      setPdfError(null)
+    if (controlledEditableLatex === undefined) {
+      setInternalEditableLatex(latexContent)
     }
-  }, [latexContent])
 
-  const compilePreview = useCallback(
-    async (content: string) => {
-      if (!content.trim()) {
-        setPdfData(null)
-        setPreviewError("No LaTeX content to preview.")
-        return
-      }
+    setPdfData(null)
+    setPreviewError(null)
+    setPdfError(null)
+  }, [controlledEditableLatex, latexContent])
 
-      setIsLoadingPreview(true)
-      setPreviewError(null)
-      setPdfError(null)
+  const compilePreview = useCallback(async (content: string) => {
+    if (!content.trim()) {
+      setPdfData(null)
+      setPreviewError("No LaTeX content to preview.")
+      return
+    }
 
-      try {
-        const response = await fetch("/api/latex-to-pdf", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            latex: content,
-            preview: true,
-          }),
-        })
+    setIsLoadingPreview(true)
+    setPreviewError(null)
+    setPdfError(null)
 
-        if (!response.ok) {
-          let message = "LaTeX compilation failed."
+    try {
+      const response = await fetch("/api/latex-to-pdf", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          latex: content,
+          preview: true,
+        }),
+      })
 
-          try {
-            const errorData = await response.json()
-            message = errorData?.details || errorData?.error || message
-          } catch {
-            // ignore
-          }
+      if (!response.ok) {
+        let message = "LaTeX compilation failed."
 
-          throw new Error(message)
+        try {
+          const errorData = await response.json()
+          message = errorData?.details || errorData?.error || message
+        } catch {
+          // ignore parse errors for fallback message
         }
 
-        const arrayBuffer = await response.arrayBuffer()
-
-        if (!arrayBuffer || arrayBuffer.byteLength === 0) {
-          throw new Error("Empty PDF returned.")
-        }
-
-        setPdfData(arrayBuffer)
-      } catch (error) {
-        setPdfData(null)
-        setPreviewError(
-          error instanceof Error ? error.message : "Failed to generate preview."
-        )
-      } finally {
-        setIsLoadingPreview(false)
+        throw new Error(message)
       }
-    },
-    []
-  )
+
+      const arrayBuffer = await response.arrayBuffer()
+
+      if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+        throw new Error("Empty PDF returned.")
+      }
+
+      setPdfData(arrayBuffer)
+    } catch (error) {
+      setPdfData(null)
+      setPreviewError(error instanceof Error ? error.message : "Failed to generate preview.")
+    } finally {
+      setIsLoadingPreview(false)
+    }
+  }, [])
 
   useEffect(() => {
     if (activeTab !== "preview") return
+
     if (!editableLatex.trim()) {
       setPdfData(null)
       setPreviewError("No LaTeX content to preview.")
@@ -201,6 +161,7 @@ export function ResumePreviewPanel({
     }
 
     if (editableLatex.length > MAX_LATEX_LENGTH) {
+      setPdfData(null)
       setPreviewError("LaTeX content too large for preview.")
       return
     }
@@ -210,7 +171,7 @@ export function ResumePreviewPanel({
     }
 
     autoCompileTimerRef.current = setTimeout(() => {
-      compilePreview(editableLatex)
+      void compilePreview(editableLatex)
     }, AUTO_COMPILE_DELAY)
 
     return () => {
@@ -218,9 +179,173 @@ export function ResumePreviewPanel({
         clearTimeout(autoCompileTimerRef.current)
       }
     }
-  }, [editableLatex, activeTab, compilePreview])
+  }, [activeTab, compilePreview, editableLatex])
 
   const currentContent = editableLatex || latexContent
+
+  const activateTab = useCallback(
+    (tab: "edit" | "preview" | "info") => {
+      setActiveTab(tab)
+
+      if (tab === "preview") {
+        const content = editableLatex || latexContent
+        if (content.trim()) {
+          window.setTimeout(() => {
+            void compilePreview(content)
+          }, 100)
+        }
+      }
+    },
+    [compilePreview, editableLatex, latexContent]
+  )
+
+  const handleEditorChange = (value: string) => {
+    setEditableLatex(value)
+    setPdfData(null)
+    setPreviewError(null)
+    setPdfError(null)
+  }
+
+  const renderEditorContent = () => (
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      <div className="flex-shrink-0 border-b border-white/8 bg-black/12 px-4 py-2">
+        <div className="mb-1 flex items-center justify-between">
+          <p className="text-xs font-semibold text-muted-foreground">LATEX FORMAT CHECK</p>
+          {editableLatex ? (
+            <div className="flex items-center gap-2">
+              {hasErrors ? (
+                <span className="flex items-center gap-1 text-xs text-red-400">
+                  <AlertTriangle className="h-3 w-3" />
+                  {latexErrors.filter((error) => error.type === "error").length} error(s)
+                </span>
+              ) : hasWarnings ? (
+                <span className="flex items-center gap-1 text-xs text-yellow-400">
+                  <AlertTriangle className="h-3 w-3" />
+                  {latexErrors.filter((error) => error.type === "warning").length} warning(s)
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 text-xs text-emerald-400">
+                  <CheckCircle className="h-3 w-3" />
+                  Looks valid
+                </span>
+              )}
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      {latexErrors.length > 0 ? (
+        <div className="scrollbar-dark max-h-32 flex-shrink-0 overflow-y-auto border-b border-white/8 bg-black/10 px-4 py-2">
+          <div className="space-y-1">
+            {latexErrors.map((error, index) => (
+              <div
+                key={`${error.message}-${index}`}
+                onClick={() => {
+                  if (error.line && editorRef.current) {
+                    const lines = editableLatex.split("\n")
+                    const lineStart =
+                      lines.slice(0, error.line - 1).join("\n").length + (error.line > 1 ? 1 : 0)
+                    editorRef.current.focus()
+                    editorRef.current.setSelectionRange(
+                      lineStart,
+                      lineStart + lines[error.line - 1].length
+                    )
+                    editorRef.current.scrollTop = (error.line - 1) * 20 - 100
+                  }
+                }}
+                className={`flex cursor-pointer items-start gap-2 rounded p-1 text-xs transition-colors hover:bg-white/8 ${
+                  error.type === "error" ? "text-red-400" : "text-yellow-400"
+                }`}
+              >
+                <AlertTriangle className="mt-0.5 h-3 w-3 flex-shrink-0" />
+                <span>
+                  {error.line ? <span className="font-semibold">Line {error.line}: </span> : null}
+                  {error.message}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <div
+          ref={lineNumbersRef}
+          className="flex-shrink-0 overflow-hidden border-r border-white/8 bg-black/10 text-right select-none"
+          style={{ width: "3rem" }}
+        >
+          <div style={{ paddingTop: "0.5rem", paddingBottom: "0.5rem" }}>
+            {lineNumbers.map((lineNumber) => (
+              <div
+                key={lineNumber}
+                className={`pr-2 text-[11px] ${
+                  errorLineNumbers.has(lineNumber)
+                    ? "font-bold text-red-400"
+                    : "text-muted-foreground/50"
+                }`}
+                style={{ lineHeight: "1.25rem", height: "1.25rem" }}
+              >
+                {lineNumber}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <textarea
+          ref={editorRef}
+          id="latex-editor"
+          name="latexEditor"
+          value={editableLatex}
+          onChange={(event) => handleEditorChange(event.target.value)}
+          onScroll={handleEditorScroll}
+          placeholder="Paste or edit your LaTeX code here..."
+          spellCheck={false}
+          wrap="off"
+          aria-label="LaTeX editor"
+          className="scrollbar-dark h-full min-w-0 flex-1 resize-none border-0 bg-transparent font-mono text-[13px] text-foreground placeholder:text-muted-foreground focus:outline-none"
+          style={{ lineHeight: "1.25rem", padding: "0.5rem", overflow: "auto" }}
+        />
+      </div>
+    </div>
+  )
+
+  const renderPreviewContent = () => (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex-shrink-0 border-b border-white/8 bg-black/12 px-4 py-2">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-semibold text-muted-foreground">LIVE PDF PREVIEW</p>
+          <div className="text-xs text-muted-foreground">Auto-updates after you stop typing</div>
+        </div>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-hidden">
+        {previewError ? (
+          <div className="flex h-full flex-col items-center justify-center p-4 text-muted-foreground">
+            <AlertTriangle className="mb-2 h-8 w-8 text-red-400" />
+            <p className="max-w-md text-center text-sm text-red-400">{previewError}</p>
+          </div>
+        ) : (
+          <PDFViewer pdfData={pdfData} isLoading={isLoadingPreview} />
+        )}
+      </div>
+    </div>
+  )
+
+  const renderInfoContent = () => (
+    <div className="scrollbar-dark h-full overflow-y-auto p-4">
+      <div className="space-y-3">
+        <div className="rounded-lg border border-white/8 bg-black/10 p-4">
+          <h3 className="mb-3 text-sm font-semibold text-foreground">Quick Reference</h3>
+          <div className="space-y-1.5 font-mono text-xs text-muted-foreground">
+            <div>{`\\textbf{bold text}`} → Bold</div>
+            <div>{`\\textit{italic text}`} → Italic</div>
+            <div>{`\\section{Experience}`} → Section</div>
+            <div>{`\\begin{itemize} ... \\end{itemize}`} → Bullet list</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 
   const handleCopy = async () => {
     if (!currentContent) return
@@ -235,12 +360,12 @@ export function ResumePreviewPanel({
     const blob = new Blob([currentContent], { type: "text/x-latex" })
     const url = URL.createObjectURL(blob)
 
-    const a = document.createElement("a")
-    a.href = url
-    a.download = "resume.tex"
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
+    const anchor = document.createElement("a")
+    anchor.href = url
+    anchor.download = "resume.tex"
+    document.body.appendChild(anchor)
+    anchor.click()
+    document.body.removeChild(anchor)
     URL.revokeObjectURL(url)
   }
 
@@ -269,7 +394,7 @@ export function ResumePreviewPanel({
           const errorData = await response.json()
           message = errorData?.details || errorData?.error || message
         } catch {
-          // ignore
+          // ignore parse errors for fallback message
         }
 
         throw new Error(message)
@@ -278,12 +403,12 @@ export function ResumePreviewPanel({
       const blob = await response.blob()
       const url = URL.createObjectURL(blob)
 
-      const a = document.createElement("a")
-      a.href = url
-      a.download = "resume.pdf"
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
+      const anchor = document.createElement("a")
+      anchor.href = url
+      anchor.download = "resume.pdf"
+      document.body.appendChild(anchor)
+      anchor.click()
+      document.body.removeChild(anchor)
       URL.revokeObjectURL(url)
     } catch (error) {
       setPdfError(
@@ -297,20 +422,34 @@ export function ResumePreviewPanel({
   }
 
   return (
-    <div className="flex flex-col h-full min-h-0">
-      <div className="flex-shrink-0 flex items-center justify-between mb-4">
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="mb-4 flex flex-shrink-0 items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-foreground mb-1 flex items-center gap-2">
-            <FileText className="w-5 h-5 text-primary" />
+          <h2 className="mb-1 flex items-center gap-2 text-xl font-bold text-foreground">
+            <FileText className="h-5 w-5 text-primary" />
             Resume Output
           </h2>
-          <p className="text-muted-foreground text-sm">
+          <p className="text-sm text-muted-foreground">
             View, edit, preview, and export your LaTeX resume
           </p>
         </div>
+        {onOpenSplitWorkspace ? (
+          <Button
+            type="button"
+            size="icon"
+            variant="outline"
+            onClick={onOpenSplitWorkspace}
+            disabled={isGenerating}
+            aria-label="Open side-by-side workspace"
+            title="Open side-by-side workspace"
+            className="h-9 w-9 rounded-full border-white/8 bg-black/12 text-muted-foreground hover:bg-white/8 hover:text-foreground"
+          >
+            <Maximize2 className="h-4 w-4" />
+          </Button>
+        ) : null}
       </div>
 
-      <div className="flex-shrink-0 flex gap-2 mb-3 overflow-x-auto">
+      <div className="mb-3 flex flex-shrink-0 gap-2 overflow-x-auto">
         {[
           { key: "edit", label: "Edit LaTeX", icon: Share2 },
           { key: "preview", label: "Preview PDF", icon: Eye },
@@ -322,20 +461,10 @@ export function ResumePreviewPanel({
             size="sm"
             variant={activeTab === key ? "cool" : "outline"}
             aria-pressed={activeTab === key}
-            onClick={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-
-              setActiveTab(key as "edit" | "preview" | "info")
-
-              if (key === "preview") {
-                const content = editableLatex || latexContent
-                if (content.trim()) {
-                  setTimeout(() => {
-                    compilePreview(content)
-                  }, 100)
-                }
-              }
+            onClick={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              activateTab(key as "edit" | "preview" | "info")
             }}
             className={cn(
               "rounded-full px-4 whitespace-nowrap",
@@ -344,174 +473,37 @@ export function ResumePreviewPanel({
                 : "border-white/8 bg-black/12 text-muted-foreground hover:bg-white/8 hover:text-foreground"
             )}
           >
-            <Icon className="w-4 h-4" />
+            <Icon className="h-4 w-4" />
             {label}
           </Button>
         ))}
       </div>
 
-      <div className="flex-1 min-h-0 rounded-xl border border-white/8 bg-black/10 overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-hidden rounded-xl border border-white/8 bg-black/10">
         {isGenerating ? (
-          <div className="h-full flex flex-col items-center justify-center text-muted-foreground p-6">
-            <Loader2 className="w-10 h-10 animate-spin text-primary mb-3" />
+          <div className="flex h-full flex-col items-center justify-center p-6 text-muted-foreground">
+            <Loader2 className="mb-3 h-10 w-10 animate-spin text-primary" />
             <p className="text-base font-medium text-foreground">
               {statusMessage || "Generating your resume..."}
             </p>
-            <p className="text-sm mt-1">This may take a few moments</p>
+            <p className="mt-1 text-sm">This may take a few moments</p>
           </div>
         ) : activeTab === "edit" ? (
-          <div className="h-full flex flex-col min-h-0 overflow-hidden">
-            <div className="flex-shrink-0 border-b border-white/8 bg-black/12 px-4 py-2">
-              <div className="flex items-center justify-between mb-1">
-                <p className="text-xs text-muted-foreground font-semibold">
-                  LATEX FORMAT CHECK
-                </p>
-                {editableLatex && (
-                  <div className="flex items-center gap-2">
-                    {hasErrors ? (
-                      <span className="flex items-center gap-1 text-xs text-red-400">
-                        <AlertTriangle className="w-3 h-3" />
-                        {latexErrors.filter((e) => e.type === "error").length} error(s)
-                      </span>
-                    ) : hasWarnings ? (
-                      <span className="flex items-center gap-1 text-xs text-yellow-400">
-                        <AlertTriangle className="w-3 h-3" />
-                        {latexErrors.filter((e) => e.type === "warning").length} warning(s)
-                      </span>
-                    ) : (
-                      <span className="flex items-center gap-1 text-xs text-emerald-400">
-                        <CheckCircle className="w-3 h-3" />
-                        Looks valid
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {latexErrors.length > 0 && (
-              <div className="scrollbar-dark max-h-32 flex-shrink-0 overflow-y-auto border-b border-white/8 bg-black/10 px-4 py-2">
-                <div className="space-y-1">
-                  {latexErrors.map((err, idx) => (
-                    <div
-                      key={idx}
-                      onClick={() => {
-                        if (err.line && editorRef.current) {
-                          const lines = editableLatex.split('\n')
-                          const lineStart = lines.slice(0, err.line - 1).join('\n').length + (err.line > 1 ? 1 : 0)
-                          editorRef.current.focus()
-                          editorRef.current.setSelectionRange(lineStart, lineStart + lines[err.line - 1].length)
-                          editorRef.current.scrollTop = (err.line - 1) * 20 - 100
-                        }
-                      }}
-                      className={`flex items-start gap-2 text-xs cursor-pointer hover:bg-white/8 p-1 rounded transition-colors ${err.type === "error" ? "text-red-400" : "text-yellow-400"
-                        }`}
-                    >
-                      <AlertTriangle className="w-3 h-3 flex-shrink-0 mt-0.5" />
-                      <span>
-                        {err.line && (
-                          <span className="font-semibold">
-                            Line {err.line}:{" "}
-                          </span>
-                        )}
-                        {err.message}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="flex-1 min-h-0 flex overflow-hidden">
-              <div
-                ref={lineNumbersRef}
-                className="flex-shrink-0 overflow-hidden border-r border-white/8 bg-black/10 text-right select-none"
-                style={{ width: "3rem" }}
-              >
-                <div style={{ paddingTop: "0.5rem", paddingBottom: "0.5rem" }}>
-                  {lineNumbers.map((n) => (
-                    <div 
-                      key={n} 
-                      className={`text-xs pr-2 ${errorLineNumbers.has(n) ? 'text-red-400 font-bold' : 'text-muted-foreground/50'}`}
-                      style={{ lineHeight: "1.25rem", height: "1.25rem" }}
-                    >
-                      {n}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <textarea
-                ref={editorRef}
-                id="latex-editor"
-                name="latexEditor"
-                value={editableLatex}
-                onChange={(e) => {
-                  setEditableLatex(e.target.value)
-                  setPdfData(null)
-                  setPreviewError(null)
-                  setPdfError(null)
-                }}
-                onScroll={handleEditorScroll}
-                placeholder="Paste or edit your LaTeX code here..."
-                spellCheck={false}
-                wrap="off"
-                aria-label="LaTeX editor"
-                className="scrollbar-dark flex-1 min-w-0 h-full resize-none border-0 bg-transparent font-mono text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
-                style={{ lineHeight: "1.25rem", padding: "0.5rem", overflow: "auto" }}
-              />
-            </div>
-          </div>
+          renderEditorContent()
         ) : activeTab === "preview" ? (
-          <div className="h-full flex flex-col min-h-0">
-            <div className="flex-shrink-0 flex items-center justify-between border-b border-white/8 bg-black/12 px-4 py-2">
-              <p className="text-xs text-muted-foreground font-semibold">
-                LIVE PDF PREVIEW
-              </p>
-              <div className="text-xs text-muted-foreground">
-                Auto-updates after you stop typing
-              </div>
-            </div>
-
-            <div className="flex-1 min-h-0 overflow-hidden">
-              {previewError ? (
-                <div className="h-full flex flex-col items-center justify-center text-muted-foreground p-4">
-                  <AlertTriangle className="w-8 h-8 text-red-400 mb-2" />
-                  <p className="text-sm text-red-400 text-center max-w-md">
-                    {previewError}
-                  </p>
-                </div>
-              ) : (
-                <PDFViewer pdfData={pdfData} isLoading={isLoadingPreview} />
-              )}
-            </div>
-          </div>
+          renderPreviewContent()
         ) : (
-          <div className="scrollbar-dark h-full p-4 overflow-y-auto">
-            <div className="space-y-3">
-              <div className="rounded-lg border border-white/8 bg-black/10 p-4">
-                <h3 className="text-sm font-semibold text-foreground mb-3">
-                  Quick Reference
-                </h3>
-                <div className="space-y-1.5 text-xs text-muted-foreground font-mono">
-                  <div>{`\\textbf{bold text}`} → Bold</div>
-                  <div>{`\\textit{italic text}`} → Italic</div>
-                  <div>{`\\section{Experience}`} → Section</div>
-                  <div>{`\\begin{itemize} ... \\end{itemize}`} → Bullet list</div>
-                </div>
-              </div>
-            </div>
-          </div>
+          renderInfoContent()
         )}
       </div>
 
-      {pdfError && (
-        <div className="flex-shrink-0 mt-2 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+      {pdfError ? (
+        <div className="mt-2 flex-shrink-0 rounded-lg border border-red-500/20 bg-red-500/10 p-3">
           <p className="text-xs text-red-400">{pdfError}</p>
         </div>
-      )}
+      ) : null}
 
-      <div className="flex-shrink-0 mt-4 flex gap-2 flex-wrap">
+      <div className="mt-4 flex flex-shrink-0 flex-wrap gap-2">
         <Button
           type="button"
           onClick={handleCopy}
@@ -521,12 +513,12 @@ export function ResumePreviewPanel({
         >
           {copied ? (
             <>
-              <Check className="w-4 h-4" />
+              <Check className="h-4 w-4" />
               Copied!
             </>
           ) : (
             <>
-              <Copy className="w-4 h-4" />
+              <Copy className="h-4 w-4" />
               Copy
             </>
           )}
@@ -539,7 +531,7 @@ export function ResumePreviewPanel({
           variant="outline"
           className="flex-1 rounded-2xl py-5"
         >
-          <Download className="w-4 h-4" />
+          <Download className="h-4 w-4" />
           Download .tex
         </Button>
 
@@ -552,12 +544,12 @@ export function ResumePreviewPanel({
         >
           {convertingToPDF ? (
             <>
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <Loader2 className="h-4 w-4 animate-spin" />
               Converting...
             </>
           ) : (
             <>
-              <FileText className="w-4 h-4" />
+              <FileText className="h-4 w-4" />
               Download PDF
             </>
           )}

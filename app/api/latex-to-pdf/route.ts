@@ -1,18 +1,38 @@
 import { NextRequest, NextResponse } from "next/server"
+import { z } from "zod"
+import { enforceRateLimit } from "@/lib/api-rate-limit"
+import { reportServerError } from "@/lib/error-monitoring"
+import { validationErrorResponse } from "@/lib/api-response"
 
 export const runtime = "nodejs"
 export const maxDuration = 30
 
-export async function POST(request: NextRequest) {
-  try {
-    const { latex, preview } = await request.json()
+const latexToPdfSchema = z.object({
+  latex: z
+    .string()
+    .trim()
+    .min(1, "No LaTeX content provided.")
+    .max(150000, "LaTeX document is too large."),
+  preview: z.boolean().optional().default(false),
+})
 
-    if (!latex || typeof latex !== "string") {
-      return NextResponse.json(
-        { error: "No LaTeX content provided." },
-        { status: 400 }
-      )
+export async function POST(request: NextRequest) {
+  const rateLimitResponse = await enforceRateLimit(request, {
+    key: "latex-to-pdf",
+    limit: 10,
+    windowMs: 60_000,
+  })
+  if (rateLimitResponse) return rateLimitResponse
+
+  try {
+    const body = await request.json()
+    const parsed = latexToPdfSchema.safeParse(body)
+
+    if (!parsed.success) {
+      return validationErrorResponse(parsed.error)
     }
+
+    const { latex, preview } = parsed.data
 
     const response = await fetch("https://latex.ytotech.com/builds/sync", {
       method: "POST",
@@ -65,7 +85,7 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error("Latex API error:", error)
+    reportServerError(error, "latex-to-pdf")
 
     return NextResponse.json(
       {

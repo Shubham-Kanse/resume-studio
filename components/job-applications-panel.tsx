@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, type ChangeEvent } from "react"
+import { useEffect, useMemo, useState, type ChangeEvent } from "react"
 import {
   BriefcaseBusiness,
   ChevronDown,
@@ -9,6 +9,8 @@ import {
   FileText,
   Loader2,
   Plus,
+  Search,
+  SlidersHorizontal,
   Sparkles,
   Trash2,
   Upload,
@@ -18,6 +20,7 @@ import {
 import { Button } from "@/components/ui/button"
 import {
   JOB_APPLICATION_STAGES,
+  formatJobApplicationDateForStorage,
   isJobApplicationDisplayDate,
   normalizeJobApplicationDateInput,
   type JobApplicationRecord,
@@ -55,6 +58,7 @@ interface JobApplicationsPanelProps {
 }
 
 const MAX_RESUME_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+type JobApplicationSort = "newest" | "oldest" | "company"
 
 const stageMeta: Record<
   JobApplicationStage,
@@ -122,6 +126,72 @@ export function JobApplicationsPanel({
     count: applications.filter((application) => application.stage === stage).length,
   }))
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [stageFilter, setStageFilter] = useState<JobApplicationStage | "all">("all")
+  const [sortOrder, setSortOrder] = useState<JobApplicationSort>("newest")
+  const [pendingDeleteApplicationId, setPendingDeleteApplicationId] = useState<string | null>(null)
+
+  const filteredApplications = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase()
+    const nextItems = applications.filter((application) => {
+      if (stageFilter !== "all" && application.stage !== stageFilter) return false
+      if (!normalizedQuery) return true
+
+      const haystack = [
+        application.company,
+        application.position,
+        application.stage,
+        application.job_link,
+        application.resume_file_name,
+        application.applied_on,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+
+      return haystack.includes(normalizedQuery)
+    })
+
+    nextItems.sort((left, right) => {
+      if (sortOrder === "company") {
+        const companyComparison = left.company.localeCompare(right.company, undefined, {
+          sensitivity: "base",
+        })
+
+        if (companyComparison !== 0) return companyComparison
+      }
+
+      const appliedLeft = formatJobApplicationDateForStorage(left.applied_on)
+      const appliedRight = formatJobApplicationDateForStorage(right.applied_on)
+      const leftTime = appliedLeft ? new Date(`${appliedLeft}T00:00:00Z`).getTime() : 0
+      const rightTime = appliedRight ? new Date(`${appliedRight}T00:00:00Z`).getTime() : 0
+
+      if (leftTime !== rightTime) {
+        return sortOrder === "oldest" ? leftTime - rightTime : rightTime - leftTime
+      }
+
+      const updatedDelta =
+        new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime()
+
+      if (updatedDelta !== 0) {
+        return sortOrder === "oldest" ? -updatedDelta : updatedDelta
+      }
+
+      return left.company.localeCompare(right.company, undefined, { sensitivity: "base" })
+    })
+
+    return nextItems
+  }, [applications, searchQuery, sortOrder, stageFilter])
+
+  const hasActiveFilters =
+    searchQuery.trim().length > 0 || stageFilter !== "all" || sortOrder !== "newest"
+
+  useEffect(() => {
+    if (!pendingDeleteApplicationId) return
+    if (!applications.some((application) => application.id === pendingDeleteApplicationId)) {
+      setPendingDeleteApplicationId(null)
+    }
+  }, [applications, pendingDeleteApplicationId])
 
   const handleResumeUpload = async (
     applicationId: string,
@@ -301,6 +371,92 @@ export function JobApplicationsPanel({
             </Button>
           </div>
 
+          <div className="mb-4 rounded-2xl border border-white/10 bg-white/[0.03] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+            <div className="mb-3 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.2em] text-white/45">
+              <Search className="h-3.5 w-3.5 text-primary" />
+              Search & Filter
+            </div>
+
+            <div className="space-y-3">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Search company, role, stage, link, or resume..."
+                  aria-label="Search job applications"
+                  className="h-10 w-full rounded-full border border-white/14 bg-black/30 pl-10 pr-4 text-sm text-foreground outline-none transition-colors placeholder:text-white/35 focus:border-primary/40 focus:bg-white/[0.05]"
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setStageFilter("all")}
+                  aria-pressed={stageFilter === "all"}
+                  className={cn(
+                    "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                    stageFilter === "all"
+                      ? "border-primary/35 bg-primary/12 text-primary shadow-[0_8px_24px_rgba(34,197,94,0.12)]"
+                      : "border-white/12 bg-black/20 text-muted-foreground hover:border-white/20 hover:text-foreground"
+                  )}
+                >
+                  All
+                </button>
+                {JOB_APPLICATION_STAGES.map((stage) => (
+                  <button
+                    key={stage}
+                    type="button"
+                    onClick={() => setStageFilter(stage)}
+                    aria-pressed={stageFilter === stage}
+                    className={cn(
+                      "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                      stageFilter === stage
+                        ? "border-primary/35 bg-primary/12 text-primary shadow-[0_8px_24px_rgba(34,197,94,0.12)]"
+                        : "border-white/12 bg-black/20 text-muted-foreground hover:border-white/20 hover:text-foreground"
+                    )}
+                  >
+                    {stage}
+                  </button>
+                ))}
+
+                <div className="ml-auto flex items-center gap-2 rounded-full border border-white/12 bg-black/20 px-3 py-1.5 text-xs text-muted-foreground">
+                  <SlidersHorizontal className="h-3.5 w-3.5 text-white/35" />
+                  <select
+                    value={sortOrder}
+                    onChange={(event) => setSortOrder(event.target.value as JobApplicationSort)}
+                    className="bg-transparent text-xs text-foreground outline-none"
+                    aria-label="Sort job applications"
+                  >
+                    <option value="newest">Newest</option>
+                    <option value="oldest">Oldest</option>
+                    <option value="company">Company A-Z</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                <span>
+                  Showing {filteredApplications.length} of {applications.length} applications
+                </span>
+                {hasActiveFilters ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery("")
+                      setStageFilter("all")
+                      setSortOrder("newest")
+                    }}
+                    className="rounded-full border border-white/10 px-3 py-1 transition-colors hover:border-white/18 hover:text-foreground"
+                  >
+                    Clear filters
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          </div>
+
           {applicationsLoading ? (
             <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -324,6 +480,29 @@ export function JobApplicationsPanel({
                 </Button>
               </div>
             </div>
+          ) : filteredApplications.length === 0 ? (
+            <div className="flex flex-1 items-center justify-center rounded-2xl border border-dashed border-white/12 bg-black/10 p-8 text-center">
+              <div>
+                <h3 className="text-lg font-semibold text-foreground">No matching applications</h3>
+                <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
+                  No job tracker rows match the current search or stage filter.
+                </p>
+                {hasActiveFilters ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="mt-5 rounded-full px-5"
+                    onClick={() => {
+                      setSearchQuery("")
+                      setStageFilter("all")
+                      setSortOrder("newest")
+                    }}
+                  >
+                    Clear filters
+                  </Button>
+                ) : null}
+              </div>
+            </div>
           ) : (
             <div className="scrollbar-dark flex-1 overflow-y-auto overflow-x-hidden rounded-2xl border border-white/8 bg-black/[0.06]">
               <table className="w-full table-fixed border-collapse">
@@ -341,12 +520,16 @@ export function JobApplicationsPanel({
                   </tr>
                 </thead>
                 <tbody>
-                  {applications.map((application) => (
-                    <tr
-                      key={application.id}
-                      className="group align-top transition-colors hover:bg-white/[0.025]"
-                    >
-                      <td className="border-b border-white/8 px-4 py-2.5">
+                  {filteredApplications.map((application) => (
+                    (() => {
+                      const isPendingDelete = pendingDeleteApplicationId === application.id
+
+                      return (
+                        <tr
+                          key={application.id}
+                          className="group align-top transition-colors hover:bg-white/[0.025]"
+                        >
+                          <td className="border-b border-white/8 px-4 py-2.5">
                         <div className="relative w-full min-w-0">
                           <select
                             value={application.stage}
@@ -373,8 +556,8 @@ export function JobApplicationsPanel({
                             )}
                           />
                         </div>
-                      </td>
-                      <td className="border-b border-white/8 px-4 py-2.5">
+                          </td>
+                          <td className="border-b border-white/8 px-4 py-2.5">
                         <input
                           type="text"
                           value={application.company}
@@ -384,8 +567,8 @@ export function JobApplicationsPanel({
                           className="h-10 w-full min-w-0 bg-transparent text-sm font-medium text-foreground outline-none placeholder:text-muted-foreground focus:bg-transparent"
                           placeholder="Company"
                         />
-                      </td>
-                      <td className="border-b border-white/8 px-4 py-2.5">
+                          </td>
+                          <td className="border-b border-white/8 px-4 py-2.5">
                         <input
                           type="text"
                           value={application.position ?? ""}
@@ -395,8 +578,8 @@ export function JobApplicationsPanel({
                           className="h-10 w-full min-w-0 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground focus:bg-transparent"
                           placeholder="Role / position"
                         />
-                      </td>
-                      <td className="border-b border-white/8 px-4 py-2.5">
+                          </td>
+                          <td className="border-b border-white/8 px-4 py-2.5">
                         <div className="relative h-10">
                           <input
                             type="url"
@@ -419,8 +602,8 @@ export function JobApplicationsPanel({
                             </a>
                           ) : null}
                         </div>
-                      </td>
-                      <td className="border-b border-white/8 px-4 py-2.5">
+                          </td>
+                          <td className="border-b border-white/8 px-4 py-2.5">
                         <div className="flex h-10 items-center gap-1.5">
                           <div className="group/file relative">
                             <label className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg border border-dashed border-white/10 bg-transparent text-sm text-foreground transition-colors hover:border-primary/30 hover:bg-white/[0.03]">
@@ -472,8 +655,8 @@ export function JobApplicationsPanel({
                             <X className="h-4 w-4" />
                           </button>
                         </div>
-                      </td>
-                      <td className="border-b border-white/8 px-4 py-2.5">
+                          </td>
+                          <td className="border-b border-white/8 px-4 py-2.5">
                         <div className="h-10 min-w-0">
                           <input
                             type="text"
@@ -497,30 +680,44 @@ export function JobApplicationsPanel({
                             title="Use DD/MM/YY"
                           />
                         </div>
-                      </td>
-                      <td className="border-b border-white/8 px-2 py-2.5">
-                        <div className="flex h-10 items-center justify-center gap-2">
-                          {savingApplicationId === application.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                          ) : null}
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="h-8 w-8 rounded-full p-0"
-                            disabled={deletingApplicationId === application.id}
-                            onClick={() => void onDeleteApplication(application.id)}
-                            aria-label="Delete application"
-                          >
-                            {deletingApplicationId === application.id ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Trash2 className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
+                          </td>
+                          <td className="border-b border-white/8 px-2 py-2.5">
+                            <div className="flex h-10 items-center justify-center gap-2">
+                              {savingApplicationId === application.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                              ) : null}
+                              <button
+                                type="button"
+                                className={cn(
+                                  "inline-flex h-8 w-8 items-center justify-center rounded-full transition-colors disabled:opacity-50",
+                                  isPendingDelete
+                                    ? "text-red-400 hover:text-red-300"
+                                    : "text-muted-foreground hover:text-foreground"
+                                )}
+                                disabled={deletingApplicationId === application.id}
+                                onClick={() => {
+                                  if (!isPendingDelete) {
+                                    setPendingDeleteApplicationId(application.id)
+                                    return
+                                  }
+                                  setPendingDeleteApplicationId(null)
+                                  void onDeleteApplication(application.id)
+                                }}
+                                aria-label="Delete application"
+                              >
+                                {deletingApplicationId === application.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : isPendingDelete ? (
+                                  <Trash2 className="h-4 w-4" />
+                                ) : (
+                                  <X className="h-4 w-4" />
+                                )}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })()
                   ))}
                 </tbody>
               </table>

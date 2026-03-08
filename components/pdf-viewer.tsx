@@ -1,126 +1,272 @@
 "use client"
 
-import { useEffect, useRef, useState, useCallback } from "react"
-import {
-  Loader2,
-  ChevronLeft,
-  ChevronRight,
-} from "lucide-react"
-import * as pdfjsLib from "pdfjs-dist"
-
-pdfjsLib.GlobalWorkerOptions.workerSrc =
-  "https://unpkg.com/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs"
+import { useEffect, useRef, useState } from "react"
+import { Loader2 } from "lucide-react"
 
 interface PDFViewerProps {
   pdfData: ArrayBuffer | null
   isLoading?: boolean
 }
 
-export function PDFViewer({ pdfData, isLoading }: PDFViewerProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
+interface PromiseWithResolvers<T> {
+  promise: Promise<T>
+  resolve: (value: T | PromiseLike<T>) => void
+  reject: (reason?: unknown) => void
+}
 
-  const [pdfDoc, setPdfDoc] = useState<pdfjsLib.PDFDocumentProxy | null>(null)
-  const [currentPage, setCurrentPage] = useState(1)
-  const [totalPages, setTotalPages] = useState(0)
-  const [renderError, setRenderError] = useState<string | null>(null)
-  const [isRendering, setIsRendering] = useState(false)
-  const renderRequestRef = useRef(0)
+function ensurePromiseWithResolvers() {
+  const promiseCtor = Promise as unknown as PromiseConstructor & {
+    withResolvers?: <T>() => PromiseWithResolvers<T>
+  }
+
+  if (typeof promiseCtor.withResolvers === "function") {
+    return
+  }
+
+  promiseCtor.withResolvers = function withResolvers<T>() {
+    let resolve!: (value: T | PromiseLike<T>) => void
+    let reject!: (reason?: unknown) => void
+
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res
+      reject = rej
+    })
+
+    return { promise, resolve, reject }
+  }
+}
+
+interface PDFPageCanvasProps {
+  containerWidth: number
+  pageNumber: number
+  pdfDocument: any
+  onRenderError: (message: string) => void
+}
+
+function PDFPageCanvas({
+  containerWidth,
+  pageNumber,
+  pdfDocument,
+  onRenderError,
+}: PDFPageCanvasProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [isPageRendering, setIsPageRendering] = useState(true)
 
   useEffect(() => {
-    if (!pdfData) {
-      setPdfDoc(null)
-      setTotalPages(0)
-      setCurrentPage(1)
-      setRenderError(null)
-      return
-    }
+    const canvas = canvasRef.current
+    if (!canvas || !containerWidth) return
 
-    const loadPDF = async () => {
+    let cancelled = false
+    let currentPage: any = null
+    let renderTask: { promise: Promise<void>; cancel?: () => void } | null = null
+
+    const renderPage = async () => {
       try {
-        setRenderError(null)
-
-        const bytes = new Uint8Array(pdfData)
-        const header = String.fromCharCode(...bytes.slice(0, 4))
-
-        if (header !== "%PDF") {
-          setRenderError("Invalid PDF received.")
+        setIsPageRendering(true)
+        const page = await pdfDocument.getPage(pageNumber)
+        if (cancelled) {
+          page.cleanup?.()
           return
         }
 
-        const loadingTask = pdfjsLib.getDocument({ data: pdfData })
-        const pdf = await loadingTask.promise
+        currentPage = page
+        const baseViewport = page.getViewport({ scale: 1 })
+        const scale = Math.max(containerWidth / baseViewport.width, 0.1)
+        const viewport = page.getViewport({ scale })
+        const outputScale = window.devicePixelRatio || 1
+        const context = canvas.getContext("2d", { alpha: false })
 
-        setPdfDoc(pdf)
-        setTotalPages(pdf.numPages)
-        setCurrentPage(1)
+        if (!context) {
+          throw new Error(`Canvas context unavailable for page ${pageNumber}.`)
+        }
+
+        canvas.width = Math.ceil(viewport.width * outputScale)
+        canvas.height = Math.ceil(viewport.height * outputScale)
+        canvas.style.width = `${viewport.width}px`
+        canvas.style.height = `${viewport.height}px`
+
+        context.setTransform(1, 0, 0, 1, 0, 0)
+        context.clearRect(0, 0, canvas.width, canvas.height)
+        context.fillStyle = "#ffffff"
+        context.fillRect(0, 0, canvas.width, canvas.height)
+
+        const nextRenderTask = page.render({
+          canvasContext: context,
+          viewport,
+          transform:
+            outputScale === 1 ? undefined : [outputScale, 0, 0, outputScale, 0, 0],
+          background: "rgb(255,255,255)",
+        })
+        renderTask = nextRenderTask
+
+        await nextRenderTask.promise
+        if (cancelled) return
+
+        setIsPageRendering(false)
       } catch (error) {
-        console.error("PDF load error:", error)
-        setRenderError(
-          error instanceof Error ? error.message : "Failed to load PDF."
+        if (cancelled) return
+        setIsPageRendering(false)
+        console.error(`PDF render error on page ${pageNumber}:`, error)
+        onRenderError(
+          error instanceof Error ? error.message : `Failed to render page ${pageNumber}.`
         )
       }
     }
 
-    loadPDF()
-  }, [pdfData])
+    void renderPage()
 
-  const renderPage = useCallback(async () => {
-    if (!pdfDoc || !canvasRef.current || !containerRef.current) return
-
-    const requestId = ++renderRequestRef.current
-    setIsRendering(true)
-
-    try {
-      const page = await pdfDoc.getPage(currentPage)
-      
-      if (requestId !== renderRequestRef.current) return
-      
-      const canvas = canvasRef.current
-      const context = canvas.getContext("2d")
-
-      if (!context) return
-
-      context.clearRect(0, 0, canvas.width, canvas.height)
-
-      const baseViewport = page.getViewport({ scale: 1 })
-      const containerWidth = Math.max(containerRef.current.clientWidth - 32, 320)
-      const fitScale = containerWidth / baseViewport.width
-      const dpr = window.devicePixelRatio || 1
-      const viewport = page.getViewport({ scale: fitScale * dpr })
-
-      canvas.width = viewport.width
-      canvas.height = viewport.height
-      canvas.style.width = `${viewport.width / dpr}px`
-      canvas.style.height = `${viewport.height / dpr}px`
-
-      context.scale(dpr, dpr)
-
-      await page.render({
-        canvasContext: context,
-        viewport: page.getViewport({ scale: fitScale }),
-      }).promise
-    } catch (error) {
-      console.error("PDF render error:", error)
-      setRenderError("Failed to render PDF page.")
-    } finally {
-      if (requestId === renderRequestRef.current) {
-        setIsRendering(false)
-      }
+    return () => {
+      cancelled = true
+      renderTask?.cancel?.()
+      currentPage?.cleanup?.()
     }
-  }, [pdfDoc, currentPage])
+  }, [containerWidth, onRenderError, pageNumber, pdfDocument])
+
+  return (
+    <div className="relative rounded-[6px] bg-white shadow-[0_18px_56px_rgba(0,0,0,0.28)]">
+      {isPageRendering ? (
+        <div className="absolute inset-0 flex items-center justify-center rounded-[6px] bg-white/70">
+          <Loader2 className="h-5 w-5 animate-spin text-zinc-500" />
+        </div>
+      ) : null}
+      <canvas ref={canvasRef} className="block max-w-full rounded-[6px]" />
+    </div>
+  )
+}
+
+export function PDFViewer({ pdfData, isLoading }: PDFViewerProps) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const pdfjsLibRef = useRef<any>(null)
+  const loadingTaskRef = useRef<{ destroy: () => void } | null>(null)
+  const pdfDocumentRef = useRef<any>(null)
+
+  const [containerWidth, setContainerWidth] = useState(0)
+  const [pageCount, setPageCount] = useState(0)
+  const [pdfDocument, setPdfDocument] = useState<any>(null)
+  const [renderError, setRenderError] = useState<string | null>(null)
+  const [viewerReady, setViewerReady] = useState(false)
+  const [isDocumentLoading, setIsDocumentLoading] = useState(false)
 
   useEffect(() => {
-    renderPage()
-  }, [renderPage])
+    let cancelled = false
 
-  const prevPage = () => setCurrentPage((prev) => Math.max(prev - 1, 1))
-  const nextPage = () => setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+    const initializePdfJs = async () => {
+      ensurePromiseWithResolvers()
+      const pdfjsLib = (await import("pdfjs-dist/legacy/build/pdf.mjs")) as unknown as any
+      if (cancelled) return
 
-  if (isLoading) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+        "pdfjs-dist/legacy/build/pdf.worker.min.mjs",
+        import.meta.url
+      ).toString()
+      pdfjsLibRef.current = pdfjsLib
+      setViewerReady(true)
+    }
+
+    void initializePdfJs().catch((error: unknown) => {
+      if (cancelled) return
+      console.error("PDF viewer init error:", error)
+      setRenderError(error instanceof Error ? error.message : "Failed to initialize PDF preview.")
+    })
+
+    return () => {
+      cancelled = true
+      loadingTaskRef.current?.destroy()
+      void pdfDocumentRef.current?.destroy?.()
+      pdfjsLibRef.current = null
+      pdfDocumentRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    const element = containerRef.current
+    if (!element) return
+
+    const updateWidth = () => {
+      setContainerWidth(Math.max(element.clientWidth - 24, 200))
+    }
+
+    updateWidth()
+
+    const observer = new ResizeObserver(updateWidth)
+    observer.observe(element)
+
+    return () => observer.disconnect()
+  }, [pdfData, pdfDocument])
+
+  useEffect(() => {
+    const pdfjsLib = pdfjsLibRef.current
+
+    loadingTaskRef.current?.destroy()
+    loadingTaskRef.current = null
+    void pdfDocumentRef.current?.destroy?.()
+    pdfDocumentRef.current = null
+    setPdfDocument(null)
+
+    if (!viewerReady || !pdfjsLib) return
+
+    if (!pdfData) {
+      setPageCount(0)
+      setRenderError(null)
+      setIsDocumentLoading(false)
+      return
+    }
+
+    const bytes = new Uint8Array(pdfData)
+    const header = String.fromCharCode(...bytes.slice(0, 4))
+
+    if (header !== "%PDF") {
+      setPageCount(0)
+      setRenderError("Invalid PDF received.")
+      setIsDocumentLoading(false)
+      return
+    }
+
+    let cancelled = false
+    setIsDocumentLoading(true)
+    setRenderError(null)
+
+    const loadingTask = pdfjsLib.getDocument({
+      data: new Uint8Array(pdfData.slice(0)),
+      disableWorker: true,
+      useWorkerFetch: false,
+      isEvalSupported: false,
+      isOffscreenCanvasSupported: false,
+    })
+
+    loadingTaskRef.current = loadingTask
+
+    void loadingTask.promise
+      .then((nextPdfDocument: any) => {
+        if (cancelled) {
+          void nextPdfDocument.destroy?.()
+          return
+        }
+
+        pdfDocumentRef.current = nextPdfDocument
+        setPdfDocument(nextPdfDocument)
+        setPageCount(nextPdfDocument.numPages)
+        setIsDocumentLoading(false)
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return
+        console.error("PDF load error:", error)
+        setPdfDocument(null)
+        setPageCount(0)
+        setIsDocumentLoading(false)
+        setRenderError(error instanceof Error ? error.message : "Failed to load PDF preview.")
+      })
+
+    return () => {
+      cancelled = true
+      loadingTask.destroy()
+    }
+  }, [pdfData, viewerReady])
+
+  if (isLoading || isDocumentLoading) {
     return (
-      <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
-        <Loader2 className="w-8 h-8 animate-spin text-primary mb-2" />
+      <div className="flex h-full flex-col items-center justify-center text-muted-foreground">
+        <Loader2 className="mb-2 h-8 w-8 animate-spin text-primary" />
         <p className="text-sm">Compiling live preview...</p>
       </div>
     )
@@ -128,67 +274,36 @@ export function PDFViewer({ pdfData, isLoading }: PDFViewerProps) {
 
   if (renderError) {
     return (
-      <div className="h-full flex items-center justify-center p-4">
-        <p className="text-sm text-red-400 text-center">{renderError}</p>
+      <div className="flex h-full items-center justify-center p-4">
+        <p className="text-center text-sm text-red-400">{renderError}</p>
       </div>
     )
   }
 
-  if (!pdfData) {
+  if (!pdfData || !pdfDocument || pageCount === 0) {
     return (
-      <div className="h-full flex items-center justify-center p-4">
-        <p className="text-sm text-muted-foreground text-center">
-          No PDF preview yet
-        </p>
+      <div className="flex h-full items-center justify-center p-4">
+        <p className="text-center text-sm text-muted-foreground">No PDF preview yet</p>
       </div>
     )
   }
 
   return (
-    <div className="h-full flex flex-col min-h-0">
-      {totalPages > 1 && (
-        <div className="flex-shrink-0 flex items-center justify-center px-3 py-2 border-b border-white/10 bg-black/20">
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={prevPage}
-              disabled={currentPage <= 1}
-              className="p-1 hover:bg-white/10 rounded disabled:opacity-50"
-              aria-label="Previous PDF page"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-
-            <span className="text-xs text-muted-foreground">
-              {currentPage} / {totalPages}
-            </span>
-
-            <button
-              type="button"
-              onClick={nextPage}
-              disabled={currentPage >= totalPages}
-              className="p-1 hover:bg-white/10 rounded disabled:opacity-50"
-              aria-label="Next PDF page"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
-
+    <div className="flex h-full min-h-0 flex-col bg-transparent">
       <div
         ref={containerRef}
-        className="flex-1 min-h-0 overflow-auto bg-neutral-800 p-4"
+        className="scrollbar-dark min-h-0 flex-1 overflow-auto p-3"
       >
-        <div className="flex justify-center items-start min-h-full">
-          <div className="relative inline-block">
-            {isRendering && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-10">
-                <Loader2 className="w-6 h-6 animate-spin text-primary" />
-              </div>
-            )}
-            <canvas ref={canvasRef} className="shadow-lg bg-white" />
-          </div>
+        <div className="flex min-h-full flex-col items-center gap-4 pb-3">
+          {Array.from({ length: pageCount }, (_, index) => (
+            <PDFPageCanvas
+              key={`${index + 1}-${containerWidth}`}
+              containerWidth={containerWidth}
+              pageNumber={index + 1}
+              pdfDocument={pdfDocument}
+              onRenderError={(message) => setRenderError(message)}
+            />
+          ))}
         </div>
       </div>
     </div>

@@ -693,7 +693,7 @@ export function ATSScorePanel({
         <FileSearch className="w-16 h-16 text-muted-foreground mb-4" />
         <h3 className="text-lg font-semibold text-foreground mb-2">No ATS Score Yet</h3>
         <p className="text-muted-foreground text-sm max-w-md">
-          Enter your resume and job description, then click "Get ATS Score" to receive a comprehensive analysis.
+          Enter your resume and job description, then click &quot;Get ATS Score&quot; to receive a comprehensive analysis.
         </p>
       </div>
     )

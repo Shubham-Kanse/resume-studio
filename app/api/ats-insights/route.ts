@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
+import { z } from "zod"
+import { enforceRateLimit } from "@/lib/api-rate-limit"
+import { reportServerError } from "@/lib/error-monitoring"
 import {
   buildATSKnowledgePrompt,
   buildATSSystemPrompt,
@@ -6,9 +9,19 @@ import {
 } from "@/lib/llm-context"
 import { scoreResumeDeterministically, type DeterministicATSResult } from "@/lib/local-ats-scorer"
 import type { ATSIssue, ATSRecommendation, ATSScoreResponse, ATSSectionReview } from "@/lib/ats-types"
+import { validationErrorResponse } from "@/lib/api-response"
 
 export const runtime = "nodejs"
 export const maxDuration = 60
+
+const atsInsightsSchema = z.object({
+  jobDescription: z.string().trim().max(30000, "Job description is too long.").optional().default(""),
+  resumeContent: z
+    .string()
+    .trim()
+    .min(1, "Resume content is required.")
+    .max(60000, "Resume content is too long."),
+})
 
 type NarrativeSectionReview = Pick<ATSSectionReview, "id" | "diagnosis" | "whatWorks" | "gaps" | "actions">
 
@@ -308,17 +321,22 @@ function filterUnsupportedFeedback(response: ATSScoreResponse, resumeContent: st
 }
 
 export async function POST(request: NextRequest) {
+  const rateLimitResponse = await enforceRateLimit(request, {
+    key: "ats-insights",
+    limit: 12,
+    windowMs: 60_000,
+  })
+  if (rateLimitResponse) return rateLimitResponse
+
   try {
     const body = await request.json()
-    const jobDescription = String(body?.jobDescription || "").trim()
-    const resumeContent = String(body?.resumeContent || "").trim()
+    const parsed = atsInsightsSchema.safeParse(body)
 
-    if (!resumeContent) {
-      return NextResponse.json(
-        { error: "Resume content is required." },
-        { status: 400 }
-      )
+    if (!parsed.success) {
+      return validationErrorResponse(parsed.error)
     }
+
+    const { jobDescription, resumeContent } = parsed.data
 
     const deterministic = scoreResumeDeterministically({
       resumeContent,
@@ -386,14 +404,14 @@ export async function POST(request: NextRequest) {
           }
         }
       } catch (aiError) {
-        console.error("ATS narrative generation error:", aiError)
+        reportServerError(aiError, "ats-insights-narrative")
       }
     }
 
     const sanitized = filterUnsupportedFeedback(finalResponse, resumeContent)
     return NextResponse.json(sanitized)
   } catch (error) {
-    console.error("ATS scoring error:", error)
+    reportServerError(error, "ats-insights")
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Failed to score resume" },
       { status: 500 }

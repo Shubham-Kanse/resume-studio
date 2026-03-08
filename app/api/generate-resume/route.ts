@@ -1,8 +1,31 @@
 import { NextRequest, NextResponse } from "next/server"
+import { z } from "zod"
+import { enforceRateLimit } from "@/lib/api-rate-limit"
+import { reportServerError } from "@/lib/error-monitoring"
 import { buildKnowledgePrompt, buildSystemPrompt, buildUserPrompt } from "@/lib/llm-context"
+import { validationErrorResponse } from "@/lib/api-response"
 
 export const runtime = "nodejs"
 export const maxDuration = 60
+
+const generateResumeSchema = z.object({
+  jobDescription: z
+    .string()
+    .trim()
+    .min(1, "Job description is required.")
+    .max(30000, "Job description is too long."),
+  resumeContent: z
+    .string()
+    .trim()
+    .min(1, "Resume content is required.")
+    .max(60000, "Resume content is too long."),
+  extraInstructions: z
+    .string()
+    .trim()
+    .max(12000, "Additional info is too long.")
+    .optional()
+    .default(""),
+})
 
 function parseMaxTokens(value: string | undefined, fallback: number): number {
   const parsed = Number(value)
@@ -21,18 +44,26 @@ function stripCodeFences(text: string): string {
 }
 
 export async function POST(request: NextRequest) {
+  const rateLimitResponse = await enforceRateLimit(request, {
+    key: "generate-resume",
+    limit: 10,
+    windowMs: 60_000,
+  })
+  if (rateLimitResponse) return rateLimitResponse
+
   try {
     const formData = await request.formData()
-    const jd = (formData.get("jobDescription") as string)?.trim() || ""
-    const resume = (formData.get("resumeContent") as string)?.trim() || ""
-    const extra = (formData.get("extraInstructions") as string)?.trim() || ""
+    const parsed = generateResumeSchema.safeParse({
+      jobDescription: String(formData.get("jobDescription") || ""),
+      resumeContent: String(formData.get("resumeContent") || ""),
+      extraInstructions: String(formData.get("extraInstructions") || ""),
+    })
 
-    if (!jd || !resume) {
-      return NextResponse.json(
-        { error: "Job description and resume are required." },
-        { status: 400 }
-      )
+    if (!parsed.success) {
+      return validationErrorResponse(parsed.error)
     }
+
+    const { jobDescription: jd, resumeContent: resume, extraInstructions: extra } = parsed.data
 
     if (!process.env.OPENROUTER_API_KEY) {
       return NextResponse.json(
@@ -102,7 +133,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ latex })
   } catch (error) {
-    console.error("AI generation error:", error)
+    reportServerError(error, "generate-resume")
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Failed to generate resume" },
       { status: 500 }
