@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Upload, FileText, X, Sparkles, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -12,6 +12,18 @@ interface ResumeInputPanelProps {
   onGenerate: (data: FormData) => void
   isGenerating: boolean
   mode?: "generate" | "ats-score"
+  jobDescription: string
+  resumeContent: string
+  resumeFileName: string
+  resumeFileMimeType: string
+  extraInstructions: string
+  onJobDescriptionChange: (value: string) => void
+  onResumeContentChange: (value: string) => void
+  onResumeFileNameChange: (value: string) => void
+  onResumeFileMimeTypeChange: (value: string) => void
+  onResumeFileDataUrlChange: (value: string) => void
+  onExtraInstructionsChange: (value: string) => void
+  resetToken?: number
 }
 
 async function extractTextFromFile(file: File): Promise<string> {
@@ -32,34 +44,76 @@ async function extractTextFromFile(file: File): Promise<string> {
   return text
 }
 
-export function ResumeInputPanel({ onGenerate, isGenerating, mode = "generate" }: ResumeInputPanelProps) {
-  const [jobDescription, setJobDescription] = useState("")
-  const [resumeContent, setResumeContent] = useState("")
-  const [extraInstructions, setExtraInstructions] = useState("")
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "")
+    reader.onerror = () => reject(new Error("Failed to read the uploaded file"))
+    reader.readAsDataURL(file)
+  })
+}
+
+export function ResumeInputPanel({
+  onGenerate,
+  isGenerating,
+  mode = "generate",
+  jobDescription,
+  resumeContent,
+  resumeFileName,
+  resumeFileMimeType,
+  extraInstructions,
+  onJobDescriptionChange,
+  onResumeContentChange,
+  onResumeFileNameChange,
+  onResumeFileMimeTypeChange,
+  onResumeFileDataUrlChange,
+  onExtraInstructionsChange,
+  resetToken = 0,
+}: ResumeInputPanelProps) {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
   const [isExtracting, setIsExtracting] = useState(false)
   const [extractionError, setExtractionError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  useEffect(() => {
+    setUploadedFile(null)
+    setExtractionError(null)
+    if (fileInputRef.current) fileInputRef.current.value = ""
+  }, [resetToken])
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
-    setUploadedFile(file)
-    setIsExtracting(true)
-    setExtractionError(null)
-
     if (file.size > MAX_FILE_SIZE) {
+      setUploadedFile(null)
+      onResumeContentChange("")
+      onResumeFileNameChange("")
+      onResumeFileMimeTypeChange("")
+      onResumeFileDataUrlChange("")
       setExtractionError(`File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Max size is 10MB.`)
-      setIsExtracting(false)
+      if (fileInputRef.current) fileInputRef.current.value = ""
       return
     }
 
+    setUploadedFile(file)
+    onResumeFileNameChange(file.name)
+    onResumeFileMimeTypeChange(file.type || "")
+    setIsExtracting(true)
+    setExtractionError(null)
+
     try {
-      const extractedText = await extractTextFromFile(file)
-      setResumeContent(extractedText)
+      const [fileDataUrl, extractedText] = await Promise.all([
+        readFileAsDataUrl(file),
+        extractTextFromFile(file),
+      ])
+
+      onResumeFileDataUrlChange(fileDataUrl)
+      onResumeContentChange(extractedText)
     } catch (error) {
       console.error("Error extracting text:", error)
+      onResumeContentChange("")
+      onResumeFileDataUrlChange("")
       setExtractionError(
         `Failed to extract text: ${error instanceof Error ? error.message : "Unknown error"}.`
       )
@@ -70,14 +124,17 @@ export function ResumeInputPanel({ onGenerate, isGenerating, mode = "generate" }
 
   const removeFile = () => {
     setUploadedFile(null)
-    setResumeContent("")
+    onResumeContentChange("")
+    onResumeFileNameChange("")
+    onResumeFileMimeTypeChange("")
+    onResumeFileDataUrlChange("")
     setExtractionError(null)
     if (fileInputRef.current) fileInputRef.current.value = ""
   }
 
   const clearAll = () => {
-    setJobDescription("")
-    setExtraInstructions("")
+    onJobDescriptionChange("")
+    onExtraInstructionsChange("")
     removeFile()
   }
 
@@ -106,7 +163,7 @@ export function ResumeInputPanel({ onGenerate, isGenerating, mode = "generate" }
   const isValid = mode === "generate" 
     ? (!!jobDescription.trim() && !!resumeContent.trim())
     : !!resumeContent.trim()
-
+  const displayFileName = uploadedFile?.name || resumeFileName
   return (
     <div className="flex flex-col h-full min-h-0">
       <div className="flex-shrink-0 mb-4">
@@ -135,14 +192,14 @@ export function ResumeInputPanel({ onGenerate, isGenerating, mode = "generate" }
             name="jobDescription"
             placeholder="Paste the job description here..."
             value={jobDescription}
-            onChange={(e) => setJobDescription(e.target.value)}
+            onChange={(e) => onJobDescriptionChange(e.target.value)}
             className="scrollbar-dark h-32 bg-black/10 border-white/8 text-foreground placeholder:text-muted-foreground resize-none focus:border-primary/40 focus:ring-primary/15 overflow-y-auto"
           />
         </div>
 
         <div className="space-y-2">
           <Label
-            htmlFor="resume-content"
+            htmlFor="resume-upload"
             className="text-foreground text-sm font-medium flex items-center gap-2"
           >
             <Upload className="w-4 h-4 text-primary" />
@@ -161,7 +218,7 @@ export function ResumeInputPanel({ onGenerate, isGenerating, mode = "generate" }
           >
             <input
               ref={fileInputRef}
-              id="resume-content"
+              id="resume-upload"
               name="resumeContentFile"
               type="file"
               accept=".pdf,.doc,.docx,.txt,.md,.json,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,application/json"
@@ -177,11 +234,11 @@ export function ResumeInputPanel({ onGenerate, isGenerating, mode = "generate" }
                   Extracting text from {uploadedFile?.name}...
                 </span>
               </div>
-            ) : uploadedFile ? (
+            ) : displayFileName ? (
               <div className="flex items-center justify-center gap-3">
                 <FileText className="w-4 h-4 text-primary" />
-                <span className="text-foreground text-sm font-medium">
-                  {uploadedFile.name}
+                <span className="block min-w-0 truncate text-foreground text-sm font-medium">
+                  {displayFileName}
                 </span>
                 <button
                   type="button"
@@ -208,6 +265,7 @@ export function ResumeInputPanel({ onGenerate, isGenerating, mode = "generate" }
           {extractionError && (
             <p className="text-red-400 text-xs">{extractionError}</p>
           )}
+
         </div>
 
         {mode === "generate" && (
@@ -225,7 +283,7 @@ export function ResumeInputPanel({ onGenerate, isGenerating, mode = "generate" }
               name="extraInstructions"
               placeholder="Anything else you want to pass through to the LLM..."
               value={extraInstructions}
-              onChange={(e) => setExtraInstructions(e.target.value)}
+              onChange={(e) => onExtraInstructionsChange(e.target.value)}
               className="scrollbar-dark h-20 bg-black/10 border-white/8 text-foreground placeholder:text-muted-foreground resize-none focus:border-primary/40 focus:ring-primary/15 overflow-y-auto"
             />
           </div>

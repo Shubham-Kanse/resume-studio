@@ -5,16 +5,15 @@ const nextConfig = {
   },
   webpack: (config, { isServer }) => {
     if (isServer) {
-      config.resolve.alias.canvas = false
-      config.externals.push({
-        'onnxruntime-node': 'commonjs onnxruntime-node',
-        'sharp': 'commonjs sharp',
-      })
+      config.resolve.alias = {
+        ...(config.resolve.alias || {}),
+        canvas: false,
+      }
     }
     return config
   },
   experimental: {
-    serverComponentsExternalPackages: ['@xenova/transformers', 'onnxruntime-node'],
+    serverComponentsExternalPackages: ["@xenova/transformers", "onnxruntime-node", "sharp"],
   },
 }
 

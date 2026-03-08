@@ -45,7 +45,8 @@ Applying for jobs is tedious. You have one resume, but each job is different. Hi
 - ✅ **Save Hours**: Stop manual resume tweaking before each application
 - ✅ **Competitive Edge**: Hiring managers see your most relevant experience first
 - ✅ **Professional Quality**: AI ensures proper formatting and language
-- ✅ **No Data Stored**: Your resume never leaves your session
+- ✅ **Guest Mode**: Use the app without creating an account
+- ✅ **Optional Cloud History**: Sign in with Google to save resumes and ATS score snapshots
 
 ---
 
@@ -61,6 +62,7 @@ An intelligent, modern web application that uses AI to generate ATS-optimized re
 - **Multi-Format Support**: Upload resumes in PDF, DOCX, or paste text directly
 - **Live PDF Preview**: Real-time preview of your generated resume in PDF format
 - **Beautiful UI**: Modern, responsive interface with a live WebGL shader background
+- **Optional Google Auth**: Supabase-powered sign-in for cross-session history
 - **LaTeX-Based**: Professional, compilable LaTeX output for maximum formatting control
 - **Action Verb Suggestions**: Integrated database of powerful action verbs organized by skill category
 - **Extended Instructions**: Add custom requirements or preferences for resume generation
@@ -199,9 +201,17 @@ pnpm install
 Create a `.env.local` file in the root directory:
 ```
 OPENROUTER_API_KEY=your_openrouter_api_key_here
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key_here
 ```
 
 Get your API key at [https://openrouter.ai/keys](https://openrouter.ai/keys)
+
+If you want saved history:
+1. Create a free Supabase project
+2. Enable Google auth in Supabase
+3. Add `http://localhost:3000` and your deployed URL to the Supabase redirect allow list
+4. Run the SQL in `supabase/tracked-runs.sql`
 
 4. Start the development server:
 ```bash
