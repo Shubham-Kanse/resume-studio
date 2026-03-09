@@ -39,36 +39,22 @@ export function validateLaTeX(content: string): LaTeXError[] {
   }
 
   const envStack: Array<{ name: string; line: number }> = []
-  let braceCount = 0
-  let bracketCount = 0
-
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
     const lineNum = i + 1
+    const escapedLine = line.replace(/\\%/g, "__ESCAPED_PERCENT__")
+    const commentStart = escapedLine.indexOf("%")
+    const codePortion =
+      commentStart >= 0 ? line.slice(0, commentStart).replace(/__ESCAPED_PERCENT__/g, "\\%") : line
 
-    for (let j = 0; j < line.length; j++) {
-      const char = line[j]
-      const prev = j > 0 ? line[j - 1] : ""
-
-      if (char === "{" && prev !== "\\") braceCount++
-      if (char === "}" && prev !== "\\") braceCount--
-      if (char === "[" && prev !== "\\") bracketCount++
-      if (char === "]" && prev !== "\\") bracketCount--
-
-      if (braceCount < 0) {
-        errors.push({ type: "error", message: "Unmatched }. Remove or add {", line: lineNum })
-        braceCount = 0
-      }
-      if (bracketCount < 0) {
-        errors.push({ type: "error", message: "Unmatched ]. Remove or add [", line: lineNum })
-        bracketCount = 0
-      }
-    }
-
-    const beginMatch = line.match(/\\begin\{([^}]+)\}/)
+    const beginMatch = codePortion.match(/\\begin\{([^}]+)\}/)
     if (beginMatch) envStack.push({ name: beginMatch[1], line: lineNum })
 
-    const endMatch = line.match(/\\end\{([^}]+)\}/)
+    const inAlignmentEnv = envStack.some((env) =>
+      ["tabular", "tabular*", "array", "align", "align*", "aligned"].includes(env.name)
+    )
+
+    const endMatch = codePortion.match(/\\end\{([^}]+)\}/)
     if (endMatch) {
       const envName = endMatch[1]
       if (envStack.length === 0) {
@@ -89,7 +75,7 @@ export function validateLaTeX(content: string): LaTeXError[] {
       }
     }
 
-    if (line.includes("_") && !line.includes("\\_") && !line.match(/\$.*_.*\$/)) {
+    if (codePortion.includes("_") && !codePortion.includes("\\_") && !codePortion.match(/\$.*_.*\$/)) {
       errors.push({
         type: "warning",
         message: "Underscore outside math. Use \\_ or $ $",
@@ -98,9 +84,11 @@ export function validateLaTeX(content: string): LaTeXError[] {
     }
 
     if (
-      line.includes("&") &&
-      !line.includes("\\&") &&
-      !line.match(/\\begin\{(tabular|array|align)/)
+      codePortion.includes("&") &&
+      !codePortion.includes("\\&") &&
+      !inAlignmentEnv &&
+      !codePortion.match(/\\(begin|end)\{(tabular|array|align|align\\*|aligned|tabular\*)/) &&
+      !codePortion.includes("\\extracolsep")
     ) {
       errors.push({
         type: "warning",
@@ -109,7 +97,7 @@ export function validateLaTeX(content: string): LaTeXError[] {
       })
     }
 
-    if (line.includes("%") && !line.includes("\\%")) {
+    if (/(?:\d|[A-Za-z])%(?![A-Za-z])/.test(codePortion.replace(/\\%/g, ""))) {
       errors.push({
         type: "warning",
         message: "Percent sign should be \\%",
@@ -125,14 +113,6 @@ export function validateLaTeX(content: string): LaTeXError[] {
       line: env.line,
     })
   )
-
-  if (braceCount > 0) {
-    errors.push({ type: "error", message: `${braceCount} unclosed {. Add closing }` })
-  }
-
-  if (bracketCount > 0) {
-    errors.push({ type: "error", message: `${bracketCount} unclosed [. Add closing ]` })
-  }
 
   return errors
 }

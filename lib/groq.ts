@@ -19,6 +19,7 @@ interface CreateGroqChatCompletionOptions {
   temperature?: number
   maxTokens?: number
   responseFormat?: GroqResponseFormat
+  timeoutMs?: number
 }
 
 interface GroqErrorPayload {
@@ -62,12 +63,16 @@ export function getGroqModel(): string {
 export async function createGroqChatCompletion(
   options: CreateGroqChatCompletionOptions
 ): Promise<GroqChatCompletionResponse> {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs ?? 20_000)
+
   const response = await fetch(GROQ_API_URL, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${getGroqApiKey()}`,
       "Content-Type": "application/json",
     },
+    signal: controller.signal,
     body: JSON.stringify({
       model: options.model || getGroqModel(),
       messages: options.messages,
@@ -76,6 +81,7 @@ export async function createGroqChatCompletion(
       response_format: options.responseFormat,
     }),
   })
+  clearTimeout(timeoutId)
 
   if (!response.ok) {
     const errorData = (await response.json().catch(() => ({}))) as GroqErrorPayload

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { enforceRateLimit } from "@/lib/api-rate-limit"
+import { buildEvidenceSummary } from "@/lib/ats-evidence"
 import { reportServerError } from "@/lib/error-monitoring"
 import { scoreResumeDeterministically } from "@/lib/local-ats-scorer"
 import type { ATSScoreResponse } from "@/lib/ats-types"
@@ -197,8 +198,12 @@ export async function POST(request: NextRequest) {
     })
 
     const { evidence: _evidence, ...publicResult } = deterministic
+    const publicResponse: ATSScoreResponse = {
+      ...publicResult,
+      evidenceSummary: buildEvidenceSummary(deterministic),
+    }
 
-    const sanitized = filterUnsupportedFeedback(publicResult, resumeContent)
+    const sanitized = filterUnsupportedFeedback(publicResponse, resumeContent)
     return NextResponse.json(sanitized)
   } catch (error) {
     reportServerError(error, "ats-score")

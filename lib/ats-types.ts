@@ -44,6 +44,23 @@ export interface ATSScoreResponse {
       preferred: string[]
     }
   } | null
+  evidenceSummary?: {
+    requiredSectionsPresent: string[]
+    missingSections: string[]
+    missingOptionalSections: string[]
+    matchedKeywords: string[]
+    missingKeywords: string[]
+    yearsRequired: number | null
+    yearsEstimated: number | null
+    meetsYearsRequirement: boolean | null
+    degreeRequirement: string | null
+    meetsDegreeRequirement: boolean | null
+    requiredCertifications: string[]
+    missingCertifications: string[]
+    matchedRoleFamilies: string[]
+    parseabilityIssues: string[]
+    parseabilityWarnings: string[]
+  }
   debugAnalysis: ATSDebugSection[]
 }
 

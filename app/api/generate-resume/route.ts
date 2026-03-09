@@ -9,6 +9,7 @@ import {
   GroqApiError,
   type GroqChatCompletionResponse,
 } from "@/lib/groq"
+import { verifyAndRepairLatex } from "@/lib/latex-generation"
 import { buildKnowledgePrompt, buildSystemPrompt, buildUserPrompt } from "@/lib/llm-context"
 import { validationErrorResponse } from "@/lib/api-response"
 
@@ -125,7 +126,37 @@ export async function POST(request: NextRequest) {
     const start = latex.indexOf("\\documentclass")
     if (start > 0) latex = latex.slice(start)
 
-    return NextResponse.json({ latex })
+    const verified = await verifyAndRepairLatex({
+      latex,
+      jobDescription: jd,
+      resumeContent: resume,
+      additionalInstructions: extra || undefined,
+    })
+
+    if (!verified.verification.pass) {
+      return NextResponse.json(
+        {
+          error: verified.verification.summary || "Generated LaTeX did not pass validation.",
+          validation: {
+            repaired: verified.repaired,
+            pass: verified.verification.pass,
+            issues: verified.verification.issues,
+            summary: verified.verification.summary,
+          },
+        },
+        { status: 422 }
+      )
+    }
+
+    return NextResponse.json({
+      latex: verified.latex,
+      validation: {
+        repaired: verified.repaired,
+        pass: verified.verification.pass,
+        issues: verified.verification.issues,
+        summary: verified.verification.summary,
+      },
+    })
   } catch (error) {
     reportServerError(error, "generate-resume")
     return NextResponse.json(

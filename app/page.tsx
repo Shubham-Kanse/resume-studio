@@ -547,7 +547,33 @@ export default function HomePage() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData?.error || "Failed to generate resume")
+        const validationSummary = errorData?.validation?.summary
+        const validationIssues = Array.isArray(errorData?.validation?.issues)
+          ? (() => {
+              const issues = errorData.validation.issues as Array<{
+                message?: string
+                severity?: "high" | "medium" | "low"
+              }>
+              const prioritized = [...issues].sort((left, right) => {
+                const weight = { high: 3, medium: 2, low: 1 }
+                return (weight[right?.severity || "low"] || 0) - (weight[left?.severity || "low"] || 0)
+              })
+              const uniqueMessages = Array.from(
+                new Set(prioritized.map((issue) => issue?.message).filter(Boolean))
+              )
+              return uniqueMessages.slice(0, 2).join(" ")
+            })()
+          : ""
+        const genericValidationSummary =
+          validationSummary === "Local LaTeX validation found issues that may affect compilation or formatting." ||
+          validationSummary === "pdflatex compilation failed."
+        throw new Error(
+          (!genericValidationSummary && validationSummary) ||
+            validationIssues ||
+            validationSummary ||
+            errorData?.error ||
+            "Failed to generate resume"
+        )
       }
 
       const data = await response.json()
@@ -558,7 +584,7 @@ export default function HomePage() {
       }
 
       setLatexContent(latex)
-      setStatusMessage("")
+      setStatusMessage(data?.validation?.repaired ? "Generated and auto-repaired successfully." : "")
 
       if (session?.user?.id) {
         const savedRunId = await saveTrackedRun({

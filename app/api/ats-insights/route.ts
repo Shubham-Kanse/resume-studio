@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { enforceRateLimit } from "@/lib/api-rate-limit"
+import { buildEvidenceSummary } from "@/lib/ats-evidence"
 import { reportServerError } from "@/lib/error-monitoring"
 import { createGroqChatCompletion, getGroqModel, GroqApiError } from "@/lib/groq"
 import {
@@ -82,7 +83,10 @@ function toStringArray(value: unknown): string[] {
 
 function toPublicResponse(result: DeterministicATSResult): ATSScoreResponse {
   const { evidence: _evidence, ...publicResult } = result
-  return publicResult
+  return {
+    ...publicResult,
+    evidenceSummary: buildEvidenceSummary(result),
+  }
 }
 
 function sanitizeNarrativeResponse(data: unknown): ATSNarrativeResponse {

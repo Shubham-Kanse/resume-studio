@@ -281,6 +281,78 @@ function ATSLoadingPanel() {
   )
 }
 
+function EvidenceSummaryPanel({ data }: { data: ATSScoreResponse["evidenceSummary"] }) {
+  if (!data) return null
+
+  return (
+    <div className="min-w-0 overflow-hidden rounded-lg border border-white/8 bg-black/10 p-3 sm:p-4">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div>
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <FileSearch className="h-4 w-4 text-primary" />
+            Evidence Summary
+          </h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Deterministic evidence used to justify the ATS score.
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-lg border border-white/8 bg-black/20 p-3">
+          <div className="text-[11px] uppercase tracking-[0.16em] text-white/40">Sections</div>
+          <p className="mt-2 text-sm text-foreground">{data.requiredSectionsPresent.length} present</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {data.missingSections.length > 0 ? `${data.missingSections.length} missing` : "No required sections missing"}
+          </p>
+        </div>
+
+        <div className="rounded-lg border border-white/8 bg-black/20 p-3">
+          <div className="text-[11px] uppercase tracking-[0.16em] text-white/40">Keywords</div>
+          <p className="mt-2 text-sm text-foreground">{data.matchedKeywords.length} matched</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {data.missingKeywords.length > 0 ? `${data.missingKeywords.length} still missing` : "No critical keywords missing"}
+          </p>
+        </div>
+
+        <div className="rounded-lg border border-white/8 bg-black/20 p-3">
+          <div className="text-[11px] uppercase tracking-[0.16em] text-white/40">Qualifications</div>
+          <p className="mt-2 text-sm text-foreground">
+            {data.yearsEstimated ?? "--"} yrs
+            {data.yearsRequired !== null ? ` / ${data.yearsRequired} req` : ""}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {data.degreeRequirement
+              ? `${data.meetsDegreeRequirement ? "Meets" : "Missing"} ${data.degreeRequirement}`
+              : "No explicit degree requirement"}
+          </p>
+        </div>
+
+        <div className="rounded-lg border border-white/8 bg-black/20 p-3">
+          <div className="text-[11px] uppercase tracking-[0.16em] text-white/40">Parseability</div>
+          <p className="mt-2 text-sm text-foreground">{data.parseabilityIssues.length} issues</p>
+          <p className="mt-1 text-xs text-muted-foreground">{data.parseabilityWarnings.length} warnings</p>
+        </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div className="rounded-lg border border-white/8 bg-black/20 p-3">
+          <div className="text-xs font-medium text-foreground">Missing Sections</div>
+          <p className="mt-2 text-xs leading-5 text-muted-foreground">
+            {data.missingSections.length > 0 ? data.missingSections.join(", ") : "None"}
+          </p>
+        </div>
+        <div className="rounded-lg border border-white/8 bg-black/20 p-3">
+          <div className="text-xs font-medium text-foreground">Missing Certifications</div>
+          <p className="mt-2 text-xs leading-5 text-muted-foreground">
+            {data.missingCertifications.length > 0 ? data.missingCertifications.join(", ") : "None"}
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function PillButton({
   active,
   label,
@@ -831,6 +903,8 @@ export function ATSScorePanel({
                 </ul>
               </div>
             </div>
+
+            <EvidenceSummaryPanel data={data.evidenceSummary} />
 
             {data.debugAnalysis.length > 0 && activeDebugSection ? (
               <div className="min-w-0 overflow-hidden rounded-lg border border-white/8 bg-black/10 p-3 sm:p-4">
