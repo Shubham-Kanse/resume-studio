@@ -60,27 +60,54 @@ export function getGroqModel(): string {
   return process.env.GROQ_MODEL || DEFAULT_GROQ_MODEL
 }
 
+function redactGroqHeaders(headers: HeadersInit | undefined) {
+  if (!headers || Array.isArray(headers)) return headers
+  if (headers instanceof Headers) return headers
+
+  return Object.fromEntries(
+    Object.entries(headers).map(([key, value]) =>
+      key.toLowerCase() === "authorization" ? [key, "Bearer [REDACTED]"] : [key, value]
+    )
+  )
+}
+
 export async function createGroqChatCompletion(
   options: CreateGroqChatCompletionOptions
 ): Promise<GroqChatCompletionResponse> {
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs ?? 20_000)
 
-  const response = await fetch(GROQ_API_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${getGroqApiKey()}`,
-      "Content-Type": "application/json",
-    },
-    signal: controller.signal,
-    body: JSON.stringify({
-      model: options.model || getGroqModel(),
-      messages: options.messages,
-      temperature: options.temperature,
-      max_tokens: options.maxTokens,
-      response_format: options.responseFormat,
-    }),
-  })
+  let response: Response
+  try {
+    response = await fetch(GROQ_API_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${getGroqApiKey()}`,
+        "Content-Type": "application/json",
+      },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: options.model || getGroqModel(),
+        messages: options.messages,
+        temperature: options.temperature,
+        max_tokens: options.maxTokens,
+        response_format: options.responseFormat,
+      }),
+    })
+  } catch (error) {
+    clearTimeout(timeoutId)
+    throw new GroqApiError(
+      error instanceof Error ? error.message : "Groq request failed",
+      500,
+      {
+        messageCount: options.messages.length,
+        headers: redactGroqHeaders({
+          Authorization: `Bearer ${getGroqApiKey()}`,
+          "Content-Type": "application/json",
+        }),
+      }
+    )
+  }
   clearTimeout(timeoutId)
 
   if (!response.ok) {

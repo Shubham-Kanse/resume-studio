@@ -1,4 +1,5 @@
 import type { ATSScoreResponse } from "@/lib/ats-types"
+import { shouldKeepCachedRecord } from "@/lib/local-storage-policy"
 import type { SaveTrackedRunInput, TrackedRunRecord } from "@/lib/tracked-runs"
 
 const STORAGE_PREFIX = "resume-studio-tracked-runs"
@@ -19,7 +20,9 @@ export function loadLocalTrackedRuns(userId: string): TrackedRunRecord[] {
     if (!raw) return []
 
     const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? (parsed as TrackedRunRecord[]) : []
+    return Array.isArray(parsed)
+      ? (parsed as TrackedRunRecord[]).filter((record) => shouldKeepCachedRecord(record.updated_at))
+      : []
   } catch {
     return []
   }
@@ -29,7 +32,10 @@ export function persistLocalTrackedRuns(userId: string, records: TrackedRunRecor
   if (!isBrowser()) return
 
   try {
-    window.localStorage.setItem(storageKey(userId), JSON.stringify(records))
+    window.localStorage.setItem(
+      storageKey(userId),
+      JSON.stringify(records.filter((record) => shouldKeepCachedRecord(record.updated_at)))
+    )
   } catch {
     // Ignore localStorage write failures.
   }
@@ -40,6 +46,16 @@ export function removeLocalTrackedRun(userId: string, runId: string) {
   const next = records.filter((record) => record.id !== runId)
   persistLocalTrackedRuns(userId, next)
   return next
+}
+
+export function clearLocalTrackedRuns(userId: string) {
+  if (!isBrowser()) return
+
+  try {
+    window.localStorage.removeItem(storageKey(userId))
+  } catch {
+    // Ignore localStorage write failures.
+  }
 }
 
 export function mergeTrackedRuns(remote: TrackedRunRecord[], local: TrackedRunRecord[], limit: number) {

@@ -1,4 +1,5 @@
 import { validateLaTeX } from "@/lib/latex-editor"
+import { compileLatexDocument } from "@/lib/latex-compiler"
 import { createGroqChatCompletion, getGroqModel } from "@/lib/groq"
 
 type LatexIssueSeverity = "high" | "medium" | "low"
@@ -113,30 +114,8 @@ export function buildLocalLatexVerification(latex: string): LatexVerificationRes
 }
 
 async function compileLatexForDiagnostics(latex: string): Promise<LatexCompileResult> {
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 15_000)
-
-  const response = await fetch("https://latex.ytotech.com/builds/sync", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    signal: controller.signal,
-    body: JSON.stringify({
-      compiler: "pdflatex",
-      resources: [
-        {
-          main: true,
-          content: latex,
-        },
-      ],
-    }),
-    cache: "no-store",
-  })
-  clearTimeout(timeoutId)
-
-  const arrayBuffer = await response.arrayBuffer()
-  if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+  const result = await compileLatexDocument(latex)
+  if (!result.ok && result.details === "Empty response from LaTeX compiler.") {
     return {
       pass: false,
       summary: "Compiler returned an empty response.",
@@ -151,9 +130,7 @@ async function compileLatexForDiagnostics(latex: string): Promise<LatexCompileRe
     }
   }
 
-  const bytes = new Uint8Array(arrayBuffer)
-  const header = new TextDecoder().decode(bytes.slice(0, 4))
-  if (header === "%PDF") {
+  if (result.ok) {
     return {
       pass: true,
       summary: "pdflatex compilation passed.",
@@ -162,8 +139,7 @@ async function compileLatexForDiagnostics(latex: string): Promise<LatexCompileRe
     }
   }
 
-  const text = new TextDecoder().decode(bytes)
-  const excerpt = text.slice(0, 3000)
+  const excerpt = result.details.slice(0, 3000)
   const issues: LatexVerificationIssue[] = []
   const lines = excerpt.split("\n")
 

@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { enforceRateLimit } from "@/lib/api-rate-limit"
+import { reportServerError } from "@/lib/error-monitoring"
 
 export const runtime = "nodejs"
 
 const clientErrorSchema = z.object({
   context: z.string().trim().min(1).max(120),
   message: z.string().trim().min(1).max(4000),
-  stack: z.string().max(20000).optional(),
   path: z.string().max(1000).optional(),
 })
 
@@ -46,6 +46,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ok: true })
   } catch {
+    reportServerError("Failed to report client error", "client-error")
     return NextResponse.json({ error: "Failed to report client error" }, { status: 500 })
   }
 }

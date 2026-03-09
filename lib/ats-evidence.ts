@@ -18,7 +18,13 @@ export function buildEvidenceSummary(
     requiredCertifications: result.evidence.qualification.requiredCertifications,
     missingCertifications: result.evidence.qualification.missingCertifications,
     matchedRoleFamilies: result.evidence.qualification.matchedRoleFamilies,
+    expectedSeniority: result.evidence.qualification.expectedSeniority,
+    observedSeniority: result.evidence.qualification.observedSeniority,
+    seniorityAligned: result.evidence.qualification.seniorityAligned,
+    managementRequired: result.evidence.qualification.managementRequired,
+    managementObserved: result.evidence.qualification.managementObserved,
     parseabilityIssues: result.atsCompatibility.issues,
     parseabilityWarnings: result.atsCompatibility.warnings,
+    keywordCoverageBySection: result.keywordAnalysis?.coverageBySection ?? null,
   }
 }

@@ -43,6 +43,14 @@ export interface ATSScoreResponse {
       required: string[]
       preferred: string[]
     }
+    coverageBySection: {
+      professionalSummary: string[]
+      skills: string[]
+      workExperience: string[]
+      education: string[]
+      projects: string[]
+      certifications: string[]
+    }
   } | null
   evidenceSummary?: {
     requiredSectionsPresent: string[]
@@ -58,8 +66,21 @@ export interface ATSScoreResponse {
     requiredCertifications: string[]
     missingCertifications: string[]
     matchedRoleFamilies: string[]
+    expectedSeniority: string | null
+    observedSeniority: string | null
+    seniorityAligned: boolean | null
+    managementRequired: boolean
+    managementObserved: boolean
     parseabilityIssues: string[]
     parseabilityWarnings: string[]
+    keywordCoverageBySection: {
+      professionalSummary: string[]
+      skills: string[]
+      workExperience: string[]
+      education: string[]
+      projects: string[]
+      certifications: string[]
+    } | null
   }
   debugAnalysis: ATSDebugSection[]
 }

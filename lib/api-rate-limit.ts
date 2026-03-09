@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { fetchWithPolicy } from "@/lib/http"
 
 interface RateLimitOptions {
   key: string
@@ -25,12 +26,14 @@ async function enforceUpstashRateLimit(
   }
 
   try {
-    const incrResponse = await fetch(`${url}/incr/${encodeURIComponent(storeKey)}`, {
+    const incrResponse = await fetchWithPolicy(`${url}/incr/${encodeURIComponent(storeKey)}`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
       },
       cache: "no-store",
+      retries: 1,
+      timeoutMs: 5_000,
     })
 
     if (!incrResponse.ok) {
@@ -41,13 +44,18 @@ async function enforceUpstashRateLimit(
     const count = Number(incrPayload.result ?? 0)
 
     if (count === 1) {
-      await fetch(`${url}/expire/${encodeURIComponent(storeKey)}/${Math.ceil(options.windowMs / 1000)}`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        cache: "no-store",
-      }).catch(() => undefined)
+      await fetchWithPolicy(
+        `${url}/expire/${encodeURIComponent(storeKey)}/${Math.ceil(options.windowMs / 1000)}`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          cache: "no-store",
+          retries: 0,
+          timeoutMs: 5_000,
+        }
+      ).catch(() => undefined)
     }
 
     if (count > options.limit) {
@@ -57,6 +65,7 @@ async function enforceUpstashRateLimit(
           status: 429,
           headers: {
             "Retry-After": String(Math.ceil(options.windowMs / 1000)),
+            "X-RateLimit-Limit": String(options.limit),
           },
         }
       )
@@ -120,6 +129,7 @@ export async function enforceRateLimit(
         status: 429,
         headers: {
           "Retry-After": String(retryAfter),
+          "X-RateLimit-Limit": String(options.limit),
         },
       }
     )

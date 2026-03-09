@@ -4,6 +4,7 @@ import {
   normalizeJobApplicationStage,
   sortJobApplications,
 } from "@/lib/job-applications"
+import { shouldKeepCachedRecord } from "@/lib/local-storage-policy"
 
 const STORAGE_PREFIX = "resume-studio-job-applications"
 
@@ -55,6 +56,7 @@ export function loadLocalJobApplications(userId: string): JobApplicationRecord[]
           parsed
             .filter((record): record is Record<string, unknown> => typeof record === "object" && record !== null)
             .map(normalizeLocalJobApplication)
+            .filter((record) => shouldKeepCachedRecord(record.updated_at))
         )
       : []
   } catch {
@@ -66,7 +68,12 @@ export function persistLocalJobApplications(userId: string, records: JobApplicat
   if (!isBrowser()) return
 
   try {
-    window.localStorage.setItem(storageKey(userId), JSON.stringify(sortJobApplications(records)))
+    window.localStorage.setItem(
+      storageKey(userId),
+      JSON.stringify(
+        sortJobApplications(records).filter((record) => shouldKeepCachedRecord(record.updated_at))
+      )
+    )
   } catch {
     // Ignore localStorage write failures.
   }
@@ -77,6 +84,16 @@ export function removeLocalJobApplication(userId: string, applicationId: string)
   const next = records.filter((record) => record.id !== applicationId)
   persistLocalJobApplications(userId, next)
   return next
+}
+
+export function clearLocalJobApplications(userId: string) {
+  if (!isBrowser()) return
+
+  try {
+    window.localStorage.removeItem(storageKey(userId))
+  } catch {
+    // Ignore localStorage write failures.
+  }
 }
 
 export function mergeJobApplications(remote: JobApplicationRecord[], local: JobApplicationRecord[]) {

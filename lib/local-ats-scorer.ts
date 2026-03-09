@@ -3,11 +3,10 @@ import type {
   ATSRecommendation,
   ATSScoreResponse,
   ATSSectionReview,
-} from "@/lib/ats-types"
+} from "./ats-types.ts"
+import { getCurrentUtcDateParts } from "./current-date"
 
-const CURRENT_DATE = new Date("2026-03-08T00:00:00Z")
-const CURRENT_MONTH_INDEX = CURRENT_DATE.getUTCMonth()
-const CURRENT_YEAR = CURRENT_DATE.getUTCFullYear()
+const { currentMonth: CURRENT_MONTH_INDEX, currentYear: CURRENT_YEAR } = getCurrentUtcDateParts()
 
 const SECTION_ALIASES = {
   professionalSummary: [

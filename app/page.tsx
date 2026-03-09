@@ -18,11 +18,11 @@ import {
   createJobApplicationDraft,
   formatJobApplicationDateForDisplay,
   formatJobApplicationDateForStorage,
-  normalizeJobApplicationStage,
   sortJobApplications,
   type JobApplicationRecord,
 } from "@/lib/job-applications"
 import {
+  clearLocalJobApplications,
   loadLocalJobApplications,
   mergeJobApplications,
   persistLocalJobApplications,
@@ -30,6 +30,13 @@ import {
 } from "@/lib/job-applications-local"
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser"
 import {
+  isMissingJobApplicationsTable,
+  isMissingTrackedRunsTable,
+  normalizeJobApplication,
+  normalizeTrackedRun,
+} from "@/lib/record-normalizers"
+import {
+  clearLocalTrackedRuns,
   createLocalTrackedRunRecord,
   loadLocalTrackedRuns,
   mergeTrackedRuns,
@@ -62,76 +69,6 @@ const WebGLShader = dynamic(
 )
 
 const supabase = getSupabaseBrowserClient()
-
-function normalizeTrackedRun(record: Record<string, unknown>): TrackedRunRecord {
-  return {
-    id: String(record.id),
-    user_id: String(record.user_id),
-    mode: record.mode === "ats-score" ? "ats-score" : "generate",
-    label: String(record.label),
-    job_description: typeof record.job_description === "string" ? record.job_description : null,
-    resume_content: typeof record.resume_content === "string" ? record.resume_content : "",
-    resume_file_name:
-      typeof record.resume_file_name === "string" ? record.resume_file_name : null,
-    resume_file_mime_type:
-      typeof record.resume_file_mime_type === "string" ? record.resume_file_mime_type : null,
-    resume_file_data_url:
-      typeof record.resume_file_data_url === "string" ? record.resume_file_data_url : null,
-    extra_instructions:
-      typeof record.extra_instructions === "string" ? record.extra_instructions : null,
-    latex_content: typeof record.latex_content === "string" ? record.latex_content : null,
-    ats_score: (record.ats_score as ATSScoreResponse | null | undefined) ?? null,
-    created_at: String(record.created_at),
-    updated_at: String(record.updated_at),
-  }
-}
-
-function normalizeJobApplication(record: Record<string, unknown>): JobApplicationRecord {
-  return {
-    id: String(record.id),
-    user_id: String(record.user_id),
-    company: typeof record.company === "string" ? record.company : "",
-    position: typeof record.position === "string" ? record.position : null,
-    stage: normalizeJobApplicationStage(record.stage),
-    job_link: typeof record.job_link === "string" ? record.job_link : null,
-    resume_file_name:
-      typeof record.resume_file_name === "string"
-        ? record.resume_file_name
-        : typeof record.resume_label === "string"
-          ? record.resume_label
-          : null,
-    resume_file_mime_type:
-      typeof record.resume_file_mime_type === "string" ? record.resume_file_mime_type : null,
-    resume_file_data_url:
-      typeof record.resume_file_data_url === "string" ? record.resume_file_data_url : null,
-    applied_on:
-      typeof record.applied_on === "string"
-        ? formatJobApplicationDateForDisplay(record.applied_on)
-        : null,
-    created_at: String(record.created_at),
-    updated_at: String(record.updated_at),
-  }
-}
-
-function isMissingTrackedRunsTable(error: { code?: string; message?: string } | null | undefined) {
-  return (
-    error?.code === "PGRST205" ||
-    error?.code === "PGRST204" ||
-    error?.message?.includes("tracked_runs") ||
-    error?.message?.includes("schema cache") ||
-    false
-  )
-}
-
-function isMissingJobApplicationsTable(error: { code?: string; message?: string } | null | undefined) {
-  return (
-    error?.code === "PGRST205" ||
-    error?.code === "PGRST204" ||
-    error?.message?.includes("job_applications") ||
-    error?.message?.includes("schema cache") ||
-    false
-  )
-}
 
 export default function HomePage() {
   const atsRequestIdRef = useRef(0)
@@ -798,6 +735,8 @@ export default function HomePage() {
         await supabase.auth.signOut()
       }
 
+      clearLocalTrackedRuns(session.user.id)
+      clearLocalJobApplications(session.user.id)
       savedAtsRunIdRef.current = null
       setHistoryItems([])
       setSelectedHistoryRunId(null)

@@ -6,7 +6,9 @@
     "build": "next build",
     "dev": "next dev",
     "lint": "eslint . --max-warnings=0",
-    "start": "next start"
+    "start": "next start",
+    "test": "pnpm test:eval",
+    "test:eval": "pnpm exec tsc --esModuleInterop --module commonjs --moduleResolution node --target es2020 --outDir /tmp/resume-studio-evals tests/evals/ats-core.test.ts lib/ats-feedback.ts lib/current-date.ts lib/ats-types.ts lib/local-ats-scorer.ts && node --test /tmp/resume-studio-evals/tests/evals/**/*.test.js"
   },
   "dependencies": {
     "@emotion/is-prop-valid": "latest",

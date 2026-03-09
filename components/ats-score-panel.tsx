@@ -284,6 +284,17 @@ function ATSLoadingPanel() {
 function EvidenceSummaryPanel({ data }: { data: ATSScoreResponse["evidenceSummary"] }) {
   if (!data) return null
 
+  const sectionCoverage = data.keywordCoverageBySection
+    ? [
+        ["Summary", data.keywordCoverageBySection.professionalSummary.length],
+        ["Skills", data.keywordCoverageBySection.skills.length],
+        ["Experience", data.keywordCoverageBySection.workExperience.length],
+        ["Education", data.keywordCoverageBySection.education.length],
+        ["Projects", data.keywordCoverageBySection.projects.length],
+        ["Certs", data.keywordCoverageBySection.certifications.length],
+      ]
+    : []
+
   return (
     <div className="min-w-0 overflow-hidden rounded-lg border border-white/8 bg-black/10 p-3 sm:p-4">
       <div className="mb-3 flex items-start justify-between gap-3">
@@ -349,6 +360,50 @@ function EvidenceSummaryPanel({ data }: { data: ATSScoreResponse["evidenceSummar
           </p>
         </div>
       </div>
+
+      <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div className="rounded-lg border border-white/8 bg-black/20 p-3">
+          <div className="text-xs font-medium text-foreground">Seniority Alignment</div>
+          <p className="mt-2 text-xs leading-5 text-muted-foreground">
+            {data.expectedSeniority
+              ? `${data.observedSeniority || "No clear seniority signal"} vs expected ${data.expectedSeniority}`
+              : "No explicit seniority requirement detected"}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {data.seniorityAligned === null
+              ? "Alignment not applicable"
+              : data.seniorityAligned
+                ? "Observed seniority appears aligned"
+                : "Seniority appears below the target"}
+          </p>
+        </div>
+
+        <div className="rounded-lg border border-white/8 bg-black/20 p-3">
+          <div className="text-xs font-medium text-foreground">Leadership Requirement</div>
+          <p className="mt-2 text-xs leading-5 text-muted-foreground">
+            {data.managementRequired ? "The JD requests management/leadership ownership." : "No management requirement found."}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {data.managementObserved ? "Leadership evidence appears in the resume." : "Limited leadership evidence detected."}
+          </p>
+        </div>
+      </div>
+
+      {sectionCoverage.length > 0 ? (
+        <div className="mt-3 rounded-lg border border-white/8 bg-black/20 p-3">
+          <div className="text-xs font-medium text-foreground">Keyword Coverage By Section</div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {sectionCoverage.map(([label, count]) => (
+              <span
+                key={label}
+                className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[11px] text-muted-foreground"
+              >
+                {label}: {count}
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

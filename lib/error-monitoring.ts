@@ -1,3 +1,10 @@
+function redactMessage(message: string) {
+  return message
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[REDACTED_EMAIL]")
+    .replace(/\b(?:https?:\/\/)?(?:www\.)?linkedin\.com\/[^\s)]+/gi, "[REDACTED_LINKEDIN]")
+    .replace(/\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b/g, "[REDACTED_PHONE]")
+}
+
 export function reportClientError(error: unknown, context?: string) {
   console.error(context ? `[client:${context}]` : "[client]", error)
 
@@ -10,8 +17,8 @@ export function reportClientError(error: unknown, context?: string) {
     },
     body: JSON.stringify({
       context: context || "client",
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
+      message: redactMessage(error instanceof Error ? error.message : String(error)),
+      stack: undefined,
       path: window.location.pathname,
     }),
   }).catch(() => undefined)
@@ -31,8 +38,8 @@ export function reportServerError(error: unknown, context?: string) {
     body: JSON.stringify({
       level: "error",
       context: context || "server",
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
+      message: redactMessage(error instanceof Error ? error.message : String(error)),
+      stack: undefined,
       timestamp: new Date().toISOString(),
     }),
     cache: "no-store",
