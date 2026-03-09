@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { enforceRateLimit } from "@/lib/api-rate-limit"
 import { reportServerError } from "@/lib/error-monitoring"
+import { createGroqChatCompletion, getGroqModel, GroqApiError } from "@/lib/groq"
 import {
   buildATSKnowledgePrompt,
   buildATSSystemPrompt,
@@ -42,7 +43,10 @@ function parseMaxTokens(value: string | undefined, fallback: number): number {
 
 function resolveNarrativeMaxTokens(): number {
   const requested = parseMaxTokens(
-    process.env.OPENROUTER_ATS_MAX_TOKENS || process.env.OPENROUTER_MAX_TOKENS,
+    process.env.GROQ_ATS_MAX_TOKENS ||
+      process.env.GROQ_MAX_TOKENS ||
+      process.env.OPENROUTER_ATS_MAX_TOKENS ||
+      process.env.OPENROUTER_MAX_TOKENS,
     1800
   )
 
@@ -361,15 +365,15 @@ export async function POST(request: NextRequest) {
 
     let finalResponse: ATSScoreResponse = toPublicResponse(deterministic)
 
-    if (process.env.OPENROUTER_API_KEY) {
+    if (process.env.GROQ_API_KEY) {
       try {
         const systemPrompt = buildATSSystemPrompt()
         const knowledgePrompt = buildATSKnowledgePrompt(jobDescription, resumeContent)
         const userPrompt = buildATSUserPrompt(jobDescription, resumeContent, deterministicPayload)
-        const model = process.env.OPENROUTER_MODEL || "deepseek/deepseek-chat"
+        const model = getGroqModel()
         const maxTokens = resolveNarrativeMaxTokens()
 
-        const requestPayload = {
+        const data = await createGroqChatCompletion({
           model,
           messages: [
             { role: "system", content: systemPrompt },
@@ -377,33 +381,20 @@ export async function POST(request: NextRequest) {
             { role: "user", content: userPrompt },
           ],
           temperature: 0.1,
-          max_tokens: maxTokens,
-        }
-
-        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-            "Content-Type": "application/json",
-            "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
-            "X-Title": "AI Resume Generator",
-          },
-          body: JSON.stringify(requestPayload),
+          maxTokens,
+          responseFormat: { type: "json_object" },
         })
 
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}))
-          console.warn("OpenRouter ATS narrative skipped; using deterministic ATS result.", errorData)
-        } else {
-          const data = await response.json()
-          const content = data?.choices?.[0]?.message?.content
-          if (content) {
-            const parsed = JSON.parse(extractJsonObject(content))
-            const narrative = sanitizeNarrativeResponse(parsed)
-            finalResponse = mergeNarrative(deterministic, narrative)
-          }
+        const content = data?.choices?.[0]?.message?.content
+        if (content) {
+          const parsed = JSON.parse(extractJsonObject(content))
+          const narrative = sanitizeNarrativeResponse(parsed)
+          finalResponse = mergeNarrative(deterministic, narrative)
         }
       } catch (aiError) {
+        if (aiError instanceof GroqApiError) {
+          console.warn("Groq ATS narrative skipped; using deterministic ATS result.", aiError.details)
+        }
         reportServerError(aiError, "ats-insights-narrative")
       }
     }

@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { enforceRateLimit } from "@/lib/api-rate-limit"
 import { reportServerError } from "@/lib/error-monitoring"
+import {
+  createGroqChatCompletion,
+  getGroqApiKey,
+  getGroqModel,
+  GroqApiError,
+  type GroqChatCompletionResponse,
+} from "@/lib/groq"
 import { buildKnowledgePrompt, buildSystemPrompt, buildUserPrompt } from "@/lib/llm-context"
 import { validationErrorResponse } from "@/lib/api-response"
 
@@ -65,9 +72,11 @@ export async function POST(request: NextRequest) {
 
     const { jobDescription: jd, resumeContent: resume, extraInstructions: extra } = parsed.data
 
-    if (!process.env.OPENROUTER_API_KEY) {
+    try {
+      getGroqApiKey()
+    } catch {
       return NextResponse.json(
-        { error: "OpenRouter API key not configured." },
+        { error: "Groq API key not configured." },
         { status: 500 }
       )
     }
@@ -75,54 +84,39 @@ export async function POST(request: NextRequest) {
     const systemPrompt = buildSystemPrompt()
     const knowledgePrompt = buildKnowledgePrompt(jd, resume, extra || undefined)
     const userPrompt = buildUserPrompt(jd, resume, extra || undefined)
-    const model = process.env.OPENROUTER_MODEL || "deepseek/deepseek-chat"
-    const maxTokens = parseMaxTokens(process.env.OPENROUTER_MAX_TOKENS, 8000)
-    const requestPayload = {
-      model,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "system", content: knowledgePrompt },
-        { role: "user", content: userPrompt }
-      ],
-      temperature: 0.2,
-      max_tokens: maxTokens
-    }
-
-    const response = await fetch(
-      "https://openrouter.ai/api/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-          "Content-Type": "application/json",
-          "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
-          "X-Title": "AI Resume Generator"
-        },
-        body: JSON.stringify(requestPayload)
-      }
+    const model = getGroqModel()
+    const maxTokens = parseMaxTokens(
+      process.env.GROQ_MAX_TOKENS || process.env.OPENROUTER_MAX_TOKENS,
+      8000
     )
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}))
-      console.error("OpenRouter error:", errorData)
-      return NextResponse.json(
-        { error: errorData?.error?.message || "AI service error" },
-        { status: response.status }
-      )
+    let data: GroqChatCompletionResponse
+    try {
+      data = await createGroqChatCompletion({
+        model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "system", content: knowledgePrompt },
+          { role: "user", content: userPrompt },
+        ],
+        temperature: 0.2,
+        maxTokens,
+      })
+    } catch (error) {
+      if (error instanceof GroqApiError) {
+        console.error("Groq error:", error.details)
+        return NextResponse.json({ error: error.message }, { status: error.status })
+      }
+
+      throw error
     }
 
-    const data = await response.json()
     const message = data?.choices?.[0]?.message
     let latex = message?.content || ""
 
     if (!latex) {
-      const usedReasoning = Boolean(message?.reasoning)
       return NextResponse.json(
-        {
-          error: usedReasoning
-            ? `Model ${model} used its output budget on reasoning and returned no LaTeX. Increase OPENROUTER_MAX_TOKENS or use a different model.`
-            : "AI returned empty response"
-        },
+        { error: `Model ${model} returned no LaTeX. Increase GROQ_MAX_TOKENS or use a different model.` },
         { status: 500 }
       )
     }
