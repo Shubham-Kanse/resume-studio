@@ -1,10 +1,11 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { formatDistanceToNow } from "date-fns"
 import {
   BarChart3,
   Calendar,
+  Check,
   ChevronRight,
   Copy,
   Download,
@@ -41,6 +42,7 @@ interface DashboardPanelProps {
 }
 
 type HistoryFilter = "all" | "generate" | "ats-score"
+type CopiedField = "jobDescription" | "latex" | null
 
 function initialsFromUser(name: string | null, email: string | null) {
   const source = name?.trim() || email?.trim() || "RS"
@@ -52,11 +54,9 @@ function initialsFromUser(name: string | null, email: string | null) {
   return `${parts[0][0]}${parts[1][0]}`.toUpperCase()
 }
 
-function clip(text: string | null | undefined, max = 220) {
-  const value = (text || "").replace(/\s+/g, " ").trim()
-  if (!value) return "Not available"
-  if (value.length <= max) return value
-  return `${value.slice(0, max - 3)}...`
+function displayText(text: string | null | undefined) {
+  const value = (text || "").trim()
+  return value || "Not available"
 }
 
 export function DashboardPanel({
@@ -77,6 +77,8 @@ export function DashboardPanel({
   const [searchQuery, setSearchQuery] = useState("")
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>("all")
   const [pendingDeleteRunId, setPendingDeleteRunId] = useState<string | null>(null)
+  const [copiedField, setCopiedField] = useState<CopiedField>(null)
+  const copyFeedbackTimerRef = useRef<number | null>(null)
 
   const filteredHistoryItems = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase()
@@ -126,23 +128,28 @@ export function DashboardPanel({
     }
   }, [historyItems, pendingDeleteRunId])
 
-  const copyLatex = async () => {
-    if (!selectedRun?.latex_content) return
-    await navigator.clipboard.writeText(selectedRun.latex_content)
-  }
+  useEffect(() => {
+    return () => {
+      if (copyFeedbackTimerRef.current) {
+        window.clearTimeout(copyFeedbackTimerRef.current)
+      }
+    }
+  }, [])
 
-  const downloadLatex = () => {
-    if (!selectedRun?.latex_content) return
+  const handleCopy = async (field: Exclude<CopiedField, null>, text: string | null | undefined) => {
+    if (!text) return
 
-    const blob = new Blob([selectedRun.latex_content], { type: "text/x-latex" })
-    const url = URL.createObjectURL(blob)
-    const anchor = document.createElement("a")
-    anchor.href = url
-    anchor.download = "resume.tex"
-    document.body.appendChild(anchor)
-    anchor.click()
-    document.body.removeChild(anchor)
-    URL.revokeObjectURL(url)
+    await navigator.clipboard.writeText(text)
+    setCopiedField(field)
+
+    if (copyFeedbackTimerRef.current) {
+      window.clearTimeout(copyFeedbackTimerRef.current)
+    }
+
+    copyFeedbackTimerRef.current = window.setTimeout(() => {
+      setCopiedField(null)
+      copyFeedbackTimerRef.current = null
+    }, 1200)
   }
 
   const downloadResumeFile = () => {
@@ -335,12 +342,19 @@ export function DashboardPanel({
                     run.resume_file_name || extractTrackedRunFileName(run.label) || "Saved run"
                   const isPendingDelete = pendingDeleteRunId === run.id
                   return (
-                    <button
+                    <div
                       key={run.id}
-                      type="button"
+                      role="button"
+                      tabIndex={0}
                       onClick={() => onSelectRun(run.id)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault()
+                          onSelectRun(run.id)
+                        }
+                      }}
                       className={cn(
-                        "w-full rounded-2xl border px-3 py-2.5 text-left transition-colors",
+                        "w-full rounded-2xl border px-3 py-2.5 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-primary/35 focus:ring-offset-0",
                         active
                           ? "border-primary/30 bg-primary/10 shadow-[0_10px_24px_rgba(34,197,94,0.14)]"
                           : "border-white/8 bg-black/8 hover:border-white/15 hover:bg-white/[0.04]"
@@ -385,7 +399,7 @@ export function DashboardPanel({
                           )}
                         </button>
                       </div>
-                    </button>
+                    </div>
                   )
                 })}
               </div>
@@ -393,10 +407,10 @@ export function DashboardPanel({
           </section>
         </div>
 
-        <section className="flex min-h-0 flex-col rounded-2xl border border-white/8 bg-black/12 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+        <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-white/8 bg-black/12 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
           {selectedRun ? (
-            <>
-              <div className="flex flex-col gap-4 border-b border-white/8 pb-4 xl:flex-row xl:items-start xl:justify-between">
+            <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
+              <div className="border-b border-white/8 pb-4">
                 <div>
                   <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-white/40">
                     {selectedRun.mode === "generate" ? (
@@ -406,7 +420,33 @@ export function DashboardPanel({
                     )}
                     {selectedRun.mode === "generate" ? "Generated resume" : "ATS analysis"}
                   </div>
-                  <h3 className="mt-2 text-xl font-semibold text-foreground">{selectedRun.label}</h3>
+                  <div className="mt-2 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                    <h3 className="min-w-0 text-xl font-semibold text-foreground">{selectedRun.label}</h3>
+
+                    <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+                      <Button
+                        type="button"
+                        variant="cool"
+                        size="sm"
+                        className="rounded-full px-4"
+                        onClick={() => onLoadRun(selectedRun)}
+                      >
+                        Open in workspace
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="rounded-full px-4"
+                        onClick={downloadResumeFile}
+                        disabled={!selectedRun.resume_file_data_url}
+                      >
+                        <Download className="h-4 w-4" />
+                        Download resume
+                      </Button>
+                    </div>
+                  </div>
                   <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                     <span className="inline-flex items-center gap-1.5">
                       <Calendar className="h-3.5 w-3.5" />
@@ -419,109 +459,124 @@ export function DashboardPanel({
                     ) : null}
                   </div>
                 </div>
-
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    variant="cool"
-                    size="sm"
-                    className="rounded-full px-4"
-                    onClick={() => onLoadRun(selectedRun)}
-                  >
-                    Open in workspace
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                  {selectedRun.latex_content ? (
-                    <>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="rounded-full px-4"
-                        onClick={() => void copyLatex()}
-                      >
-                        <Copy className="h-4 w-4" />
-                        Copy LaTeX
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="rounded-full px-4"
-                        onClick={downloadLatex}
-                      >
-                        <Download className="h-4 w-4" />
-                        Download .tex
-                      </Button>
-                    </>
-                  ) : null}
-                </div>
               </div>
 
-                <div className="scrollbar-dark mt-4 flex-1 space-y-4 overflow-y-auto pr-1">
-                <div className="grid gap-4 xl:grid-cols-2">
+              {selectedRun.mode === "generate" ? (
+                <div className="scrollbar-dark mt-4 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-1">
                   <div className="rounded-2xl border border-white/8 bg-black/10 p-4">
-                    <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-foreground">
-                      <FileText className="h-4 w-4 text-primary" />
-                      Resume file
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                        <FileText className="h-4 w-4 text-primary" />
+                        Job description
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void handleCopy("jobDescription", selectedRun.job_description)}
+                        disabled={!selectedRun.job_description}
+                        className={cn(
+                          "rounded-full border p-2 transition-all duration-200 hover:border-white/20 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40",
+                          copiedField === "jobDescription"
+                            ? "border-primary/35 bg-primary/10 text-primary scale-105"
+                            : "border-white/10 text-muted-foreground"
+                        )}
+                        aria-label={copiedField === "jobDescription" ? "Job description copied" : "Copy job description"}
+                        title={copiedField === "jobDescription" ? "Copied" : "Copy job description"}
+                      >
+                        {copiedField === "jobDescription" ? (
+                          <Check className="h-3.5 w-3.5" />
+                        ) : (
+                          <Copy className="h-3.5 w-3.5" />
+                        )}
+                      </button>
                     </div>
-                    <p className="text-sm leading-6 text-muted-foreground">
-                      {selectedFileName || "No uploaded file name was saved for this run."}
-                    </p>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="mt-4 rounded-full px-4"
-                      onClick={downloadResumeFile}
-                      disabled={!selectedRun.resume_file_data_url}
-                    >
-                      <Download className="h-4 w-4" />
-                      Download resume
-                    </Button>
-                    {!selectedRun.resume_file_data_url ? (
-                      <p className="mt-3 text-xs leading-5 text-muted-foreground">
-                        This saved run does not include the original uploaded file, so only its metadata is available.
+                    <div className="scrollbar-dark h-25 overflow-y-auto rounded-xl border border-white/8 bg-black/20 px-4 py-3">
+                      <p className="whitespace-pre-wrap break-words text-sm leading-6 text-muted-foreground">
+                        {displayText(selectedRun.job_description)}
                       </p>
-                    ) : null}
-                  </div>
-                  <div className="rounded-2xl border border-white/8 bg-black/10 p-4">
-                    <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-foreground">
-                      <FileText className="h-4 w-4 text-primary" />
-                      Job description
                     </div>
-                    <p className="text-sm leading-6 text-muted-foreground">{clip(selectedRun.job_description)}</p>
                   </div>
+
                   {selectedRun.extra_instructions ? (
-                    <div className="rounded-2xl border border-white/8 bg-black/10 p-4 xl:col-span-2">
+                    <div className="rounded-2xl border border-white/8 bg-black/10 p-4">
                       <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-foreground">
                         <Sparkles className="h-4 w-4 text-primary" />
                         Additional info
                       </div>
-                      <p className="text-sm leading-6 text-muted-foreground">
-                        {clip(selectedRun.extra_instructions, 320)}
-                      </p>
+                      <div className="scrollbar-dark max-h-40 overflow-y-auto rounded-xl border border-white/8 bg-black/20 px-4 py-3">
+                        <p className="whitespace-pre-wrap break-words text-sm leading-6 text-muted-foreground">
+                          {displayText(selectedRun.extra_instructions)}
+                        </p>
+                      </div>
                     </div>
                   ) : null}
-                </div>
 
-                {selectedRun.mode === "generate" ? (
-                  <div className="rounded-2xl border border-white/8 bg-black/10 p-4">
-                    <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-foreground">
-                      <FileCode2 className="h-4 w-4 text-primary" />
-                      LaTeX file
+                  <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-white/8 bg-black/10 p-4">
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                        <FileCode2 className="h-4 w-4 text-primary" />
+                        LaTeX file
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void handleCopy("latex", selectedRun.latex_content)}
+                        disabled={!selectedRun.latex_content}
+                        className={cn(
+                          "rounded-full border p-2 transition-all duration-200 hover:border-white/20 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40",
+                          copiedField === "latex"
+                            ? "border-primary/35 bg-primary/10 text-primary scale-105"
+                            : "border-white/10 text-muted-foreground"
+                        )}
+                        aria-label={copiedField === "latex" ? "LaTeX copied" : "Copy LaTeX"}
+                        title={copiedField === "latex" ? "Copied" : "Copy LaTeX"}
+                      >
+                        {copiedField === "latex" ? (
+                          <Check className="h-3.5 w-3.5" />
+                        ) : (
+                          <Copy className="h-3.5 w-3.5" />
+                        )}
+                      </button>
                     </div>
-                    <p className="mb-4 text-sm text-muted-foreground">
+                    <p className="mb-3 text-xs text-muted-foreground">
                       {selectedRun.latex_content
                         ? "This generated run includes a saved LaTeX output you can reopen, copy, or download."
                         : "No LaTeX file was saved for this run."}
                     </p>
-                    <pre className="scrollbar-dark max-h-80 overflow-auto rounded-xl border border-white/8 bg-black/20 p-4 text-xs text-muted-foreground">
+                    <pre className="scrollbar-dark min-h-0 flex-1 overflow-auto rounded-xl border border-white/8 bg-black/20 p-4 text-xs text-muted-foreground">
                       {selectedRun.latex_content || "No LaTeX content available."}
                     </pre>
                   </div>
-                ) : selectedRun.ats_score ? (
+                </div>
+              ) : (
+                <div className="scrollbar-dark mt-4 min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
                   <div className="space-y-4">
+                    <div className="rounded-2xl border border-white/8 bg-black/10 p-4">
+                      <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-foreground">
+                        <FileText className="h-4 w-4 text-primary" />
+                        Job description
+                      </div>
+                      <div className="scrollbar-dark h-25 overflow-y-auto rounded-xl border border-white/8 bg-black/20 px-4 py-3">
+                        <p className="whitespace-pre-wrap break-words text-sm leading-6 text-muted-foreground">
+                          {displayText(selectedRun.job_description)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  {selectedRun.extra_instructions ? (
+                    <div className="rounded-2xl border border-white/8 bg-black/10 p-4">
+                      <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-foreground">
+                        <Sparkles className="h-4 w-4 text-primary" />
+                        Additional info
+                      </div>
+                      <div className="scrollbar-dark max-h-64 overflow-y-auto rounded-xl border border-white/8 bg-black/20 px-4 py-3">
+                        <p className="whitespace-pre-wrap break-words text-sm leading-6 text-muted-foreground">
+                          {displayText(selectedRun.extra_instructions)}
+                        </p>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {selectedRun.ats_score ? (
+                    <div className="space-y-4">
                     <div className="grid gap-4 md:grid-cols-3">
                       <div className="rounded-2xl border border-white/8 bg-black/10 p-4">
                         <div className="text-xs uppercase tracking-[0.18em] text-white/40">Overall</div>
@@ -567,14 +622,15 @@ export function DashboardPanel({
                         </ul>
                       </div>
                     </div>
-                  </div>
-                ) : (
-                  <div className="rounded-2xl border border-white/8 bg-black/10 p-4 text-sm text-muted-foreground">
-                    No ATS details were saved for this run.
-                  </div>
-                )}
-              </div>
-            </>
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-white/8 bg-black/10 p-4 text-sm text-muted-foreground">
+                      No ATS details were saved for this run.
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           ) : (
             <div className="flex flex-1 items-center justify-center rounded-2xl border border-white/8 bg-black/10 p-8 text-center text-sm text-muted-foreground">
               {historyItems.length === 0
