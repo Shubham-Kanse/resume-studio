@@ -354,9 +354,9 @@ function DashboardPanelComponent({
                         }
                       }}
                       className={cn(
-                        "w-full rounded-2xl border px-3 py-2.5 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-primary/35 focus:ring-offset-0",
+                        "w-full rounded-2xl border px-3 py-2.5 text-left transition-colors outline-none",
                         active
-                          ? "border-primary/30 bg-primary/10 shadow-[0_10px_24px_rgba(34,197,94,0.14)]"
+                          ? "border-white/12 bg-white/[0.05] shadow-[0_10px_24px_rgba(0,0,0,0.18)]"
                           : "border-white/8 bg-black/8 hover:border-white/15 hover:bg-white/[0.04]"
                       )}
                     >

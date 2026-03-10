@@ -1,5 +1,4 @@
 import { z } from "zod"
-import type { TextItem } from "pdfjs-dist/types/src/display/api"
 import { documentArtifactsSchema, type DocumentArtifacts, type DocumentBlock } from "@/lib/document-artifacts"
 import { compileLatexDocument } from "@/lib/latex-compiler"
 
@@ -38,98 +37,28 @@ function classifyBlockKind(text: string): DocumentBlock["kind"] {
 }
 
 async function extractFromPDF(buffer: ArrayBuffer): Promise<DocumentArtifacts> {
-  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs")
-  const loadingTask = pdfjs.getDocument({
-    data: new Uint8Array(buffer),
-    useWorkerFetch: false,
-    isEvalSupported: false,
-    useSystemFonts: true,
-  })
-  const pdf = await loadingTask.promise
-  const blocks: DocumentBlock[] = []
-  let hasTableEvidence = false
-  let hasHeaderFooterEvidence = false
-  let hasMultiColumnEvidence = false
-  let misorderedPairs = 0
-  let pageComparisons = 0
+  const pdfParse = (await import("pdf-parse-fork")).default
+  const parsed = await pdfParse(Buffer.from(buffer))
+  const lines = splitLines(parsed.text || "")
+  const blocks: DocumentBlock[] = lines.slice(0, 250).map((line) => ({
+    page: 1,
+    text: line,
+    kind: classifyBlockKind(line),
+  }))
 
-  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-    const page = await pdf.getPage(pageNumber)
-    const viewport = page.getViewport({ scale: 1 })
-    const content = await page.getTextContent()
-    const items = content.items.filter((item): item is TextItem => "str" in item)
-    const rows = new Map<number, TextItem[]>()
-
-    for (const item of items) {
-      const y = Math.round(item.transform[5])
-      const row = rows.get(y) || []
-      row.push(item)
-      rows.set(y, row)
-    }
-
-    const orderedRows = [...rows.entries()]
-      .sort((a, b) => b[0] - a[0])
-      .map(([y, rowItems]) => {
-        const sorted = [...rowItems].sort((a, b) => a.transform[4] - b.transform[4])
-        const text = sorted.map((item) => item.str).join(" ").replace(/\s+/g, " ").trim()
-        const minX = Math.min(...sorted.map((item) => item.transform[4]))
-        const maxX = Math.max(...sorted.map((item) => item.transform[4] + item.width))
-        const avgFont = sorted.reduce((sum, item) => sum + Math.abs(item.transform[0] || 0), 0) / sorted.length
-        return { y, text, minX, maxX, avgFont }
-      })
-      .filter((row) => row.text.length > 0)
-
-    const leftRows = orderedRows.filter((row) => row.minX < viewport.width * 0.42)
-    const rightRows = orderedRows.filter((row) => row.minX > viewport.width * 0.58)
-    if (leftRows.length >= 4 && rightRows.length >= 4) hasMultiColumnEvidence = true
-
-    const bodyTop = viewport.height * 0.15
-    const bodyBottom = viewport.height * 0.88
-
-    for (let index = 0; index < orderedRows.length; index += 1) {
-      const row = orderedRows[index]
-      const next = orderedRows[index + 1]
-      if (next) {
-        pageComparisons += 1
-        const horizontalJump = Math.abs(next.minX - row.minX)
-        if (horizontalJump > viewport.width * 0.38 && Math.abs(next.y - row.y) < 80) misorderedPairs += 1
-      }
-
-      if ((row.y >= viewport.height * 0.92 || row.y <= viewport.height * 0.08) && row.text.length > 4) {
-        hasHeaderFooterEvidence = true
-      }
-      if ((row.text.match(/\|/g) || []).length >= 2) hasTableEvidence = true
-
-      blocks.push({
-        page: pageNumber,
-        text: row.text,
-        kind: classifyBlockKind(row.text),
-        x: Number(row.minX.toFixed(1)),
-        y: Number(row.y.toFixed(1)),
-        width: Number((row.maxX - row.minX).toFixed(1)),
-        height: Number(Math.max(10, row.avgFont * 1.3).toFixed(1)),
-        fontSize: Number(row.avgFont.toFixed(1)),
-      })
-
-      if (row.y < bodyTop || row.y > bodyBottom) {
-        if (/@|linkedin\.com|github\.com|https?:\/\//i.test(row.text)) hasHeaderFooterEvidence = true
-      }
-    }
-  }
-
-  const extractedText = normalizeExtractedText(blocks.map((block) => block.text).join("\n"))
+  const extractedText = normalizeExtractedText(parsed.text || "")
   const artifacts = {
     sourceType: "pdf" as const,
     extractedText,
     layout: {
-      pageCount: pdf.numPages,
-      hasTableEvidence,
-      hasHeaderFooterEvidence,
-      hasMultiColumnEvidence,
-      readingOrderRisk: pageComparisons > 0 ? Number((misorderedPairs / pageComparisons).toFixed(2)) : 0,
-      averageBlocksPerPage: Number((blocks.length / Math.max(1, pdf.numPages)).toFixed(1)),
+      pageCount: parsed.numpages || 1,
+      hasTableEvidence: lines.some((line) => (line.match(/\|/g) || []).length >= 2 || /\t/.test(line)),
+      hasHeaderFooterEvidence: lines.some((line) => /page\s+\d+|@|linkedin\.com|github\.com|https?:\/\//i.test(line)),
+      hasMultiColumnEvidence: false,
+      readingOrderRisk: 0,
+      averageBlocksPerPage: Number((blocks.length / Math.max(1, parsed.numpages || 1)).toFixed(1)),
     },
-    blocks: blocks.slice(0, 250),
+    blocks,
   }
 
   return documentArtifactsSchema.parse(artifacts)
