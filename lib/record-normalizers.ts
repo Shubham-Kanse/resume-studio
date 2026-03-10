@@ -4,13 +4,13 @@ import {
   normalizeJobApplicationStage,
   type JobApplicationRecord,
 } from "@/lib/job-applications"
-import type { TrackedRunRecord } from "@/lib/tracked-runs"
+import { TRACKED_RUN_MODE, type TrackedRunRecord } from "@/lib/tracked-runs"
 
 export function normalizeTrackedRun(record: Record<string, unknown>): TrackedRunRecord {
   return {
     id: String(record.id),
     user_id: String(record.user_id),
-    mode: record.mode === "ats-score" ? "ats-score" : "generate",
+    mode: record.mode === TRACKED_RUN_MODE.ATS_SCORE ? TRACKED_RUN_MODE.ATS_SCORE : TRACKED_RUN_MODE.GENERATE,
     label: String(record.label),
     job_description: typeof record.job_description === "string" ? record.job_description : null,
     resume_content: typeof record.resume_content === "string" ? record.resume_content : "",

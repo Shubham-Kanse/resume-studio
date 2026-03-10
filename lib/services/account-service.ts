@@ -1,4 +1,5 @@
 import { createSupabaseAdminClient, createSupabaseAnonServerClient, getAuthenticatedUserFromRequest } from "@/lib/supabase-server"
+import { getUserSubscriptionRecord, isMissingUserSubscriptionsTable } from "@/lib/services/subscription-service"
 
 function isMissingTableError(error: { code?: string; message?: string } | null | undefined) {
   return (
@@ -16,7 +17,7 @@ export async function exportAccountData(authorizationHeader: string | null) {
   }
 
   const supabase = createSupabaseAnonServerClient(auth.accessToken)
-  const [trackedRunsResult, jobApplicationsResult] = await Promise.all([
+  const [trackedRunsResult, jobApplicationsResult, subscriptionResult] = await Promise.all([
     supabase.from("tracked_runs").select("*").eq("user_id", auth.user.id).order("created_at", { ascending: false }),
     supabase
       .from("job_applications")
@@ -24,6 +25,12 @@ export async function exportAccountData(authorizationHeader: string | null) {
       .eq("user_id", auth.user.id)
       .order("applied_on", { ascending: false })
       .order("updated_at", { ascending: false }),
+    getUserSubscriptionRecord(auth.user, auth.accessToken).catch((error: { code?: string; message?: string }) => {
+      if (isMissingUserSubscriptionsTable(error)) {
+        return null
+      }
+      throw error
+    }),
   ])
 
   const warnings: string[] = []
@@ -40,6 +47,9 @@ export async function exportAccountData(authorizationHeader: string | null) {
   if (jobApplicationsResult.error && isMissingTableError(jobApplicationsResult.error)) {
     warnings.push("job_applications table not available in this project.")
   }
+  if (!subscriptionResult) {
+    warnings.push("user_subscriptions table not available in this project.")
+  }
 
   return {
     exportedAt: new Date().toISOString(),
@@ -50,6 +60,7 @@ export async function exportAccountData(authorizationHeader: string | null) {
     },
     trackedRuns: trackedRunsResult.data ?? [],
     jobApplications: jobApplicationsResult.data ?? [],
+    subscription: subscriptionResult,
     warnings,
   }
 }

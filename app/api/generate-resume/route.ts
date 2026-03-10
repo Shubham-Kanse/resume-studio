@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
 import { enforceRateLimit } from "@/lib/api-rate-limit"
+import { errorResponse, forbidden, unauthorized, validationErrorResponse } from "@/lib/api-response"
 import { isLikelyConfigurationError } from "@/lib/errors"
-import { validationErrorResponse } from "@/lib/api-response"
 import { reportServerError } from "@/lib/error-monitoring"
 import { generateResume, generateResumeSchema, GroqApiError } from "@/lib/services/resume-generation-service"
+import { resolvePlanSnapshotForUser } from "@/lib/services/subscription-service"
+import { getAuthenticatedUserFromRequest } from "@/lib/supabase-server"
+import { canAccessFeature, getFeatureUpgradeMessage, PREMIUM_FEATURE } from "@/lib/subscription"
 
 export const runtime = "nodejs"
 export const maxDuration = 60
@@ -17,6 +20,16 @@ export async function POST(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse
 
   try {
+    const auth = await getAuthenticatedUserFromRequest(request.headers.get("authorization"))
+    if (!auth) {
+      return unauthorized("Sign in to access Pro features.")
+    }
+
+    const planSnapshot = await resolvePlanSnapshotForUser(auth.user, auth.accessToken)
+    if (!canAccessFeature(planSnapshot, PREMIUM_FEATURE.AI_GENERATOR)) {
+      return forbidden(getFeatureUpgradeMessage(PREMIUM_FEATURE.AI_GENERATOR))
+    }
+
     const formData = await request.formData()
     const parsed = generateResumeSchema.safeParse({
       jobDescription: String(formData.get("jobDescription") || ""),
@@ -51,9 +64,6 @@ export async function POST(request: NextRequest) {
     }
 
     reportServerError(error, "generate-resume")
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to generate resume" },
-      { status: 500 }
-    )
+    return errorResponse(error, "Failed to generate resume.")
   }
 }

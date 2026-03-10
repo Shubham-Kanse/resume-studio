@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic"
 import { memo, useCallback, useEffect, useRef, useState, type ComponentProps, type RefObject } from "react"
 import type { Session } from "@supabase/supabase-js"
-import { BriefcaseBusiness, ChevronDown, FileCode2, LayoutDashboard, LogOut, Target, UserRound } from "lucide-react"
+import { BriefcaseBusiness, ChevronDown, Crown, FileCode2, LayoutDashboard, LogOut, Target, UserRound } from "lucide-react"
 import { ErrorBoundary } from "@/components/error-boundary"
 import { BACKGROUND_THEMES, type BackgroundTheme } from "@/components/webgl-shader"
 import { Button } from "@/components/ui/button"
@@ -43,6 +43,7 @@ import {
 import {
   buildTrackedRunLabel,
   extractTrackedRunFileName,
+  TRACKED_RUN_MODE,
   type SaveTrackedRunInput,
   type TrackedRunRecord,
   type TrackedRunMode,
@@ -50,21 +51,61 @@ import {
 import {
   accountServiceClient,
   atsServiceClient,
+  billingServiceClient,
   resumeServiceClient,
   ServiceClientError,
 } from "@/lib/services/gateway-client"
 import { reportClientError } from "@/lib/error-monitoring"
+import {
+  getFeatureUpgradeMessage,
+  getGuestPlanSnapshot,
+  getPlanEntitlements,
+  isPlanSnapshot,
+  PREMIUM_FEATURE,
+  SUBSCRIPTION_PLAN,
+  type PlanSnapshot,
+  type PremiumFeature,
+} from "@/lib/subscription"
 import { cn } from "@/lib/utils"
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 const ATS_LOADING_MIN_DURATION_MS = 11000
 const HISTORY_LIMIT = 24
+const PLAN_SNAPSHOT_STORAGE_KEY_PREFIX = "resume-studio:plan-snapshot:"
 const TRACKED_RUNS_STORAGE_NOTICE =
   "Cloud dashboard storage needs the latest Supabase schema. Using local browser history for now."
 const JOB_APPLICATIONS_STORAGE_NOTICE =
   "Job tracker cloud storage needs the latest Supabase schema. Using local browser history for now."
 
-type AppMode = "dashboard" | "job-tracker" | TrackedRunMode
+const APP_MODE = {
+  DASHBOARD: "dashboard",
+  JOB_TRACKER: "job-tracker",
+} as const
+
+type AppMode = (typeof APP_MODE)[keyof typeof APP_MODE] | TrackedRunMode
+
+function getPlanSnapshotStorageKey(userId: string) {
+  return `${PLAN_SNAPSHOT_STORAGE_KEY_PREFIX}${userId}`
+}
+
+function loadCachedPlanSnapshot(userId: string): PlanSnapshot | null {
+  if (typeof window === "undefined") return null
+
+  const raw = window.localStorage.getItem(getPlanSnapshotStorageKey(userId))
+  if (!raw) return null
+
+  try {
+    const parsed = JSON.parse(raw)
+    return isPlanSnapshot(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+function persistPlanSnapshot(userId: string, snapshot: PlanSnapshot) {
+  if (typeof window === "undefined") return
+  window.localStorage.setItem(getPlanSnapshotStorageKey(userId), JSON.stringify(snapshot))
+}
 
 const WebGLShader = dynamic(
   () => import("@/components/webgl-shader").then((mod) => mod.WebGLShader),
@@ -106,6 +147,10 @@ const LegalDialog = dynamic(() => import("@/components/legal-dialog").then((mod)
   loading: () => null,
 })
 
+const PlanDialog = dynamic(() => import("@/components/plan-dialog").then((mod) => mod.PlanDialog), {
+  loading: () => null,
+})
+
 const supabase = getSupabaseBrowserClient()
 
 type DashboardPanelProps = ComponentProps<typeof DashboardPanel>
@@ -116,20 +161,25 @@ type ATSScorePanelProps = ComponentProps<typeof ATSScorePanel>
 type LatexSplitWorkspaceProps = ComponentProps<typeof LatexSplitWorkspace>
 type AuthDialogProps = ComponentProps<typeof AuthDialog>
 type LegalDialogProps = ComponentProps<typeof LegalDialog>
+type PlanDialogProps = ComponentProps<typeof PlanDialog>
 
 const PageHeader = memo(function PageHeader({
   mode,
   userEmail,
+  currentPlan,
   pageContainerClass,
   onModeChange,
   onOpenAuth,
+  onOpenPlans,
   onSignOut,
 }: {
   mode: AppMode
   userEmail: string | null
+  currentPlan: PlanSnapshot["plan"]
   pageContainerClass: string
   onModeChange: (mode: AppMode) => void
   onOpenAuth: () => void
+  onOpenPlans: () => void
   onSignOut: () => Promise<void>
 }) {
   return (
@@ -145,11 +195,11 @@ const PageHeader = memo(function PageHeader({
             type="button"
             variant="cool"
             size="sm"
-            aria-pressed={mode === "dashboard"}
-            onClick={() => onModeChange("dashboard")}
+            aria-pressed={mode === APP_MODE.DASHBOARD}
+            onClick={() => onModeChange(APP_MODE.DASHBOARD)}
             className={cn(
               "flex-1 rounded-full px-3 text-xs sm:flex-none sm:px-4 sm:text-sm",
-              mode === "dashboard"
+              mode === APP_MODE.DASHBOARD
                 ? "shadow-[0_10px_24px_rgba(34,197,94,0.28)]"
                 : "opacity-60 saturate-50 shadow-none hover:opacity-100"
             )}
@@ -161,11 +211,11 @@ const PageHeader = memo(function PageHeader({
             type="button"
             variant="cool"
             size="sm"
-            aria-pressed={mode === "generate"}
-            onClick={() => onModeChange("generate")}
+            aria-pressed={mode === TRACKED_RUN_MODE.GENERATE}
+            onClick={() => onModeChange(TRACKED_RUN_MODE.GENERATE)}
             className={cn(
               "flex-1 rounded-full px-3 text-xs sm:flex-none sm:px-4 sm:text-sm",
-              mode === "generate"
+              mode === TRACKED_RUN_MODE.GENERATE
                 ? "shadow-[0_10px_24px_rgba(34,197,94,0.28)]"
                 : "opacity-60 saturate-50 shadow-none hover:opacity-100"
             )}
@@ -177,11 +227,11 @@ const PageHeader = memo(function PageHeader({
             type="button"
             variant="cool"
             size="sm"
-            aria-pressed={mode === "ats-score"}
-            onClick={() => onModeChange("ats-score")}
+            aria-pressed={mode === TRACKED_RUN_MODE.ATS_SCORE}
+            onClick={() => onModeChange(TRACKED_RUN_MODE.ATS_SCORE)}
             className={cn(
               "flex-1 rounded-full px-3 text-xs sm:flex-none sm:px-4 sm:text-sm",
-              mode === "ats-score"
+              mode === TRACKED_RUN_MODE.ATS_SCORE
                 ? "shadow-[0_10px_24px_rgba(34,197,94,0.28)]"
                 : "opacity-60 saturate-50 shadow-none hover:opacity-100"
             )}
@@ -193,11 +243,11 @@ const PageHeader = memo(function PageHeader({
             type="button"
             variant="cool"
             size="sm"
-            aria-pressed={mode === "job-tracker"}
-            onClick={() => onModeChange("job-tracker")}
+            aria-pressed={mode === APP_MODE.JOB_TRACKER}
+            onClick={() => onModeChange(APP_MODE.JOB_TRACKER)}
             className={cn(
               "flex-1 rounded-full px-3 text-xs sm:flex-none sm:px-4 sm:text-sm",
-              mode === "job-tracker"
+              mode === APP_MODE.JOB_TRACKER
                 ? "shadow-[0_10px_24px_rgba(34,197,94,0.28)]"
                 : "opacity-60 saturate-50 shadow-none hover:opacity-100"
             )}
@@ -210,6 +260,23 @@ const PageHeader = memo(function PageHeader({
 
       <div className="w-full rounded-full border border-white/12 bg-black/25 p-1.5 shadow-[0_14px_40px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-xl md:w-fit">
         <div className="flex items-stretch gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onOpenPlans}
+            className={cn(
+              "flex-1 rounded-full px-3 text-xs sm:flex-none sm:px-4 sm:text-sm",
+              currentPlan === SUBSCRIPTION_PLAN.PRO
+                ? "border-sky-400/25 bg-sky-500/12 text-sky-50 hover:bg-sky-500/18"
+                : "border-sky-400/25 bg-sky-500/12 text-sky-50 hover:bg-sky-500/18"
+            )}
+          >
+            <Crown className="h-4 w-4" />
+            <span className="text-xs font-medium sm:text-sm">
+              {currentPlan === SUBSCRIPTION_PLAN.PRO ? "Pro" : "Upgrade"}
+            </span>
+          </Button>
           {userEmail ? (
             <>
               <Button
@@ -311,7 +378,7 @@ const MainContent = memo(function MainContent({
         pageContainerClass
       )}
     >
-      {mode === "dashboard" ? (
+      {mode === APP_MODE.DASHBOARD ? (
         <div className={cn(panelShellClass, "md:basis-auto md:flex-auto")}>
           <ErrorBoundary
             context="dashboard-panel"
@@ -321,7 +388,7 @@ const MainContent = memo(function MainContent({
             <DashboardPanel {...dashboardProps} />
           </ErrorBoundary>
         </div>
-      ) : mode === "job-tracker" ? (
+      ) : mode === APP_MODE.JOB_TRACKER ? (
         <div className={cn(panelShellClass, "md:basis-auto md:flex-auto")}>
           <ErrorBoundary
             context="job-applications-panel"
@@ -344,7 +411,7 @@ const MainContent = memo(function MainContent({
           </div>
 
           <div ref={outputPanelRef} className={panelShellClass}>
-            {mode === "generate" ? (
+            {mode === TRACKED_RUN_MODE.GENERATE ? (
               <ErrorBoundary
                 context="resume-preview-panel"
                 fallbackTitle="Preview unavailable"
@@ -375,7 +442,7 @@ const SplitWorkspaceLayer = memo(function SplitWorkspaceLayer({
   mode: AppMode
   splitProps: LatexSplitWorkspaceProps
 }) {
-  if (mode !== "generate") return null
+  if (mode !== TRACKED_RUN_MODE.GENERATE) return null
 
   return (
     <ErrorBoundary
@@ -392,14 +459,17 @@ const SplitWorkspaceLayer = memo(function SplitWorkspaceLayer({
 const DialogLayer = memo(function DialogLayer({
   authProps,
   legalProps,
+  planProps,
 }: {
   authProps: AuthDialogProps
   legalProps: LegalDialogProps
+  planProps: PlanDialogProps
 }) {
   return (
     <>
       <AuthDialog {...authProps} />
       <LegalDialog {...legalProps} />
+      <PlanDialog {...planProps} />
     </>
   )
 })
@@ -468,7 +538,7 @@ export default function HomePage() {
   const outputPanelRef = useRef<HTMLDivElement>(null)
   const savedAtsRunIdRef = useRef<string | null>(null)
 
-  const [mode, setMode] = useState<AppMode>("generate")
+  const [mode, setMode] = useState<AppMode>(TRACKED_RUN_MODE.GENERATE)
   const [jobDescription, setJobDescription] = useState("")
   const [resumeContent, setResumeContent] = useState("")
   const [resumeFileName, setResumeFileName] = useState("")
@@ -486,9 +556,14 @@ export default function HomePage() {
   const [isLoadingInsights, setIsLoadingInsights] = useState(false)
   const [hasLoadedAIInsights, setHasLoadedAIInsights] = useState(false)
   const [session, setSession] = useState<Session | null>(null)
+  const [planSnapshot, setPlanSnapshot] = useState<PlanSnapshot>(() => getGuestPlanSnapshot())
+  const [isPlanLoading, setIsPlanLoading] = useState(false)
   const [authLoading, setAuthLoading] = useState(Boolean(supabase))
   const [authMessage, setAuthMessage] = useState<string | null>(null)
   const [isAuthDialogOpen, setIsAuthDialogOpen] = useState(false)
+  const [isPlanDialogOpen, setIsPlanDialogOpen] = useState(false)
+  const [planHighlightFeature, setPlanHighlightFeature] = useState<PremiumFeature | null>(null)
+  const [isBillingActionLoading, setIsBillingActionLoading] = useState(false)
   const [isExportingData, setIsExportingData] = useState(false)
   const [isDeletingAccount, setIsDeletingAccount] = useState(false)
   const [legalDialog, setLegalDialog] = useState<"privacy" | "terms" | null>(null)
@@ -508,10 +583,11 @@ export default function HomePage() {
   const pageContainerClass = "mx-auto w-full max-w-[1680px] px-4 sm:px-6 lg:px-10 xl:px-12"
   const panelShellClass =
     "w-full min-w-0 rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(8,12,24,0.16),rgba(3,7,18,0.06))] p-4 sm:rounded-[28px] sm:p-5 md:basis-0 md:flex-1 lg:p-6 shadow-[0_18px_56px_rgba(0,0,0,0.18),inset_0_1px_0_rgba(255,255,255,0.1)] backdrop-blur-sm flex flex-col overflow-hidden min-h-[34rem] sm:min-h-[38rem] md:min-h-0"
-  const isSplitWorkspaceActive = mode === "generate" && isSplitWorkspaceOpen
+  const isSplitWorkspaceActive = mode === TRACKED_RUN_MODE.GENERATE && isSplitWorkspaceOpen
   const isAuthenticated = Boolean(session?.user?.id)
   const authAvailable = Boolean(supabase)
   const userEmail = session?.user?.email ?? null
+  const entitlements = planSnapshot.entitlements ?? getPlanEntitlements(SUBSCRIPTION_PLAN.FREE)
 
   useEffect(() => {
     if (!authMessage) return
@@ -534,11 +610,31 @@ export default function HomePage() {
   }, [backgroundTheme])
 
   useEffect(() => {
+    if (typeof window === "undefined") return
+
+    const url = new URL(window.location.href)
+    const billingStatus = url.searchParams.get("billing")
+    const checkoutId = url.searchParams.get("checkoutId")
+
+    if (billingStatus !== "success") return
+
+    setAuthMessage(
+      checkoutId
+        ? "Checkout completed. Refreshing your Pro access..."
+        : "Payment completed. Refreshing your Pro access..."
+    )
+
+    url.searchParams.delete("billing")
+    url.searchParams.delete("checkoutId")
+    window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`)
+  }, [])
+
+  useEffect(() => {
     setEditableLatexContent(latexContent)
   }, [latexContent])
 
   useEffect(() => {
-    if (mode !== "generate") {
+    if (mode !== TRACKED_RUN_MODE.GENERATE) {
       setIsSplitWorkspaceOpen(false)
     }
   }, [mode])
@@ -593,6 +689,49 @@ export default function HomePage() {
       subscription.unsubscribe()
     }
   }, [])
+
+  useEffect(() => {
+    if (!session?.user?.id) {
+      setPlanSnapshot(getGuestPlanSnapshot())
+      setIsPlanLoading(false)
+      return
+    }
+
+    let active = true
+    const cachedSnapshot = loadCachedPlanSnapshot(session.user.id)
+
+    if (cachedSnapshot) {
+      setPlanSnapshot(cachedSnapshot)
+    }
+
+    setIsPlanLoading(true)
+
+    const loadPlan = async () => {
+      try {
+        const snapshot = await accountServiceClient.getPlan(session?.access_token)
+        if (active) {
+          setPlanSnapshot(snapshot)
+          persistPlanSnapshot(session.user.id, snapshot)
+          setIsPlanLoading(false)
+        }
+      } catch (error) {
+        reportClientError(error, "subscription-plan")
+        if (active) {
+          if (!cachedSnapshot) {
+            setPlanSnapshot(getGuestPlanSnapshot())
+          }
+          setIsPlanLoading(false)
+          setAuthMessage("Failed to refresh your subscription plan.")
+        }
+      }
+    }
+
+    void loadPlan()
+
+    return () => {
+      active = false
+    }
+  }, [session?.access_token, session?.user])
 
   const scrollToOutputOnMobile = () => {
     if (typeof window === "undefined") return
@@ -830,6 +969,11 @@ export default function HomePage() {
     },
     requestId: number
   ) => {
+    if (!entitlements.canUseAiInsights || !session?.access_token) {
+      setIsLoadingInsights(false)
+      return
+    }
+
     setIsLoadingInsights(true)
 
     try {
@@ -837,7 +981,7 @@ export default function HomePage() {
         jobDescription: input.jobDescription,
         resumeContent: input.resumeContent,
         extractionArtifacts: input.extractionArtifacts,
-      })
+      }, session.access_token)
 
       if (atsRequestIdRef.current !== requestId) return
 
@@ -859,6 +1003,25 @@ export default function HomePage() {
   }
 
   const handleGenerate = async (formData: FormData) => {
+    if (isAuthenticated && isPlanLoading) {
+      setAuthMessage("Checking your subscription plan...")
+      return
+    }
+
+    if (!entitlements.canUseAiGenerator) {
+      setError(getFeatureUpgradeMessage(PREMIUM_FEATURE.AI_GENERATOR))
+      setPlanHighlightFeature(PREMIUM_FEATURE.AI_GENERATOR)
+      setIsPlanDialogOpen(true)
+      return
+    }
+
+    if (!session?.access_token) {
+      setAuthMessage("Sign in to access Pro features.")
+      setPlanHighlightFeature(PREMIUM_FEATURE.AI_GENERATOR)
+      setIsPlanDialogOpen(true)
+      return
+    }
+
     scrollToOutputOnMobile()
     setIsGenerating(true)
     setLatexContent("")
@@ -883,7 +1046,7 @@ export default function HomePage() {
 
       setStatusMessage("Generating optimized resume...")
 
-      const data = await resumeServiceClient.generate(formData)
+      const data = await resumeServiceClient.generate(formData, session.access_token)
       const latex = data?.latex || ""
 
       if (!latex) {
@@ -895,7 +1058,7 @@ export default function HomePage() {
 
       if (session?.user?.id) {
         const savedRunId = await saveTrackedRun({
-          mode: "generate",
+          mode: TRACKED_RUN_MODE.GENERATE,
           jobDescription: jd,
           resumeContent: resume,
           sourceFileName: resumeFileName,
@@ -992,7 +1155,7 @@ export default function HomePage() {
 
       if (session?.user?.id) {
         const savedRunId = await saveTrackedRun({
-          mode: "ats-score",
+          mode: TRACKED_RUN_MODE.ATS_SCORE,
           jobDescription: jd,
           resumeContent: resume,
           sourceFileName: resumeFileName,
@@ -1009,7 +1172,9 @@ export default function HomePage() {
         }
       }
 
-      void prefetchATSInsights({ ...input, extractionArtifacts: resumeArtifacts }, requestId)
+      if (entitlements.canUseAiInsights && session?.access_token) {
+        void prefetchATSInsights({ ...input, extractionArtifacts: resumeArtifacts }, requestId)
+      }
     } catch (scoringError) {
       reportClientError(scoringError, "ats-score")
       console.error("Scoring error:", scoringError)
@@ -1132,15 +1297,15 @@ export default function HomePage() {
     setResumeFileDataUrl(run.resume_file_data_url ?? "")
     setResumeArtifacts(null)
     setExtraInstructions(run.extra_instructions ?? "")
-    setLatexContent(run.mode === "generate" ? run.latex_content ?? "" : "")
-    setAtsScore(run.mode === "ats-score" ? run.ats_score : null)
-    setHasLoadedAIInsights(Boolean(run.mode === "ats-score" && run.ats_score))
+    setLatexContent(run.mode === TRACKED_RUN_MODE.GENERATE ? run.latex_content ?? "" : "")
+    setAtsScore(run.mode === TRACKED_RUN_MODE.ATS_SCORE ? run.ats_score : null)
+    setHasLoadedAIInsights(Boolean(run.mode === TRACKED_RUN_MODE.ATS_SCORE && run.ats_score))
     setIsLoadingInsights(false)
     setIsGenerating(false)
     setIsScoring(false)
     setStatusMessage("")
     setError(null)
-    savedAtsRunIdRef.current = run.mode === "ats-score" ? run.id : null
+    savedAtsRunIdRef.current = run.mode === TRACKED_RUN_MODE.ATS_SCORE ? run.id : null
     scrollToOutputOnMobile()
   }
 
@@ -1341,12 +1506,60 @@ export default function HomePage() {
   }
 
   const handleOpenAuthDialog = useCallback(() => {
+    setIsPlanDialogOpen(false)
     setIsAuthDialogOpen(true)
   }, [])
 
   const handleCloseAuthDialog = useCallback(() => {
     setIsAuthDialogOpen(false)
   }, [])
+
+  const handleOpenPlanDialog = useCallback((feature?: PremiumFeature | null) => {
+    if (isAuthenticated && isPlanLoading) {
+      setAuthMessage("Checking your subscription plan...")
+      return
+    }
+
+    setPlanHighlightFeature(feature ?? null)
+    setIsPlanDialogOpen(true)
+  }, [isAuthenticated, isPlanLoading])
+
+  const handleClosePlanDialog = useCallback(() => {
+    if (isBillingActionLoading) return
+    setIsPlanDialogOpen(false)
+    setPlanHighlightFeature(null)
+  }, [isBillingActionLoading])
+
+  const handleBillingAction = useCallback(async () => {
+    if (!session?.access_token) {
+      setIsPlanDialogOpen(false)
+      setIsAuthDialogOpen(true)
+      return
+    }
+
+    setIsBillingActionLoading(true)
+
+    try {
+      const response =
+        planSnapshot.plan === SUBSCRIPTION_PLAN.PRO
+          ? await billingServiceClient.createCustomerPortalSession(session.access_token)
+          : await billingServiceClient.createCheckoutSession(session.access_token)
+
+      window.location.href = response.url
+    } catch (error) {
+      reportClientError(error, "billing-action")
+      setAuthMessage(
+        getUserFacingMessage(
+          error,
+          planSnapshot.plan === SUBSCRIPTION_PLAN.PRO
+            ? "Failed to open billing portal."
+            : "Failed to start Polar checkout."
+        )
+      )
+    } finally {
+      setIsBillingActionLoading(false)
+    }
+  }, [planSnapshot.plan, session?.access_token])
 
   const handleOpenPrivacyDialog = useCallback(() => {
     setLegalDialog("privacy")
@@ -1361,8 +1574,20 @@ export default function HomePage() {
   }, [])
 
   const handleModeChange = useCallback((nextMode: AppMode) => {
+    if (isAuthenticated && isPlanLoading && nextMode === APP_MODE.JOB_TRACKER) {
+      setAuthMessage("Checking your subscription plan...")
+      return
+    }
+
+    if (nextMode === APP_MODE.JOB_TRACKER && !entitlements.canUseJobTracker) {
+      setError(getFeatureUpgradeMessage(PREMIUM_FEATURE.JOB_TRACKER))
+      setPlanHighlightFeature(PREMIUM_FEATURE.JOB_TRACKER)
+      setIsPlanDialogOpen(true)
+      return
+    }
+
     setMode(nextMode)
-  }, [])
+  }, [entitlements.canUseJobTracker, isAuthenticated, isPlanLoading])
 
   const handleBackgroundThemeChange = useCallback((nextTheme: BackgroundTheme) => {
     setBackgroundTheme(nextTheme)
@@ -1415,12 +1640,13 @@ export default function HomePage() {
   }
 
   const inputMode: NonNullable<ResumeInputPanelProps["mode"]> =
-    mode === "ats-score" ? "ats-score" : "generate"
+    mode === TRACKED_RUN_MODE.ATS_SCORE ? TRACKED_RUN_MODE.ATS_SCORE : TRACKED_RUN_MODE.GENERATE
 
   const inputProps: ResumeInputPanelProps = {
-    onGenerate: mode === "generate" ? handleGenerate : handleATSScore,
-    isGenerating: mode === "generate" ? isGenerating : isScoring,
+    onGenerate: mode === TRACKED_RUN_MODE.GENERATE ? handleGenerate : handleATSScore,
+    isGenerating: mode === TRACKED_RUN_MODE.GENERATE ? isGenerating : isScoring,
     mode: inputMode,
+    canUseAiGenerator: entitlements.canUseAiGenerator,
     jobDescription,
     resumeContent,
     resumeFileName,
@@ -1433,6 +1659,7 @@ export default function HomePage() {
     onResumeFileDataUrlChange: setResumeFileDataUrl,
     onResumeArtifactsChange: setResumeArtifacts,
     onExtraInstructionsChange: setExtraInstructions,
+    onLockedGenerateAttempt: () => handleOpenPlanDialog(PREMIUM_FEATURE.AI_GENERATOR),
   }
 
   const previewProps: ResumePreviewPanelProps = {
@@ -1449,6 +1676,8 @@ export default function HomePage() {
     isLoading: isScoring,
     isLoadingInsights,
     hasLoadedAIInsights,
+    canUseAiInsights: entitlements.canUseAiInsights,
+    onUpgradeToPro: () => handleOpenPlanDialog(PREMIUM_FEATURE.AI_ATS_INSIGHTS),
   }
 
   const splitProps: LatexSplitWorkspaceProps = {
@@ -1480,6 +1709,17 @@ export default function HomePage() {
     onClose: handleCloseLegalDialog,
   }
 
+  const planDialogProps: PlanDialogProps = {
+    open: isPlanDialogOpen,
+    currentPlan: planSnapshot.plan,
+    isAuthenticated,
+    highlightedFeature: planHighlightFeature,
+    isBillingActionLoading,
+    onClose: handleClosePlanDialog,
+    onOpenAuth: handleOpenAuthDialog,
+    onBillingAction: handleBillingAction,
+  }
+
   return (
     <div className="relative flex min-h-dvh flex-col overflow-x-hidden bg-[#030712] md:h-screen md:overflow-hidden">
       <div className="fixed inset-0 h-full w-full">
@@ -1500,9 +1740,11 @@ export default function HomePage() {
           <PageHeader
             mode={mode}
             userEmail={userEmail}
+            currentPlan={planSnapshot.plan}
             pageContainerClass={pageContainerClass}
             onModeChange={handleModeChange}
             onOpenAuth={handleOpenAuthDialog}
+            onOpenPlans={() => handleOpenPlanDialog()}
             onSignOut={handleSignOut}
           />
 
@@ -1524,7 +1766,7 @@ export default function HomePage() {
 
       <SplitWorkspaceLayer mode={mode} splitProps={splitProps} />
 
-      <DialogLayer authProps={authDialogProps} legalProps={legalDialogProps} />
+      <DialogLayer authProps={authDialogProps} legalProps={legalDialogProps} planProps={planDialogProps} />
 
       <PageFooter
         hidden={isSplitWorkspaceActive}

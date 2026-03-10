@@ -2,6 +2,11 @@ export const serviceContracts = {
   account: {
     delete: "/api/account/delete",
     export: "/api/account/export",
+    plan: "/api/account/plan",
+  },
+  billing: {
+    checkout: "/api/billing/checkout",
+    portal: "/api/billing/portal",
   },
   ats: {
     insights: "/api/ats-insights",

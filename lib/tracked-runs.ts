@@ -1,6 +1,11 @@
 import type { ATSScoreResponse } from "@/lib/ats-types"
 
-export type TrackedRunMode = "generate" | "ats-score"
+export const TRACKED_RUN_MODE = {
+  GENERATE: "generate",
+  ATS_SCORE: "ats-score",
+} as const
+
+export type TrackedRunMode = (typeof TRACKED_RUN_MODE)[keyof typeof TRACKED_RUN_MODE]
 
 export interface TrackedRunRecord {
   id: string
@@ -49,7 +54,7 @@ export function buildTrackedRunLabel(input: SaveTrackedRunInput) {
   const sourceFileName = normalizeFileName(input.sourceFileName)
   const jobSummary = truncateLabel(input.jobDescription, "Target role", 42)
 
-  if (input.mode === "generate") {
+  if (input.mode === TRACKED_RUN_MODE.GENERATE) {
     if (sourceFileName) return `Generated Resume • ${truncateLabel(sourceFileName, "resume", 52)}`
     if (input.jobDescription.trim()) return `Generated Resume • ${jobSummary}`
     return "Generated Resume"

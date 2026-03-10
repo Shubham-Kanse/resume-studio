@@ -2,6 +2,7 @@ import type { ATSScoreResponse } from "@/lib/ats-types"
 import type { DocumentArtifacts } from "@/lib/document-artifacts"
 import { AppError, isRetryableStatus } from "@/lib/errors"
 import { serviceContracts } from "@/lib/services/contracts"
+import type { PlanSnapshot } from "@/lib/subscription"
 
 interface JsonRequestOptions extends Omit<RequestInit, "body"> {
   body?: BodyInit | null
@@ -42,10 +43,20 @@ async function request(input: string, init: JsonRequestOptions) {
   return fetch(input, init)
 }
 
+function withAuthHeaders(headers: HeadersInit | undefined, accessToken?: string) {
+  if (!accessToken) return headers
+
+  return {
+    ...(headers || {}),
+    Authorization: `Bearer ${accessToken}`,
+  }
+}
+
 export const resumeServiceClient = {
-  async generate(formData: FormData) {
+  async generate(formData: FormData, accessToken?: string) {
     const response = await request(serviceContracts.resume.generate, {
       method: "POST",
+      headers: withAuthHeaders(undefined, accessToken),
       body: formData,
     })
 
@@ -90,10 +101,10 @@ export const atsServiceClient = {
     jobDescription: string
     resumeContent: string
     extractionArtifacts?: DocumentArtifacts | null
-  }) {
+  }, accessToken?: string) {
     const response = await request(serviceContracts.ats.insights, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: withAuthHeaders({ "Content-Type": "application/json" }, accessToken),
       body: JSON.stringify(payload),
     })
 
@@ -141,6 +152,20 @@ export const documentServiceClient = {
 }
 
 export const accountServiceClient = {
+  async getPlan(accessToken?: string) {
+    const response = await request(serviceContracts.account.plan, {
+      method: "GET",
+      headers: withAuthHeaders(undefined, accessToken),
+    })
+
+    if (!response.ok) {
+      const error = await parseErrorResponse(response, "Failed to load subscription plan")
+      throw new ServiceClientError(error.message, response.status, error.data)
+    }
+
+    return response.json() as Promise<PlanSnapshot>
+  },
+
   async exportAccount(accessToken: string) {
     const response = await request(serviceContracts.account.export, {
       method: "GET",
@@ -173,5 +198,35 @@ export const accountServiceClient = {
     }
 
     return response.json() as Promise<{ success: true }>
+  },
+}
+
+export const billingServiceClient = {
+  async createCheckoutSession(accessToken: string) {
+    const response = await request(serviceContracts.billing.checkout, {
+      method: "POST",
+      headers: withAuthHeaders({ "Content-Type": "application/json" }, accessToken),
+    })
+
+    if (!response.ok) {
+      const error = await parseErrorResponse(response, "Failed to start checkout")
+      throw new ServiceClientError(error.message, response.status, error.data)
+    }
+
+    return response.json() as Promise<{ url: string }>
+  },
+
+  async createCustomerPortalSession(accessToken: string) {
+    const response = await request(serviceContracts.billing.portal, {
+      method: "POST",
+      headers: withAuthHeaders({ "Content-Type": "application/json" }, accessToken),
+    })
+
+    if (!response.ok) {
+      const error = await parseErrorResponse(response, "Failed to open billing portal")
+      throw new ServiceClientError(error.message, response.status, error.data)
+    }
+
+    return response.json() as Promise<{ url: string }>
   },
 }

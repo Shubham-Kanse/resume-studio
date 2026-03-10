@@ -203,6 +203,11 @@ Create a `.env.local` file in the root directory:
 OPENROUTER_API_KEY=your_openrouter_api_key_here
 NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key_here
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key_here
+POLAR_ACCESS_TOKEN=polar_oat_your_access_token_here
+POLAR_WEBHOOK_SECRET=whsec_your_webhook_secret_here
+POLAR_PRO_PRODUCT_ID=your_polar_pro_product_id_here
+POLAR_SERVER=sandbox
 ```
 
 Get your API key at [https://openrouter.ai/keys](https://openrouter.ai/keys)
@@ -211,7 +216,9 @@ If you want saved history:
 1. Create a free Supabase project
 2. Enable Google auth in Supabase
 3. Add `http://localhost:3000` and your deployed URL to the Supabase redirect allow list
-4. Run the SQL in `supabase/tracked-runs.sql`
+4. Add `SUPABASE_SERVICE_ROLE_KEY` to your environment
+5. Run the SQL in `supabase/tracked-runs.sql`, `supabase/job-applications.sql`, and `supabase/user-subscriptions.sql`
+6. Add a Polar webhook endpoint pointing to `/api/webhooks/polar`
 
 4. Start the development server:
 ```bash

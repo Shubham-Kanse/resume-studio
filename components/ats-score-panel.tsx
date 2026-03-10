@@ -4,6 +4,7 @@ import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "reac
 import {
   Target,
   CheckCircle2,
+  Crown,
   XCircle,
   ChevronDown,
   ChevronUp,
@@ -29,6 +30,8 @@ interface ATSScorePanelProps {
   isLoading: boolean
   isLoadingInsights: boolean
   hasLoadedAIInsights: boolean
+  canUseAiInsights: boolean
+  onUpgradeToPro: () => void
 }
 
 type ColorBand = "red" | "yellow" | "green" | "blue" | "gray"
@@ -775,6 +778,8 @@ function ATSScorePanelComponent({
   isLoading,
   isLoadingInsights,
   hasLoadedAIInsights,
+  canUseAiInsights,
+  onUpgradeToPro,
 }: ATSScorePanelProps) {
   const [activeTab, setActiveTab] = useState<"overview" | "insights">("overview")
   const [activeOverviewDebug, setActiveOverviewDebug] = useState<string | null>(null)
@@ -867,7 +872,7 @@ function ATSScorePanelComponent({
             onClick={() => setActiveTab("insights")}
             badge={data.detailedIssues.length + data.recommendations.length}
           />
-        ) : (
+        ) : canUseAiInsights ? (
           <Button
             type="button"
             disabled
@@ -877,6 +882,17 @@ function ATSScorePanelComponent({
           >
             <Lightbulb className={`h-4 w-4 ${isLoadingInsights ? "animate-pulse" : ""}`} />
             {isLoadingInsights ? "AI Insights Loading..." : "AI Insights"}
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-9 rounded-full border-sky-400/25 bg-sky-500/10 px-3 text-xs whitespace-nowrap text-sky-100 hover:bg-sky-500/15 sm:px-4 sm:text-sm"
+            onClick={onUpgradeToPro}
+          >
+            <Crown className="h-4 w-4" />
+            AI Insights Pro
           </Button>
         )}
       </div>
@@ -988,6 +1004,25 @@ function ATSScorePanelComponent({
                   </SubnavRow>
                 </div>
                 <DebugSectionCard section={activeDebugSection} />
+              </div>
+            ) : null}
+
+            {!canUseAiInsights ? (
+              <div className="rounded-2xl border border-sky-400/20 bg-sky-500/10 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="flex items-center gap-2 text-sm font-semibold text-sky-100">
+                      <Crown className="h-4 w-4" />
+                      Pro unlock: AI ATS Insights
+                    </h3>
+                    <p className="mt-1 text-xs leading-5 text-sky-100/75">
+                      Overview scoring stays free. Upgrade to Pro for section breakdowns, issue prioritization, and AI recommendations.
+                    </p>
+                  </div>
+                  <Button type="button" size="sm" variant="outline" className="rounded-full border-sky-400/25 bg-black/20 text-sky-50 hover:bg-black/30" onClick={onUpgradeToPro}>
+                    View Plans
+                  </Button>
+                </div>
               </div>
             ) : null}
           </div>

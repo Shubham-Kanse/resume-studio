@@ -19,6 +19,11 @@ export const serviceRegistry = [
   {
     domain: "account",
     description: "Authenticated export and deletion workflows",
-    routes: [serviceContracts.account.export, serviceContracts.account.delete],
+    routes: [serviceContracts.account.export, serviceContracts.account.delete, serviceContracts.account.plan],
+  },
+  {
+    domain: "billing",
+    description: "Polar checkout and billing portal workflows",
+    routes: [serviceContracts.billing.checkout, serviceContracts.billing.portal],
   },
 ] as const

@@ -9,13 +9,15 @@ import type { DocumentArtifacts } from "@/lib/document-artifacts"
 import { getUserFacingMessage } from "@/lib/errors"
 import { reportClientError } from "@/lib/error-monitoring"
 import { documentServiceClient } from "@/lib/services/gateway-client"
+import { TRACKED_RUN_MODE, type TrackedRunMode } from "@/lib/tracked-runs"
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 
 interface ResumeInputPanelProps {
   onGenerate: (data: FormData) => void
   isGenerating: boolean
-  mode?: "generate" | "ats-score"
+  mode?: TrackedRunMode
+  canUseAiGenerator?: boolean
   jobDescription: string
   resumeContent: string
   resumeFileName: string
@@ -28,6 +30,7 @@ interface ResumeInputPanelProps {
   onResumeFileDataUrlChange: (value: string) => void
   onResumeArtifactsChange: (value: DocumentArtifacts | null) => void
   onExtraInstructionsChange: (value: string) => void
+  onLockedGenerateAttempt?: () => void
   resetToken?: number
 }
 
@@ -47,7 +50,8 @@ function readFileAsDataUrl(file: File): Promise<string> {
 export function ResumeInputPanel({
   onGenerate,
   isGenerating,
-  mode = "generate",
+  mode = TRACKED_RUN_MODE.GENERATE,
+  canUseAiGenerator = false,
   jobDescription,
   resumeContent,
   resumeFileName,
@@ -60,6 +64,7 @@ export function ResumeInputPanel({
   onResumeFileDataUrlChange,
   onResumeArtifactsChange,
   onExtraInstructionsChange,
+  onLockedGenerateAttempt,
   resetToken = 0,
 }: ResumeInputPanelProps) {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
@@ -139,10 +144,15 @@ export function ResumeInputPanel({
 
     // For generation mode, both JD and resume are required
     // For ATS score mode, only resume is required
-    const isValidForGenerate = mode === "generate" && jobDescription.trim() && resumeContent.trim()
-    const isValidForATS = mode === "ats-score" && resumeContent.trim()
-    
+    const isValidForGenerate = mode === TRACKED_RUN_MODE.GENERATE && jobDescription.trim() && resumeContent.trim()
+    const isValidForATS = mode === TRACKED_RUN_MODE.ATS_SCORE && resumeContent.trim()
+
     if (!isValidForGenerate && !isValidForATS) return
+
+    if (mode === TRACKED_RUN_MODE.GENERATE && !canUseAiGenerator) {
+      onLockedGenerateAttempt?.()
+      return
+    }
 
     const formData = new FormData()
     formData.append("jobDescription", jobDescription)
@@ -155,7 +165,7 @@ export function ResumeInputPanel({
     onGenerate(formData)
   }
 
-  const isValid = mode === "generate" 
+  const isValid = mode === TRACKED_RUN_MODE.GENERATE
     ? (!!jobDescription.trim() && !!resumeContent.trim())
     : !!resumeContent.trim()
   const displayFileName = uploadedFile?.name || resumeFileName
@@ -164,7 +174,7 @@ export function ResumeInputPanel({
       <div className="flex-shrink-0 mb-4">
         <h2 className="text-xl font-bold text-foreground mb-1">Input Details</h2>
         <p className="text-muted-foreground text-sm">
-          {mode === "ats-score" 
+          {mode === TRACKED_RUN_MODE.ATS_SCORE
             ? "Attach a resume file and optionally add a job description for keyword analysis"
             : "Paste the JD and attach a resume file"
           }
@@ -179,8 +189,8 @@ export function ResumeInputPanel({
           >
             <FileText className="w-4 h-4 text-primary" />
             Job Description
-            {mode === "generate" && <span className="text-primary">*</span>}
-            {mode === "ats-score" && <span className="text-muted-foreground text-xs">(Optional)</span>}
+            {mode === TRACKED_RUN_MODE.GENERATE && <span className="text-primary">*</span>}
+            {mode === TRACKED_RUN_MODE.ATS_SCORE && <span className="text-muted-foreground text-xs">(Optional)</span>}
           </Label>
           <Textarea
             id="job-description"
@@ -263,7 +273,7 @@ export function ResumeInputPanel({
 
         </div>
 
-        {mode === "generate" && (
+        {mode === TRACKED_RUN_MODE.GENERATE && (
           <div className="space-y-2">
             <Label
               htmlFor="extra-instructions"
@@ -283,6 +293,15 @@ export function ResumeInputPanel({
             />
           </div>
         )}
+
+        {mode === TRACKED_RUN_MODE.GENERATE && !canUseAiGenerator ? (
+          <div className="rounded-2xl border border-sky-400/20 bg-sky-500/10 p-4">
+            <p className="text-sm font-medium text-sky-100">AI LaTeX Generator is a Pro feature.</p>
+            <p className="mt-1 text-xs leading-5 text-sky-100/75">
+              Free users can still use the LaTeX editor, ATS score, and dashboard.
+            </p>
+          </div>
+        ) : null}
       </div>
 
       <div className="flex-shrink-0 mt-4 pt-4 border-t border-white/10 space-y-2">
@@ -297,12 +316,12 @@ export function ResumeInputPanel({
           {isGenerating ? (
             <>
               <Loader2 className="w-5 h-5 animate-spin" />
-              {mode === "ats-score" ? "Analyzing Resume..." : "Generating Resume..."}
+              {mode === TRACKED_RUN_MODE.ATS_SCORE ? "Analyzing Resume..." : "Generating Resume..."}
             </>
           ) : (
             <>
               <Sparkles className="w-5 h-5" />
-              {mode === "ats-score" ? "Get ATS Score" : "Generate LaTeX Resume"}
+              {mode === TRACKED_RUN_MODE.ATS_SCORE ? "Get ATS Score" : "Generate LaTeX Resume"}
             </>
           )}
         </Button>
