@@ -4,6 +4,7 @@ import type {
   ATSScoreResponse,
   ATSSectionReview,
 } from "./ats-types.ts"
+import type { DocumentArtifacts } from "./document-artifacts.ts"
 import { getCurrentUtcDateParts } from "./current-date"
 
 const { currentMonth: CURRENT_MONTH_INDEX, currentYear: CURRENT_YEAR } = getCurrentUtcDateParts()
@@ -265,6 +266,14 @@ interface QualificationAlignment {
   managementRequired: boolean
   managementObserved: boolean
   matchedRoleFamilies: string[]
+}
+
+interface DocumentStructureSignals {
+  detectedSections: SectionKey[]
+  contactInHeaderFooter: boolean
+  hasTableEvidence: boolean
+  hasMultiColumnEvidence: boolean
+  readingOrderRisk: number
 }
 
 interface DeterministicEvidence {
@@ -1180,8 +1189,38 @@ function splitLines(value: string): string[] {
     .filter(Boolean)
 }
 
+function normalizeHeadingCandidate(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[:|\-]+$/g, "")
+    .replace(/[()]/g, " ")
+    .replace(/[&/]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
 function tokenize(value: string): string[] {
   return (value.toLowerCase().match(/[a-z0-9][a-z0-9+#./-]{1,}/g) || []).filter(Boolean)
+}
+
+function normalizeSimilarityToken(token: string): string {
+  let normalized = token.toLowerCase()
+  if (normalized.endsWith("ies") && normalized.length > 4) normalized = `${normalized.slice(0, -3)}y`
+  else if (normalized.endsWith("ing") && normalized.length > 5) normalized = normalized.slice(0, -3)
+  else if (normalized.endsWith("ed") && normalized.length > 4) normalized = normalized.slice(0, -2)
+  else if (normalized.endsWith("es") && normalized.length > 4) normalized = normalized.slice(0, -2)
+  else if (normalized.endsWith("s") && normalized.length > 3) normalized = normalized.slice(0, -1)
+  if (normalized.endsWith("ment") && normalized.length > 6) normalized = normalized.slice(0, -4)
+  if (normalized.endsWith("manage")) normalized = normalized.slice(0, -1)
+  return normalized
+}
+
+function tokenizeForSimilarity(value: string): string[] {
+  return unique(
+    tokenize(value)
+      .map((token) => normalizeSimilarityToken(token))
+      .filter((token) => token.length >= 3 && !STOPWORDS.has(token))
+  )
 }
 
 function unique<T>(values: T[]): T[] {
@@ -1292,19 +1331,118 @@ function extractTermsFromLine(line: string): string[] {
   return unique([...canonicalTerms, ...rawTokens]).slice(0, 20)
 }
 
-function detectSectionKey(line: string): SectionKey | null {
-  const normalized = line
-    .toLowerCase()
-    .replace(/[:|\-]+$/g, "")
-    .replace(/[()]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
+function isLikelyHeadingLine(line: string): boolean {
+  const trimmed = line.trim()
+  if (!trimmed || trimmed.length > 72) return false
+  if (/[.!?]$/.test(trimmed) && !/:$/.test(trimmed)) return false
+  const words = trimmed.split(/\s+/).filter(Boolean)
+  if (words.length === 0 || words.length > 8) return false
+  const letters = trimmed.replace(/[^A-Za-z]/g, "")
+  const uppercaseLetters = trimmed.replace(/[^A-Z]/g, "").length
+  const uppercaseRatio = letters.length > 0 ? uppercaseLetters / letters.length : 0
+  return /:$/.test(trimmed) || uppercaseRatio >= 0.6 || words.every((word) => /^[A-Z][A-Za-z&/+-]*$/.test(word))
+}
+
+function detectSectionKeyFromHeading(line: string): SectionKey | null {
+  const normalized = normalizeHeadingCandidate(line)
+  const headingTokens = new Set(tokenizeForSimilarity(normalized))
 
   for (const [key, aliases] of Object.entries(SECTION_ALIASES) as Array<[SectionKey, readonly string[]]>) {
-    if (aliases.includes(normalized)) return key
+    for (const alias of aliases) {
+      const normalizedAlias = normalizeHeadingCandidate(alias)
+      if (normalized === normalizedAlias) return key
+      if (!isLikelyHeadingLine(line)) continue
+
+      const aliasTokens = tokenizeForSimilarity(normalizedAlias)
+      const matchedTokens = aliasTokens.filter((token) => headingTokens.has(token)).length
+      if (aliasTokens.length > 0 && matchedTokens === aliasTokens.length) return key
+      if (aliasTokens.length >= 2 && matchedTokens / aliasTokens.length >= 0.75) return key
+      if (normalized.startsWith(`${normalizedAlias} `) || normalized.includes(` ${normalizedAlias}`)) return key
+    }
+  }
+
+  if (isLikelyHeadingLine(line)) {
+    if (/\b(summary|profile|overview|qualifications?|highlights?)\b/i.test(normalized)) return "professionalSummary"
+    if (/\b(experience|employment|background|career history)\b/i.test(normalized)) return "workExperience"
+    if (/\b(skills?|tools?|technologies|competencies|proficiencies|stack)\b/i.test(normalized)) return "skills"
+    if (/\b(education|academics?|training)\b/i.test(normalized)) return "education"
+    if (/\b(certifications?|licenses?|licences?|certificates?)\b/i.test(normalized)) return "certifications"
+    if (/\b(projects?|portfolio)\b/i.test(normalized)) return "projects"
+    if (/\b(publications?|research|patents?)\b/i.test(normalized)) return "publications"
   }
 
   return null
+}
+
+function findTermEvidenceInLines(lines: string[], termValue: string): { exact: boolean; semantic: boolean } {
+  const normalizedTerm = termValue.toLowerCase().trim()
+  const termTokens = tokenizeForSimilarity(normalizedTerm)
+  if (termTokens.length === 0) return { exact: false, semantic: false }
+
+  for (const line of lines) {
+    if (containsTerm(line, normalizedTerm)) return { exact: true, semantic: false }
+  }
+
+  if (termTokens.length < 2) return { exact: false, semantic: false }
+
+  for (const line of lines) {
+    const lineTokens = new Set(tokenizeForSimilarity(line))
+    const overlap = termTokens.filter((token) => lineTokens.has(token)).length
+    if (overlap / termTokens.length >= 0.75) return { exact: false, semantic: true }
+  }
+
+  return { exact: false, semantic: false }
+}
+
+function computeDocumentParseRisk(text: string): {
+  issues: string[]
+  warnings: string[]
+  riskPenalty: number
+} {
+  const issues: string[] = []
+  const warnings: string[] = []
+  let riskPenalty = 0
+
+  if (/\\begin\{(?:tabular|table|multicols|minipage)\}|\\multicolumn|\\multirow|\\fancyhead|\\fancyfoot/i.test(text)) {
+    issues.push("LaTeX layout commands suggest tables, columns, or header/footer content that ATS parsers often skip.")
+    riskPenalty += 12
+  }
+
+  if (/\|[^\n|]+\|[^\n|]+\|/.test(text) || /^\s*\|.+\|\s*$/m.test(text)) {
+    warnings.push("Detected table-like separators that may indicate columnar content or markdown tables.")
+    riskPenalty += 6
+  }
+
+  if (/<table|<tr|<td|<div|<span/i.test(text)) {
+    warnings.push("HTML-style markup appears in the resume text and may not survive ATS extraction cleanly.")
+    riskPenalty += 5
+  }
+
+  const lines = splitLines(text)
+  const shortStructuredLines = lines.filter(
+    (line) =>
+      line.length >= 8 &&
+      line.length <= 40 &&
+      /[|•·]/.test(line) &&
+      !/@/.test(line) &&
+      !/^[-*•]/.test(line)
+  ).length
+  if (shortStructuredLines >= 6) {
+    warnings.push("Many short separator-heavy lines suggest visual layout formatting rather than plain linear text.")
+    riskPenalty += 5
+  }
+
+  const fragmentedLines = lines.filter((line) => line.split(/\s+/).length <= 3 && line.length >= 8).length
+  if (lines.length > 0 && fragmentedLines / lines.length >= 0.22) {
+    warnings.push("The text contains many fragmented short lines, which can indicate reading-order or column extraction issues.")
+    riskPenalty += 4
+  }
+
+  return { issues, warnings, riskPenalty }
+}
+
+function detectSectionKey(line: string): SectionKey | null {
+  return detectSectionKeyFromHeading(line)
 }
 
 function extractSections(text: string): {
@@ -1344,6 +1482,95 @@ function extractSections(text: string): {
 
   flush()
   return { sections, order }
+}
+
+function extractSectionsFromArtifacts(artifacts: DocumentArtifacts | null | undefined): {
+  sections: Partial<Record<SectionKey, SectionBlock>>
+  order: string[]
+} {
+  if (!artifacts?.blocks?.length) return { sections: {}, order: [] }
+
+  const sections: Partial<Record<SectionKey, SectionBlock>> = {}
+  const order: string[] = []
+  let currentKey: SectionKey | null = null
+  let currentTitle = ""
+  let buffer: string[] = []
+
+  const flush = () => {
+    if (!currentKey || buffer.length === 0) return
+    sections[currentKey] = {
+      key: currentKey,
+      title: currentTitle,
+      content: buffer.join("\n").trim(),
+      lines: [...buffer],
+    }
+    order.push(currentKey)
+  }
+
+  for (const block of artifacts.blocks) {
+    const detected = block.kind === "heading" ? detectSectionKey(block.text) : null
+    if (detected) {
+      flush()
+      currentKey = detected
+      currentTitle = block.text
+      buffer = []
+      continue
+    }
+    if (!currentKey) continue
+    if (block.kind === "heading") {
+      flush()
+      currentKey = null
+      currentTitle = ""
+      buffer = []
+      continue
+    }
+    buffer.push(block.text)
+  }
+
+  flush()
+  return { sections, order }
+}
+
+function mergeSectionResults(
+  primary: { sections: Partial<Record<SectionKey, SectionBlock>>; order: string[] },
+  fallback: { sections: Partial<Record<SectionKey, SectionBlock>>; order: string[] }
+): { sections: Partial<Record<SectionKey, SectionBlock>>; order: string[] } {
+  const sections: Partial<Record<SectionKey, SectionBlock>> = { ...primary.sections }
+  for (const [key, section] of Object.entries(fallback.sections) as Array<[SectionKey, SectionBlock | undefined]>) {
+    if (!sections[key] && section) sections[key] = section
+  }
+
+  const order = unique([...primary.order, ...fallback.order])
+  return { sections, order }
+}
+
+function deriveDocumentStructureSignals(artifacts: DocumentArtifacts | null | undefined): DocumentStructureSignals {
+  if (!artifacts) {
+    return {
+      detectedSections: [],
+      contactInHeaderFooter: false,
+      hasTableEvidence: false,
+      hasMultiColumnEvidence: false,
+      readingOrderRisk: 0,
+    }
+  }
+
+  const detectedSections = unique(
+    artifacts.blocks
+      .filter((block) => block.kind === "heading")
+      .map((block) => detectSectionKey(block.text))
+      .filter((value): value is SectionKey => Boolean(value))
+  )
+
+  return {
+    detectedSections,
+    contactInHeaderFooter:
+      artifacts.layout.hasHeaderFooterEvidence &&
+      artifacts.blocks.some((block) => block.kind === "contact"),
+    hasTableEvidence: artifacts.layout.hasTableEvidence,
+    hasMultiColumnEvidence: artifacts.layout.hasMultiColumnEvidence,
+    readingOrderRisk: artifacts.layout.readingOrderRisk,
+  }
 }
 
 function detectContactInfo(text: string): ContactInfo {
@@ -1999,11 +2226,13 @@ function buildKeywordAnalysis(
   if (!jd) return null
 
   const resumeLower = resumeContent.toLowerCase()
+  const resumeLines = splitLines(resumeContent)
   const classify = (terms: string[]) => {
     const matched: string[] = []
     const missing: string[] = []
     for (const termValue of terms) {
-      if (containsTerm(resumeLower, termValue)) matched.push(resolveCanonicalTerm(termValue))
+      const evidence = findTermEvidenceInLines(resumeLines, termValue)
+      if (evidence.exact || evidence.semantic) matched.push(resolveCanonicalTerm(termValue))
       else missing.push(resolveCanonicalTerm(termValue))
     }
     return { matched: unique(matched), missing: unique(missing) }
@@ -2059,8 +2288,14 @@ function buildKeywordAnalysis(
     ...jd.requiredTerms.slice(0, 18),
     ...jd.responsibilityTerms.slice(0, 10),
   ]).map((termValue) => resolveCanonicalTerm(termValue))
-  const criticalMatchedTerms = criticalTerms.filter((termValue) => containsTerm(resumeLower, termValue))
-  const criticalMissingTerms = criticalTerms.filter((termValue) => !containsTerm(resumeLower, termValue))
+  const criticalMatchedTerms = criticalTerms.filter((termValue) => {
+    const evidence = findTermEvidenceInLines(resumeLines, termValue)
+    return evidence.exact || evidence.semantic
+  })
+  const criticalMissingTerms = criticalTerms.filter((termValue) => {
+    const evidence = findTermEvidenceInLines(resumeLines, termValue)
+    return !evidence.exact && !evidence.semantic
+  })
   const underusedKeywords = criticalMatchedTerms
     .filter((termValue) => countOccurrences(resumeLower, termValue) === 1)
     .slice(0, 15)
@@ -2092,12 +2327,42 @@ function buildKeywordAnalysis(
       preferred: preferred.missing.slice(0, 20),
     },
     coverageBySection: {
-      professionalSummary: criticalTerms.filter((termValue) => containsTerm(sectionText.professionalSummary, termValue)).slice(0, 15),
-      skills: criticalTerms.filter((termValue) => containsTerm(sectionText.skills, termValue)).slice(0, 20),
-      workExperience: criticalTerms.filter((termValue) => containsTerm(sectionText.workExperience, termValue)).slice(0, 20),
-      education: criticalTerms.filter((termValue) => containsTerm(sectionText.education, termValue)).slice(0, 12),
-      projects: criticalTerms.filter((termValue) => containsTerm(sectionText.projects, termValue)).slice(0, 15),
-      certifications: criticalTerms.filter((termValue) => containsTerm(sectionText.certifications, termValue)).slice(0, 12),
+      professionalSummary: criticalTerms
+        .filter((termValue) => {
+          const evidence = findTermEvidenceInLines(splitLines(sectionText.professionalSummary), termValue)
+          return evidence.exact || evidence.semantic
+        })
+        .slice(0, 15),
+      skills: criticalTerms
+        .filter((termValue) => {
+          const evidence = findTermEvidenceInLines(splitLines(sectionText.skills), termValue)
+          return evidence.exact || evidence.semantic
+        })
+        .slice(0, 20),
+      workExperience: criticalTerms
+        .filter((termValue) => {
+          const evidence = findTermEvidenceInLines(splitLines(sectionText.workExperience), termValue)
+          return evidence.exact || evidence.semantic
+        })
+        .slice(0, 20),
+      education: criticalTerms
+        .filter((termValue) => {
+          const evidence = findTermEvidenceInLines(splitLines(sectionText.education), termValue)
+          return evidence.exact || evidence.semantic
+        })
+        .slice(0, 12),
+      projects: criticalTerms
+        .filter((termValue) => {
+          const evidence = findTermEvidenceInLines(splitLines(sectionText.projects), termValue)
+          return evidence.exact || evidence.semantic
+        })
+        .slice(0, 15),
+      certifications: criticalTerms
+        .filter((termValue) => {
+          const evidence = findTermEvidenceInLines(splitLines(sectionText.certifications), termValue)
+          return evidence.exact || evidence.semantic
+        })
+        .slice(0, 12),
     },
     criticalMatchedTerms,
     criticalMissingTerms,
@@ -2217,11 +2482,13 @@ function scoreFormatting(
   contact: ContactInfo,
   dates: DateInfo,
   text: string,
-  bulletStats: BulletStats
+  bulletStats: BulletStats,
+  structureSignals?: DocumentStructureSignals
 ): { score: number; parseability: number; issues: string[]; warnings: string[] } {
   const issues: string[] = []
   const warnings: string[] = []
   let score = 100
+  const parseRisk = computeDocumentParseRisk(text)
 
   if (!contact.email) {
     score -= 18
@@ -2280,6 +2547,40 @@ function scoreFormatting(
     issues.push("Work experience section was not detected with a standard ATS-safe header.")
   }
 
+  if (structureSignals?.hasTableEvidence) {
+    score -= 8
+    issues.push("Structured extraction found table-like layout evidence that can reduce ATS field parsing reliability.")
+  }
+
+  if (structureSignals?.hasMultiColumnEvidence) {
+    score -= 10
+    issues.push("Structured extraction found likely multi-column layout, which often breaks ATS reading order.")
+  }
+
+  if ((structureSignals?.readingOrderRisk || 0) >= 0.2) {
+    score -= 8
+    warnings.push("Structured extraction suggests unstable reading order across parts of the document.")
+  } else if ((structureSignals?.readingOrderRisk || 0) >= 0.1) {
+    score -= 4
+    warnings.push("Structured extraction suggests mild reading-order risk.")
+  }
+
+  if (structureSignals?.contactInHeaderFooter) {
+    score -= 6
+    warnings.push("Contact details appear to rely on header or footer regions, which some ATS parsers ignore.")
+  }
+
+  if (contact.url && !contact.linkedin && !contact.github) {
+    score -= 2
+    warnings.push("A URL was detected but it does not clearly identify LinkedIn, GitHub, or a portfolio.")
+  }
+
+  if (parseRisk.riskPenalty > 0) {
+    score -= parseRisk.riskPenalty
+    issues.push(...parseRisk.issues)
+    warnings.push(...parseRisk.warnings)
+  }
+
   const parseability = clamp(score)
   return {
     score: parseability,
@@ -2295,11 +2596,16 @@ function scoreStructure(
   contact: ContactInfo,
   summaryStats: SummaryStats,
   skillsAnalysis: SkillsAnalysis,
-  jd: JDAnalysis | null
+  jd: JDAnalysis | null,
+  structureSignals?: DocumentStructureSignals
 ): number {
   let score = 25
   const requiredPresent = REQUIRED_SECTION_KEYS.filter((key) => sections[key]).length
   score += (requiredPresent / REQUIRED_SECTION_KEYS.length) * 35
+  const artifactDetected = structureSignals?.detectedSections.length || 0
+  if (artifactDetected > requiredPresent) {
+    score += Math.min(6, (artifactDetected - requiredPresent) * 2)
+  }
 
   if (contact.email && contact.phone && contact.location) score += 10
   else if (contact.email && contact.phone) score += 7
@@ -2324,6 +2630,9 @@ function scoreStructure(
   if (jd?.optionalSections.includes("projects")) {
     score += sections.projects ? 3 : -2
   }
+
+  if (structureSignals?.hasMultiColumnEvidence) score -= 6
+  if ((structureSignals?.readingOrderRisk || 0) >= 0.2) score -= 4
 
   return clamp(score)
 }
@@ -2400,16 +2709,23 @@ function inferQualificationAlignment(
   const managementObserved =
     MANAGEMENT_MARKERS.some((marker) => containsTerm(resumeContent, marker)) ||
     /\bmanaged\s+(?:a|an|the)?\s*\d+/i.test(resumeContent) ||
-    /\bmentored\b/i.test(resumeContent)
+    /\bmentored\b/i.test(resumeContent) ||
+    /\b(?:direct reports?|managed|led)\s+(?:a\s+)?team of\s+\d+/i.test(resumeContent)
 
   const matchedRoleFamilies = (jd?.roleFamilies || []).filter((family) =>
     lexicalCoverage.roleFamilies.includes(family)
   )
 
+  const summarySignals = splitLines(summaryText)
+  const experienceSignals = splitLines(experienceText)
+  const seniorityEvidenceBoost =
+    (summarySignals.some((line) => /\b(lead|staff|principal|head|director)\b/i.test(line)) ? 1 : 0) +
+    (experienceSignals.some((line) => /\b(lead|managed|mentored|owned|drove)\b/i.test(line)) ? 1 : 0)
+
   let score = 68
   if (yearsRequired !== null) {
     if (meetsYearsRequirement === true) score += 14
-    else if (meetsYearsRequirement === false) score -= 20
+    else if (meetsYearsRequirement === false) score -= yearsRequired >= 8 ? 24 : 20
   }
 
   if (degreeRequirement) {
@@ -2418,7 +2734,7 @@ function inferQualificationAlignment(
   }
 
   if (missingCertifications.length > 0) score -= Math.min(15, missingCertifications.length * 7)
-  if (seniorityAligned === true) score += 8
+  if (seniorityAligned === true) score += 8 + Math.min(3, seniorityEvidenceBoost)
   else if (seniorityAligned === false) score -= 10
   if (managementRequired) score += managementObserved ? 6 : -8
   if (jd?.roleFamilies.length) score += Math.min(10, matchedRoleFamilies.length * 4)
@@ -2438,6 +2754,90 @@ function inferQualificationAlignment(
     managementRequired,
     managementObserved,
     matchedRoleFamilies,
+  }
+}
+
+function calibrateScores(params: {
+  hasJD: boolean
+  jdAnalysis: JDAnalysis | null
+  formattingScore: number
+  contentQualityScore: number
+  summaryScore: number
+  skillsScore: number
+  structureScore: number
+  educationScore: number
+  keywordScore: number | null
+  qualificationScore: number
+  missingRequiredSectionCount: number
+  contact: ContactInfo
+  qualification: QualificationAlignment
+}): { resumeQualityScore: number; targetRoleScore: number | null; overallScore: number } {
+  const {
+    hasJD,
+    jdAnalysis,
+    formattingScore,
+    contentQualityScore,
+    summaryScore,
+    skillsScore,
+    structureScore,
+    educationScore,
+    keywordScore,
+    qualificationScore,
+    missingRequiredSectionCount,
+    contact,
+    qualification,
+  } = params
+
+  const resumeQualityScore = clamp(
+    formattingScore * 0.24 +
+      contentQualityScore * 0.27 +
+      summaryScore * 0.13 +
+      skillsScore * 0.14 +
+      structureScore * 0.12 +
+      educationScore * 0.10 -
+      missingRequiredSectionCount * 2
+  )
+
+  const jdSignalStrength = Math.min(
+    1,
+    ((jdAnalysis?.requiredTerms.length || 0) + (jdAnalysis?.titleTerms.length || 0) * 1.5) / 18
+  )
+  const keywordWeight = 0.26 + jdSignalStrength * 0.10
+  const qualificationWeight = 0.20 + (qualification.yearsRequired !== null || qualification.degreeRequirement ? 0.06 : 0)
+  const contentWeight = 0.12
+  const skillsWeight = 0.11
+  const summaryWeight = 0.12
+  const formattingWeight = 0.08
+  const educationWeight = 0.06
+
+  const targetRoleScore = hasJD
+    ? clamp(
+        (keywordScore || 0) * keywordWeight +
+          qualificationScore * qualificationWeight +
+          summaryScore * summaryWeight +
+          skillsScore * skillsWeight +
+          contentQualityScore * contentWeight +
+          formattingScore * formattingWeight +
+          educationScore * educationWeight
+      )
+    : null
+
+  let overallScore = hasJD ? clamp(resumeQualityScore * 0.35 + (targetRoleScore || 0) * 0.65) : resumeQualityScore
+
+  const severeParseability = formattingScore < 55
+  const missingCoreContact = !contact.email || !contact.phone
+  const failedYearsGate = qualification.meetsYearsRequirement === false && (keywordScore || 0) < 55
+  const missingCriticalEvidence = missingRequiredSectionCount >= 2
+
+  if (severeParseability) overallScore = Math.min(overallScore, 58)
+  if (missingCoreContact && missingCriticalEvidence) overallScore = Math.min(overallScore, 50)
+  if (failedYearsGate) overallScore = Math.min(overallScore, 57)
+  if (qualification.missingCertifications.length >= 2) overallScore = Math.min(overallScore, 62)
+
+  return {
+    resumeQualityScore,
+    targetRoleScore,
+    overallScore: clamp(overallScore),
   }
 }
 
@@ -3445,12 +3845,16 @@ function buildRating(score: number): ATSScoreResponse["rating"] {
 export function scoreResumeDeterministically(input: {
   resumeContent: string
   jobDescription?: string
+  extractionArtifacts?: DocumentArtifacts | null
 }): DeterministicATSResult {
   const resumeContent = normalizeWhitespace(input.resumeContent)
   const jobDescription = normalizeWhitespace(input.jobDescription || "")
   const hasJD = jobDescription.length > 0
 
-  const { sections, order } = extractSections(resumeContent)
+  const parsedSections = extractSections(resumeContent)
+  const artifactSections = extractSectionsFromArtifacts(input.extractionArtifacts)
+  const { sections, order } = mergeSectionResults(parsedSections, artifactSections)
+  const structureSignals = deriveDocumentStructureSignals(input.extractionArtifacts)
   const summaryText = getSectionText(sections.professionalSummary)
   const skillsText = getSectionText(sections.skills)
   const experienceText = getSectionText(sections.workExperience)
@@ -3460,6 +3864,7 @@ export function scoreResumeDeterministically(input: {
 
   const contact = detectContactInfo(resumeContent)
   const dates = extractDateInfo(resumeContent)
+  const experienceDates = extractDateInfo(`${experienceText}\n${projectText}`)
   const jdAnalysis = analyzeJobDescription(jobDescription)
   const summaryStats = analyzeSummary(summaryText, jdAnalysis)
   const repetition = analyzeRepetition(resumeContent, jdAnalysis)
@@ -3476,48 +3881,38 @@ export function scoreResumeDeterministically(input: {
   const summaryScore = scoreProfessionalSummary(summaryText, jdAnalysis, summaryStats)
   const skillsScore = scoreSkills(skillsText, jdAnalysis, skillsAnalysis)
   const contentQualityScore = scoreContentQuality(bulletStats, repetition, lexicalCoverage)
-  const structureScore = scoreStructure(sections, order, contact, summaryStats, skillsAnalysis, jdAnalysis)
-  const formatting = scoreFormatting(sections, contact, dates, resumeContent, bulletStats)
+  const structureScore = scoreStructure(sections, order, contact, summaryStats, skillsAnalysis, jdAnalysis, structureSignals)
+  const formatting = scoreFormatting(sections, contact, dates, resumeContent, bulletStats, structureSignals)
   const educationScore = scoreEducation(educationText, jdAnalysis)
   const qualification = inferQualificationAlignment(
     jdAnalysis,
     educationText,
-    dates,
+    experienceDates.yearsEstimated !== null ? experienceDates : dates,
     `${resumeContent}\n${certificationText}`,
     lexicalCoverage,
     summaryText,
     experienceText
   )
 
-  const resumeQualityScore = clamp(
-    formatting.score * 0.22 +
-      contentQualityScore * 0.28 +
-      summaryScore * 0.14 +
-      skillsScore * 0.14 +
-      structureScore * 0.12 +
-      educationScore * 0.10
-  )
-
-  const targetRoleScore = hasJD
-    ? clamp(
-        (keywordScore || 0) * 0.30 +
-          qualification.score * 0.22 +
-          summaryScore * 0.14 +
-          skillsScore * 0.12 +
-          contentQualityScore * 0.12 +
-          formatting.score * 0.05 +
-          educationScore * 0.05
-      )
-    : null
-
-  const overallScore = hasJD
-    ? clamp(resumeQualityScore * 0.32 + (targetRoleScore || 0) * 0.68)
-    : resumeQualityScore
-
   const missingSections = REQUIRED_SECTION_KEYS.filter((key) => !sections[key]).map((key) => titleCase(key))
   const missingOptionalSections = (jdAnalysis?.optionalSections || [])
     .filter((key) => !sections[key])
     .map((key) => titleCase(key))
+  const calibratedScores = calibrateScores({
+    hasJD,
+    jdAnalysis,
+    formattingScore: formatting.score,
+    contentQualityScore,
+    summaryScore,
+    skillsScore,
+    structureScore,
+    educationScore,
+    keywordScore,
+    qualificationScore: qualification.score,
+    missingRequiredSectionCount: missingSections.length,
+    contact,
+    qualification,
+  })
 
   const derived = buildIssuesAndRecommendations({
     hasJD,
@@ -3577,9 +3972,9 @@ export function scoreResumeDeterministically(input: {
 
   return {
     analysisMode: hasJD ? "resume-with-jd" : "resume-only",
-    resumeQualityScore,
-    targetRoleScore,
-    overallScore,
+    resumeQualityScore: calibratedScores.resumeQualityScore,
+    targetRoleScore: calibratedScores.targetRoleScore,
+    overallScore: calibratedScores.overallScore,
     categoryScores: {
       keywordMatch: hasJD ? { score: keywordScore || 0, maxScore: 100 } : null,
       formatting: { score: formatting.score, maxScore: 100 },
@@ -3588,7 +3983,7 @@ export function scoreResumeDeterministically(input: {
       skills: { score: skillsScore, maxScore: 100 },
       structure: hasJD ? null : { score: structureScore, maxScore: 100 },
     },
-    rating: buildRating(overallScore),
+    rating: buildRating(calibratedScores.overallScore),
     keyFindings: {
       strengths: derived.strengths,
       weaknesses: derived.weaknesses,

@@ -1,24 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
-import { z } from "zod"
 import { enforceRateLimit } from "@/lib/api-rate-limit"
-import { filterUnsupportedFeedback } from "@/lib/ats-feedback"
-import { buildEvidenceSummary } from "@/lib/ats-evidence"
-import { reportServerError } from "@/lib/error-monitoring"
-import { scoreResumeDeterministically } from "@/lib/local-ats-scorer"
-import type { ATSScoreResponse } from "@/lib/ats-types"
 import { validationErrorResponse } from "@/lib/api-response"
+import { reportServerError } from "@/lib/error-monitoring"
+import { atsScoreSchema, scoreResume } from "@/lib/services/ats-service"
 
 export const runtime = "nodejs"
 export const maxDuration = 60
-
-const atsScoreSchema = z.object({
-  jobDescription: z.string().trim().max(30000, "Job description is too long.").optional().default(""),
-  resumeContent: z
-    .string()
-    .trim()
-    .min(1, "Resume content is required.")
-    .max(60000, "Resume content is too long."),
-})
 
 export async function POST(request: NextRequest) {
   const rateLimitResponse = await enforceRateLimit(request, {
@@ -36,21 +23,7 @@ export async function POST(request: NextRequest) {
       return validationErrorResponse(parsed.error)
     }
 
-    const { jobDescription, resumeContent } = parsed.data
-
-    const deterministic = scoreResumeDeterministically({
-      resumeContent,
-      jobDescription,
-    })
-
-    const { evidence: _evidence, ...publicResult } = deterministic
-    const publicResponse: ATSScoreResponse = {
-      ...publicResult,
-      evidenceSummary: buildEvidenceSummary(deterministic),
-    }
-
-    const sanitized = filterUnsupportedFeedback(publicResponse, resumeContent)
-    return NextResponse.json(sanitized)
+    return NextResponse.json(await scoreResume(parsed.data))
   } catch (error) {
     reportServerError(error, "ats-score")
     return NextResponse.json(

@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { enforceRateLimit } from "@/lib/api-rate-limit"
+import { isLikelyConfigurationError } from "@/lib/errors"
 import { reportServerError } from "@/lib/error-monitoring"
 import { serviceUnavailable, unauthorized, validationErrorResponse } from "@/lib/api-response"
-import { createSupabaseAdminClient, getAuthenticatedUserFromRequest } from "@/lib/supabase-server"
+import { deleteAccount } from "@/lib/services/account-service"
 
 export const runtime = "nodejs"
 
@@ -22,31 +23,26 @@ export async function DELETE(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse
 
   try {
-    const auth = await getAuthenticatedUserFromRequest(request.headers.get("authorization"))
-    if (!auth) {
-      return unauthorized()
-    }
-
     const body = await request.json().catch(() => ({}))
     const parsed = deleteAccountSchema.safeParse(body)
     if (!parsed.success) {
       return validationErrorResponse(parsed.error)
     }
 
-    let adminClient
     try {
-      adminClient = createSupabaseAdminClient()
-    } catch {
-      return serviceUnavailable("Account deletion requires SUPABASE_SERVICE_ROLE_KEY to be configured.")
-    }
+      const result = await deleteAccount(request.headers.get("authorization"))
+      if (!result) {
+        return unauthorized()
+      }
 
-    const { error } = await adminClient.auth.admin.deleteUser(auth.user.id)
+      return NextResponse.json(result)
+    } catch (error) {
+      if (isLikelyConfigurationError(error)) {
+        return serviceUnavailable("Account deletion requires SUPABASE_SERVICE_ROLE_KEY to be configured.")
+      }
 
-    if (error) {
       throw error
     }
-
-    return NextResponse.json({ success: true })
   } catch (error) {
     reportServerError(error, "account-delete")
     return NextResponse.json(

@@ -1,3 +1,5 @@
+import { getUserFacingMessage, normalizeError } from "@/lib/errors"
+
 function redactMessage(message: string) {
   return message
     .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[REDACTED_EMAIL]")
@@ -5,8 +7,33 @@ function redactMessage(message: string) {
     .replace(/\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b/g, "[REDACTED_PHONE]")
 }
 
+function serializeError(error: unknown) {
+  const normalized = normalizeError(error, {
+    fallbackMessage: "Unexpected error",
+  })
+
+  const cause =
+    normalized.cause instanceof Error
+      ? redactMessage(normalized.cause.message)
+      : normalized.cause
+        ? redactMessage(String(normalized.cause))
+        : undefined
+
+  return {
+    name: normalized.name,
+    code: normalized.code,
+    status: normalized.status,
+    retryable: normalized.retryable,
+    message: redactMessage(normalized.message),
+    userMessage: redactMessage(getUserFacingMessage(normalized)),
+    context: normalized.context,
+    cause,
+  }
+}
+
 export function reportClientError(error: unknown, context?: string) {
-  console.error(context ? `[client:${context}]` : "[client]", error)
+  const payload = serializeError(error)
+  console.error(context ? `[client:${context}]` : "[client]", payload)
 
   if (typeof window === "undefined") return
 
@@ -17,15 +44,19 @@ export function reportClientError(error: unknown, context?: string) {
     },
     body: JSON.stringify({
       context: context || "client",
-      message: redactMessage(error instanceof Error ? error.message : String(error)),
-      stack: undefined,
+      message: payload.message,
+      code: payload.code,
+      status: payload.status,
+      retryable: payload.retryable,
       path: window.location.pathname,
+      userAgent: window.navigator.userAgent,
     }),
   }).catch(() => undefined)
 }
 
 export function reportServerError(error: unknown, context?: string) {
-  console.error(context ? `[server:${context}]` : "[server]", error)
+  const payload = serializeError(error)
+  console.error(context ? `[server:${context}]` : "[server]", payload)
 
   const webhookUrl = process.env.ERROR_MONITORING_WEBHOOK_URL
   if (!webhookUrl) return
@@ -37,9 +68,8 @@ export function reportServerError(error: unknown, context?: string) {
     },
     body: JSON.stringify({
       level: "error",
-      context: context || "server",
-      message: redactMessage(error instanceof Error ? error.message : String(error)),
-      stack: undefined,
+      ...payload,
+      context: context || payload.context || "server",
       timestamp: new Date().toISOString(),
     }),
     cache: "no-store",

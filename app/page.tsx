@@ -7,6 +7,7 @@ import { BriefcaseBusiness, LayoutDashboard, FileCode2, LogOut, Target, UserRoun
 import { ATSScorePanel } from "@/components/ats-score-panel"
 import { AuthDialog } from "@/components/auth-dialog"
 import { DashboardPanel } from "@/components/dashboard-panel"
+import { ErrorBoundary } from "@/components/error-boundary"
 import { JobApplicationsPanel } from "@/components/job-applications-panel"
 import { LatexSplitWorkspace } from "@/components/latex-split-workspace"
 import { LegalDialog } from "@/components/legal-dialog"
@@ -14,6 +15,8 @@ import { ResumeInputPanel } from "@/components/resume-input-panel"
 import { ResumePreviewPanel } from "@/components/resume-preview-panel"
 import { Button } from "@/components/ui/button"
 import type { ATSScoreResponse } from "@/lib/ats-types"
+import type { DocumentArtifacts } from "@/lib/document-artifacts"
+import { getUserFacingMessage } from "@/lib/errors"
 import {
   createJobApplicationDraft,
   formatJobApplicationDateForDisplay,
@@ -51,6 +54,13 @@ import {
   type TrackedRunRecord,
   type TrackedRunMode,
 } from "@/lib/tracked-runs"
+import {
+  accountServiceClient,
+  atsServiceClient,
+  resumeServiceClient,
+  ServiceClientError,
+} from "@/lib/services/gateway-client"
+import { reportClientError } from "@/lib/error-monitoring"
 import { cn } from "@/lib/utils"
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
@@ -82,6 +92,7 @@ export default function HomePage() {
   const [resumeFileName, setResumeFileName] = useState("")
   const [resumeFileMimeType, setResumeFileMimeType] = useState("")
   const [resumeFileDataUrl, setResumeFileDataUrl] = useState("")
+  const [resumeArtifacts, setResumeArtifacts] = useState<DocumentArtifacts | null>(null)
   const [extraInstructions, setExtraInstructions] = useState("")
   const [latexContent, setLatexContent] = useState("")
   const [editableLatexContent, setEditableLatexContent] = useState("")
@@ -412,27 +423,22 @@ export default function HomePage() {
   }
 
   const prefetchATSInsights = async (
-    input: { jobDescription: string; resumeContent: string; extraInstructions: string },
+    input: {
+      jobDescription: string
+      resumeContent: string
+      extraInstructions: string
+      extractionArtifacts?: DocumentArtifacts | null
+    },
     requestId: number
   ) => {
     setIsLoadingInsights(true)
 
     try {
-      const response = await fetch("/api/ats-insights", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          jobDescription: input.jobDescription,
-          resumeContent: input.resumeContent,
-        }),
+      const data = await atsServiceClient.insights({
+        jobDescription: input.jobDescription,
+        resumeContent: input.resumeContent,
+        extractionArtifacts: input.extractionArtifacts,
       })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData?.error || "Failed to load AI insights")
-      }
-
-      const data = (await response.json()) as ATSScoreResponse
 
       if (atsRequestIdRef.current !== requestId) return
 
@@ -444,6 +450,7 @@ export default function HomePage() {
       }
     } catch (prefetchError) {
       if (atsRequestIdRef.current !== requestId) return
+      reportClientError(prefetchError, "ats-insights-prefetch")
       console.warn("ATS insights prefetch error:", prefetchError)
     } finally {
       if (atsRequestIdRef.current === requestId) {
@@ -477,43 +484,7 @@ export default function HomePage() {
 
       setStatusMessage("Generating optimized resume...")
 
-      const response = await fetch("/api/generate-resume", {
-        method: "POST",
-        body: formData,
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        const validationSummary = errorData?.validation?.summary
-        const validationIssues = Array.isArray(errorData?.validation?.issues)
-          ? (() => {
-              const issues = errorData.validation.issues as Array<{
-                message?: string
-                severity?: "high" | "medium" | "low"
-              }>
-              const prioritized = [...issues].sort((left, right) => {
-                const weight = { high: 3, medium: 2, low: 1 }
-                return (weight[right?.severity || "low"] || 0) - (weight[left?.severity || "low"] || 0)
-              })
-              const uniqueMessages = Array.from(
-                new Set(prioritized.map((issue) => issue?.message).filter(Boolean))
-              )
-              return uniqueMessages.slice(0, 2).join(" ")
-            })()
-          : ""
-        const genericValidationSummary =
-          validationSummary === "Local LaTeX validation found issues that may affect compilation or formatting." ||
-          validationSummary === "pdflatex compilation failed."
-        throw new Error(
-          (!genericValidationSummary && validationSummary) ||
-            validationIssues ||
-            validationSummary ||
-            errorData?.error ||
-            "Failed to generate resume"
-        )
-      }
-
-      const data = await response.json()
+      const data = await resumeServiceClient.generate(formData)
       const latex = data?.latex || ""
 
       if (!latex) {
@@ -540,9 +511,39 @@ export default function HomePage() {
         }
       }
     } catch (generationError) {
+      reportClientError(generationError, "resume-generation")
       console.error("Generation error:", generationError)
-      const message =
-        generationError instanceof Error ? generationError.message : "Failed to generate resume"
+      let message =
+        getUserFacingMessage(generationError, "Failed to generate resume")
+
+      if (generationError instanceof ServiceClientError) {
+        const validationSummary = generationError.data?.validation?.summary
+        const validationIssues = Array.isArray(generationError.data?.validation?.issues)
+          ? (() => {
+              const issues = generationError.data.validation.issues as Array<{
+                message?: string
+                severity?: "high" | "medium" | "low"
+              }>
+              const prioritized = [...issues].sort((left, right) => {
+                const weight = { high: 3, medium: 2, low: 1 }
+                return (weight[right?.severity || "low"] || 0) - (weight[left?.severity || "low"] || 0)
+              })
+              const uniqueMessages = Array.from(
+                new Set(prioritized.map((issue) => issue?.message).filter(Boolean))
+              )
+              return uniqueMessages.slice(0, 2).join(" ")
+            })()
+          : ""
+        const genericValidationSummary =
+          validationSummary === "Local LaTeX validation found issues that may affect compilation or formatting." ||
+          validationSummary === "pdflatex compilation failed."
+        message =
+          (!genericValidationSummary && validationSummary) ||
+          validationIssues ||
+          validationSummary ||
+          generationError.message
+      }
+
       setError(message)
       setLatexContent(`% Error: ${message}\n% Please try again`)
       setStatusMessage("")
@@ -575,18 +576,11 @@ export default function HomePage() {
         throw new Error("Resume content is required.")
       }
 
-      const response = await fetch("/api/ats-score", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jobDescription: jd, resumeContent: resume }),
+      const data = await atsServiceClient.score({
+        jobDescription: jd,
+        resumeContent: resume,
+        extractionArtifacts: resumeArtifacts,
       })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData?.error || "Failed to score resume")
-      }
-
-      const data = (await response.json()) as ATSScoreResponse
       const input = { jobDescription: jd, resumeContent: resume, extraInstructions: additional }
       const elapsed = Date.now() - startedAt
       const remainingDelay = Math.max(0, ATS_LOADING_MIN_DURATION_MS - elapsed)
@@ -616,10 +610,11 @@ export default function HomePage() {
         }
       }
 
-      void prefetchATSInsights(input, requestId)
+      void prefetchATSInsights({ ...input, extractionArtifacts: resumeArtifacts }, requestId)
     } catch (scoringError) {
+      reportClientError(scoringError, "ats-score")
       console.error("Scoring error:", scoringError)
-      const message = scoringError instanceof Error ? scoringError.message : "Failed to score resume"
+      const message = getUserFacingMessage(scoringError, "Failed to score resume")
       setError(message)
     } finally {
       setIsScoring(false)
@@ -679,19 +674,7 @@ export default function HomePage() {
     setIsExportingData(true)
 
     try {
-      const response = await fetch("/api/account/export", {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData?.error || "Failed to export account data")
-      }
-
-      const blob = await response.blob()
+      const blob = await accountServiceClient.exportAccount(session.access_token)
       const url = URL.createObjectURL(blob)
       const anchor = document.createElement("a")
       anchor.href = url
@@ -702,7 +685,8 @@ export default function HomePage() {
       URL.revokeObjectURL(url)
       setAuthMessage("Your account export is downloading.")
     } catch (error) {
-      setAuthMessage(error instanceof Error ? error.message : "Failed to export account data")
+      reportClientError(error, "account-export")
+      setAuthMessage(getUserFacingMessage(error, "Failed to export account data"))
     } finally {
       setIsExportingData(false)
     }
@@ -717,19 +701,7 @@ export default function HomePage() {
     setIsDeletingAccount(true)
 
     try {
-      const response = await fetch("/api/account/delete", {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({ confirmation }),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData?.error || "Failed to delete account")
-      }
+      await accountServiceClient.deleteAccount(session.access_token, confirmation)
 
       if (supabase) {
         await supabase.auth.signOut()
@@ -745,7 +717,8 @@ export default function HomePage() {
       setIsAuthDialogOpen(false)
       setAuthMessage("Your account has been deleted.")
     } catch (error) {
-      setAuthMessage(error instanceof Error ? error.message : "Failed to delete account")
+      reportClientError(error, "account-delete")
+      setAuthMessage(getUserFacingMessage(error, "Failed to delete account"))
     } finally {
       setIsDeletingAccount(false)
     }
@@ -758,6 +731,7 @@ export default function HomePage() {
     setResumeFileName(run.resume_file_name ?? extractTrackedRunFileName(run.label) ?? "")
     setResumeFileMimeType(run.resume_file_mime_type ?? "")
     setResumeFileDataUrl(run.resume_file_data_url ?? "")
+    setResumeArtifacts(null)
     setExtraInstructions(run.extra_instructions ?? "")
     setLatexContent(run.mode === "generate" ? run.latex_content ?? "" : "")
     setAtsScore(run.mode === "ats-score" ? run.ats_score : null)
@@ -971,7 +945,14 @@ export default function HomePage() {
     <div className="relative flex min-h-dvh flex-col overflow-x-hidden bg-[#030712] md:h-screen md:overflow-hidden">
       <div className="fixed inset-0 h-full w-full">
         <div className="absolute inset-0 bg-[linear-gradient(180deg,#020202_0%,#050505_45%,#020202_100%)]" />
-        <WebGLShader />
+        <ErrorBoundary
+          context="webgl-background"
+          fallbackTitle="Background disabled"
+          fallbackMessage="The animated background failed to initialize. The workspace is still available."
+          compact
+        >
+          <WebGLShader />
+        </ErrorBoundary>
         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.04),rgba(0,0,0,0.38))]" />
       </div>
 
@@ -1106,76 +1087,107 @@ export default function HomePage() {
           <div className={cn("relative z-10 flex min-h-0 flex-1 min-w-0 flex-col gap-4 overflow-y-auto pb-4 pt-4 md:overflow-hidden lg:gap-6 lg:pb-6", pageContainerClass)}>
             {mode === "dashboard" ? (
               <div className={cn(panelShellClass, "md:basis-auto md:flex-auto")}>
-                <DashboardPanel
-                  authAvailable={Boolean(supabase)}
-                  isAuthenticated={Boolean(session?.user?.id)}
-                  userEmail={session?.user?.email ?? null}
-                  userName={userName}
-                  historyItems={historyItems}
-                  historyLoading={historyLoading}
-                  selectedRunId={selectedHistoryRunId}
-                  deletingRunId={deletingRunId}
-                  onSelectRun={setSelectedHistoryRunId}
-                  onLoadRun={handleLoadRunFromDashboard}
-                  onDeleteRun={handleDeleteRun}
-                  onOpenAuth={() => setIsAuthDialogOpen(true)}
-                  storageNotice={storageNotice}
-                />
+                <ErrorBoundary
+                  context="dashboard-panel"
+                  fallbackTitle="Dashboard unavailable"
+                  fallbackMessage="The dashboard failed to render. You can reload just this section."
+                >
+                  <DashboardPanel
+                    authAvailable={Boolean(supabase)}
+                    isAuthenticated={Boolean(session?.user?.id)}
+                    userEmail={session?.user?.email ?? null}
+                    userName={userName}
+                    historyItems={historyItems}
+                    historyLoading={historyLoading}
+                    selectedRunId={selectedHistoryRunId}
+                    deletingRunId={deletingRunId}
+                    onSelectRun={setSelectedHistoryRunId}
+                    onLoadRun={handleLoadRunFromDashboard}
+                    onDeleteRun={handleDeleteRun}
+                    onOpenAuth={() => setIsAuthDialogOpen(true)}
+                    storageNotice={storageNotice}
+                  />
+                </ErrorBoundary>
               </div>
             ) : mode === "job-tracker" ? (
               <div className={cn(panelShellClass, "md:basis-auto md:flex-auto")}>
-                <JobApplicationsPanel
-                  authAvailable={Boolean(supabase)}
-                  isAuthenticated={Boolean(session?.user?.id)}
-                  storageNotice={jobApplicationsNotice}
-                  applications={jobApplications}
-                  applicationsLoading={jobApplicationsLoading}
-                  savingApplicationId={savingJobApplicationId}
-                  deletingApplicationId={deletingJobApplicationId}
-                  onAddApplication={handleAddJobApplication}
-                  onUpdateApplication={handleUpdateJobApplication}
-                  onDeleteApplication={handleDeleteJobApplication}
-                  onOpenAuth={() => setIsAuthDialogOpen(true)}
-                />
+                <ErrorBoundary
+                  context="job-applications-panel"
+                  fallbackTitle="Job tracker unavailable"
+                  fallbackMessage="The job tracker failed to render. Your data is still intact."
+                >
+                  <JobApplicationsPanel
+                    authAvailable={Boolean(supabase)}
+                    isAuthenticated={Boolean(session?.user?.id)}
+                    storageNotice={jobApplicationsNotice}
+                    applications={jobApplications}
+                    applicationsLoading={jobApplicationsLoading}
+                    savingApplicationId={savingJobApplicationId}
+                    deletingApplicationId={deletingJobApplicationId}
+                    onAddApplication={handleAddJobApplication}
+                    onUpdateApplication={handleUpdateJobApplication}
+                    onDeleteApplication={handleDeleteJobApplication}
+                    onOpenAuth={() => setIsAuthDialogOpen(true)}
+                  />
+                </ErrorBoundary>
               </div>
             ) : (
               <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 md:flex-row md:items-stretch md:overflow-hidden">
                 <div className={panelShellClass}>
-                  <ResumeInputPanel
-                    onGenerate={mode === "generate" ? handleGenerate : handleATSScore}
-                    isGenerating={mode === "generate" ? isGenerating : isScoring}
-                    mode={mode}
-                    jobDescription={jobDescription}
-                    resumeContent={resumeContent}
-                    resumeFileName={resumeFileName}
-                    resumeFileMimeType={resumeFileMimeType}
-                    extraInstructions={extraInstructions}
-                    onJobDescriptionChange={setJobDescription}
-                    onResumeContentChange={setResumeContent}
-                    onResumeFileNameChange={setResumeFileName}
-                    onResumeFileMimeTypeChange={setResumeFileMimeType}
-                    onResumeFileDataUrlChange={setResumeFileDataUrl}
-                    onExtraInstructionsChange={setExtraInstructions}
-                  />
+                  <ErrorBoundary
+                    context="resume-input-panel"
+                    fallbackTitle="Input panel unavailable"
+                    fallbackMessage="The input panel failed to render. Reload this section to continue."
+                  >
+                    <ResumeInputPanel
+                      onGenerate={mode === "generate" ? handleGenerate : handleATSScore}
+                      isGenerating={mode === "generate" ? isGenerating : isScoring}
+                      mode={mode}
+                      jobDescription={jobDescription}
+                      resumeContent={resumeContent}
+                      resumeFileName={resumeFileName}
+                      resumeFileMimeType={resumeFileMimeType}
+                      extraInstructions={extraInstructions}
+                      onJobDescriptionChange={setJobDescription}
+                      onResumeContentChange={setResumeContent}
+                      onResumeFileNameChange={setResumeFileName}
+                      onResumeFileMimeTypeChange={setResumeFileMimeType}
+                      onResumeFileDataUrlChange={setResumeFileDataUrl}
+                      onResumeArtifactsChange={setResumeArtifacts}
+                      onExtraInstructionsChange={setExtraInstructions}
+                    />
+                  </ErrorBoundary>
                 </div>
 
                 <div ref={outputPanelRef} className={panelShellClass}>
                   {mode === "generate" ? (
-                    <ResumePreviewPanel
-                      latexContent={latexContent}
-                      editableLatex={editableLatexContent}
-                      isGenerating={isGenerating}
-                      onEditableLatexChange={setEditableLatexContent}
-                      onOpenSplitWorkspace={() => setIsSplitWorkspaceOpen(true)}
-                      statusMessage={statusMessage}
-                    />
+                    <ErrorBoundary
+                      context="resume-preview-panel"
+                      fallbackTitle="Preview unavailable"
+                      fallbackMessage="The resume preview failed to render. You can reload just this panel."
+                    >
+                      <ResumePreviewPanel
+                        latexContent={latexContent}
+                        editableLatex={editableLatexContent}
+                        isGenerating={isGenerating}
+                        onEditableLatexChange={setEditableLatexContent}
+                        onOpenSplitWorkspace={() => setIsSplitWorkspaceOpen(true)}
+                        statusMessage={statusMessage}
+                      />
+                    </ErrorBoundary>
                   ) : (
-                    <ATSScorePanel
-                      scoreData={atsScore}
-                      isLoading={isScoring}
-                      isLoadingInsights={isLoadingInsights}
-                      hasLoadedAIInsights={hasLoadedAIInsights}
-                    />
+                    <ErrorBoundary
+                      context="ats-score-panel"
+                      fallbackTitle="ATS results unavailable"
+                      fallbackMessage="The ATS results panel failed to render. Reload this section to continue."
+                    >
+                      <ATSScorePanel
+                        scoreData={atsScore}
+                        isLoading={isScoring}
+                        isLoadingInsights={isLoadingInsights}
+                        hasLoadedAIInsights={hasLoadedAIInsights}
+                      />
+                    </ErrorBoundary>
                   )}
                 </div>
               </div>
@@ -1185,14 +1197,21 @@ export default function HomePage() {
       )}
 
       {mode === "generate" ? (
-        <LatexSplitWorkspace
-          open={isSplitWorkspaceOpen}
-          latexContent={editableLatexContent}
-          isGenerating={isGenerating}
-          statusMessage={statusMessage}
-          onLatexChange={setEditableLatexContent}
-          onClose={() => setIsSplitWorkspaceOpen(false)}
-        />
+        <ErrorBoundary
+          context="latex-split-workspace"
+          fallbackTitle="Workspace unavailable"
+          fallbackMessage="The side-by-side workspace failed to render. Close and reopen it to continue."
+          compact
+        >
+          <LatexSplitWorkspace
+            open={isSplitWorkspaceOpen}
+            latexContent={editableLatexContent}
+            isGenerating={isGenerating}
+            statusMessage={statusMessage}
+            onLatexChange={setEditableLatexContent}
+            onClose={() => setIsSplitWorkspaceOpen(false)}
+          />
+        </ErrorBoundary>
       ) : null}
 
       <AuthDialog

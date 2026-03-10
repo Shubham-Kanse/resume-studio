@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import * as THREE from "three"
+import { reportClientError } from "@/lib/error-monitoring"
 
 type ShaderUniforms = {
   resolution: { value: any }
@@ -148,6 +149,7 @@ export function WebGLShader() {
       window.addEventListener("resize", handleResize)
       resizeAttached = true
     } catch (error) {
+      reportClientError(error, "webgl-shader-init")
       console.error("WebGL shader failed to initialize:", error)
       refs.renderer?.dispose()
       refs.scene = null

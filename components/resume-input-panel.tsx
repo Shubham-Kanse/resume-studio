@@ -5,6 +5,10 @@ import { Upload, FileText, X, Sparkles, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
+import type { DocumentArtifacts } from "@/lib/document-artifacts"
+import { getUserFacingMessage } from "@/lib/errors"
+import { reportClientError } from "@/lib/error-monitoring"
+import { documentServiceClient } from "@/lib/services/gateway-client"
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 
@@ -22,26 +26,13 @@ interface ResumeInputPanelProps {
   onResumeFileNameChange: (value: string) => void
   onResumeFileMimeTypeChange: (value: string) => void
   onResumeFileDataUrlChange: (value: string) => void
+  onResumeArtifactsChange: (value: DocumentArtifacts | null) => void
   onExtraInstructionsChange: (value: string) => void
   resetToken?: number
 }
 
-async function extractTextFromFile(file: File): Promise<string> {
-  const formData = new FormData()
-  formData.append("file", file)
-
-  const response = await fetch("/api/extract-resume", {
-    method: "POST",
-    body: formData,
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || "Extraction failed")
-  }
-
-  const { text } = await response.json()
-  return text
+async function extractTextFromFile(file: File): Promise<{ text: string; artifacts?: DocumentArtifacts }> {
+  return documentServiceClient.extractResume(file)
 }
 
 function readFileAsDataUrl(file: File): Promise<string> {
@@ -67,6 +58,7 @@ export function ResumeInputPanel({
   onResumeFileNameChange,
   onResumeFileMimeTypeChange,
   onResumeFileDataUrlChange,
+  onResumeArtifactsChange,
   onExtraInstructionsChange,
   resetToken = 0,
 }: ResumeInputPanelProps) {
@@ -91,6 +83,7 @@ export function ResumeInputPanel({
       onResumeFileNameChange("")
       onResumeFileMimeTypeChange("")
       onResumeFileDataUrlChange("")
+      onResumeArtifactsChange(null)
       setExtractionError(`File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Max size is 10MB.`)
       if (fileInputRef.current) fileInputRef.current.value = ""
       return
@@ -103,20 +96,21 @@ export function ResumeInputPanel({
     setExtractionError(null)
 
     try {
-      const [fileDataUrl, extractedText] = await Promise.all([
+      const [fileDataUrl, extractionResult] = await Promise.all([
         readFileAsDataUrl(file),
         extractTextFromFile(file),
       ])
 
       onResumeFileDataUrlChange(fileDataUrl)
-      onResumeContentChange(extractedText)
+      onResumeArtifactsChange(extractionResult.artifacts || null)
+      onResumeContentChange(extractionResult.text)
     } catch (error) {
+      reportClientError(error, "resume-file-extraction")
       console.error("Error extracting text:", error)
       onResumeContentChange("")
       onResumeFileDataUrlChange("")
-      setExtractionError(
-        `Failed to extract text: ${error instanceof Error ? error.message : "Unknown error"}.`
-      )
+      onResumeArtifactsChange(null)
+      setExtractionError(`Failed to extract text: ${getUserFacingMessage(error, "Unknown error")}.`)
     } finally {
       setIsExtracting(false)
     }
@@ -128,6 +122,7 @@ export function ResumeInputPanel({
     onResumeFileNameChange("")
     onResumeFileMimeTypeChange("")
     onResumeFileDataUrlChange("")
+    onResumeArtifactsChange(null)
     setExtractionError(null)
     if (fileInputRef.current) fileInputRef.current.value = ""
   }

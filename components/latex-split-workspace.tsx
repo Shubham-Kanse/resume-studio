@@ -4,11 +4,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { AlertTriangle, CheckCircle, Download, Loader2, Minimize2 } from "lucide-react"
 import { PDFViewer } from "@/components/pdf-viewer"
 import { Button } from "@/components/ui/button"
+import { getUserFacingMessage } from "@/lib/errors"
+import { reportClientError } from "@/lib/error-monitoring"
 import {
   AUTO_COMPILE_DELAY,
   MAX_LATEX_LENGTH,
   validateLaTeX,
 } from "@/lib/latex-editor"
+import { documentServiceClient } from "@/lib/services/gateway-client"
 
 interface LatexSplitWorkspaceProps {
   open: boolean
@@ -90,29 +93,10 @@ export function LatexSplitWorkspace({
     setPreviewError(null)
 
     try {
-      const response = await fetch("/api/latex-to-pdf", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          latex: content,
-          preview: true,
-        }),
+      const response = await documentServiceClient.compileLatex({
+        latex: content,
+        preview: true,
       })
-
-      if (!response.ok) {
-        let message = "LaTeX compilation failed."
-
-        try {
-          const errorData = await response.json()
-          message = errorData?.details || errorData?.error || message
-        } catch {
-          // ignore parse errors for fallback message
-        }
-
-        throw new Error(message)
-      }
 
       const arrayBuffer = await response.arrayBuffer()
 
@@ -122,8 +106,9 @@ export function LatexSplitWorkspace({
 
       setPdfData(arrayBuffer)
     } catch (error) {
+      reportClientError(error, "latex-split-preview")
       setPdfData(null)
-      setPreviewError(error instanceof Error ? error.message : "Failed to generate preview.")
+      setPreviewError(getUserFacingMessage(error, "Failed to generate preview."))
     } finally {
       setIsLoadingPreview(false)
     }
@@ -135,29 +120,10 @@ export function LatexSplitWorkspace({
     setIsDownloadingPdf(true)
 
     try {
-      const response = await fetch("/api/latex-to-pdf", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          latex: latexContent,
-          preview: false,
-        }),
+      const response = await documentServiceClient.compileLatex({
+        latex: latexContent,
+        preview: false,
       })
-
-      if (!response.ok) {
-        let message = "Failed to convert LaTeX to PDF."
-
-        try {
-          const errorData = await response.json()
-          message = errorData?.details || errorData?.error || message
-        } catch {
-          // ignore parse errors for fallback message
-        }
-
-        throw new Error(message)
-      }
 
       const blob = await response.blob()
       const url = URL.createObjectURL(blob)
@@ -170,8 +136,9 @@ export function LatexSplitWorkspace({
       document.body.removeChild(anchor)
       URL.revokeObjectURL(url)
     } catch (error) {
+      reportClientError(error, "latex-split-download")
       setPreviewError(
-        error instanceof Error ? error.message : "Failed to download PDF."
+        getUserFacingMessage(error, "Failed to download PDF.")
       )
     } finally {
       setIsDownloadingPdf(false)

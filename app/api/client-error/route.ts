@@ -8,7 +8,11 @@ export const runtime = "nodejs"
 const clientErrorSchema = z.object({
   context: z.string().trim().min(1).max(120),
   message: z.string().trim().min(1).max(4000),
+  code: z.string().trim().max(120).optional(),
+  status: z.number().int().min(100).max(599).optional(),
+  retryable: z.boolean().optional(),
   path: z.string().max(1000).optional(),
+  userAgent: z.string().max(1000).optional(),
 })
 
 export async function POST(request: NextRequest) {

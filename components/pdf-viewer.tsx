@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react"
 import { Loader2 } from "lucide-react"
+import { getUserFacingMessage } from "@/lib/errors"
+import { reportClientError } from "@/lib/error-monitoring"
 
 interface PDFViewerProps {
   pdfData: ArrayBuffer | null
@@ -106,10 +108,9 @@ function PDFPageCanvas({
       } catch (error) {
         if (cancelled) return
         setIsPageRendering(false)
+        reportClientError(error, `pdf-render-page-${pageNumber}`)
         console.error(`PDF render error on page ${pageNumber}:`, error)
-        onRenderError(
-          error instanceof Error ? error.message : `Failed to render page ${pageNumber}.`
-        )
+        onRenderError(getUserFacingMessage(error, `Failed to render page ${pageNumber}.`))
       }
     }
 
@@ -165,8 +166,9 @@ export function PDFViewer({ pdfData, isLoading }: PDFViewerProps) {
 
     void initializePdfJs().catch((error: unknown) => {
       if (cancelled) return
+      reportClientError(error, "pdf-viewer-init")
       console.error("PDF viewer init error:", error)
-      setRenderError(error instanceof Error ? error.message : "Failed to initialize PDF preview.")
+      setRenderError(getUserFacingMessage(error, "Failed to initialize PDF preview."))
     })
 
     return () => {
@@ -250,11 +252,12 @@ export function PDFViewer({ pdfData, isLoading }: PDFViewerProps) {
       })
       .catch((error: unknown) => {
         if (cancelled) return
+        reportClientError(error, "pdf-load")
         console.error("PDF load error:", error)
         setPdfDocument(null)
         setPageCount(0)
         setIsDocumentLoading(false)
-        setRenderError(error instanceof Error ? error.message : "Failed to load PDF preview.")
+        setRenderError(getUserFacingMessage(error, "Failed to load PDF preview."))
       })
 
     return () => {

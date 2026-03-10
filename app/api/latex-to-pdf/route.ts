@@ -1,21 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
-import { z } from "zod"
 import { enforceRateLimit } from "@/lib/api-rate-limit"
-import { reportServerError } from "@/lib/error-monitoring"
-import { compileLatexDocument } from "@/lib/latex-compiler"
 import { validationErrorResponse } from "@/lib/api-response"
+import { reportServerError } from "@/lib/error-monitoring"
+import { compileLatexPdf, latexToPdfSchema } from "@/lib/services/document-service"
 
 export const runtime = "nodejs"
 export const maxDuration = 30
-
-const latexToPdfSchema = z.object({
-  latex: z
-    .string()
-    .trim()
-    .min(1, "No LaTeX content provided.")
-    .max(150000, "LaTeX document is too large."),
-  preview: z.boolean().optional().default(false),
-})
 
 export async function POST(request: NextRequest) {
   const rateLimitResponse = await enforceRateLimit(request, {
@@ -35,7 +25,7 @@ export async function POST(request: NextRequest) {
 
     const { latex, preview } = parsed.data
 
-    const result = await compileLatexDocument(latex)
+    const result = await compileLatexPdf(parsed.data)
 
     if (!result.ok) {
       return NextResponse.json(
