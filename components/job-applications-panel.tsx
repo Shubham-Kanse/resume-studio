@@ -506,7 +506,7 @@ function JobApplicationsPanelComponent({
           ) : (
             <div className="scrollbar-dark flex-1 overflow-y-auto overflow-x-hidden rounded-2xl border border-white/8 bg-black/[0.06]">
               <table className="w-full table-fixed border-collapse">
-                <thead className="sticky top-0 z-10 bg-white/[0.02] backdrop-blur-xl">
+                <thead className="sticky top-0 z-10 bg-white/[0.04] backdrop-blur-[18px]">
                   <tr className="text-left text-xs uppercase tracking-[0.18em] text-white/40">
                     <th className="w-[11%] border-b border-white/8 px-4 py-3 font-medium">Stage</th>
                     <th className="w-[20%] border-b border-white/8 px-4 py-3 font-medium">Company</th>

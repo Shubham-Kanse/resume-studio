@@ -304,7 +304,7 @@ function WebGLShaderComponent({ theme = "current" }: { theme?: BackgroundTheme }
     <canvas
       ref={canvasRef}
       aria-hidden="true"
-      className={`pointer-events-none fixed inset-0 block h-full w-full blur-[4px] transition-opacity duration-500 ${themeDefinition.opacityClassName}`}
+      className={`pointer-events-none fixed inset-0 block h-full w-full blur-[7px] transition-opacity duration-500 ${themeDefinition.opacityClassName}`}
     />
   )
 }
