@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import {
   Target,
   CheckCircle2,
@@ -770,7 +770,7 @@ function DebugSectionCard({ section }: { section: ATSDebugSection }) {
   )
 }
 
-export function ATSScorePanel({
+function ATSScorePanelComponent({
   scoreData,
   isLoading,
   isLoadingInsights,
@@ -1087,3 +1087,5 @@ export function ATSScorePanel({
     </div>
   )
 }
+
+export const ATSScorePanel = memo(ATSScorePanelComponent)

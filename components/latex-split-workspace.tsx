@@ -1,8 +1,8 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import dynamic from "next/dynamic"
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
 import { AlertTriangle, CheckCircle, Download, Loader2, Minimize2 } from "lucide-react"
-import { PDFViewer } from "@/components/pdf-viewer"
 import { Button } from "@/components/ui/button"
 import { getUserFacingMessage } from "@/lib/errors"
 import { reportClientError } from "@/lib/error-monitoring"
@@ -12,6 +12,10 @@ import {
   validateLaTeX,
 } from "@/lib/latex-editor"
 import { documentServiceClient } from "@/lib/services/gateway-client"
+
+const PDFViewer = dynamic(() => import("@/components/pdf-viewer").then((mod) => mod.PDFViewer), {
+  loading: () => null,
+})
 
 interface LatexSplitWorkspaceProps {
   open: boolean
@@ -38,16 +42,17 @@ export function LatexSplitWorkspace({
   const editorRef = useRef<HTMLTextAreaElement>(null)
   const lineNumbersRef = useRef<HTMLDivElement>(null)
   const autoCompileTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const deferredLatexContent = useDeferredValue(latexContent)
 
-  const latexErrors = useMemo(() => validateLaTeX(latexContent), [latexContent])
+  const latexErrors = useMemo(() => validateLaTeX(deferredLatexContent), [deferredLatexContent])
   const hasErrors = latexErrors.some((error) => error.type === "error")
   const hasWarnings = latexErrors.some((error) => error.type === "warning")
 
   const lineNumbers = useMemo(() => {
-    if (!latexContent) return []
-    const lineCount = (latexContent.match(/\n/g) || []).length + 1
+    if (!deferredLatexContent) return []
+    const lineCount = (deferredLatexContent.match(/\n/g) || []).length + 1
     return Array.from({ length: lineCount }, (_, index) => index + 1)
-  }, [latexContent])
+  }, [deferredLatexContent])
 
   const errorLineNumbers = useMemo(() => {
     return new Set(latexErrors.filter((error) => error.line).map((error) => error.line!))
@@ -246,7 +251,7 @@ export function LatexSplitWorkspace({
                           key={`${error.message}-${index}`}
                           onClick={() => {
                             if (error.line && editorRef.current) {
-                              const lines = latexContent.split("\n")
+                              const lines = deferredLatexContent.split("\n")
                               const lineStart =
                                 lines.slice(0, error.line - 1).join("\n").length +
                                 (error.line > 1 ? 1 : 0)

@@ -1,18 +1,10 @@
 "use client"
 
 import dynamic from "next/dynamic"
-import { useEffect, useRef, useState } from "react"
+import { memo, useCallback, useEffect, useRef, useState, type ComponentProps, type RefObject } from "react"
 import type { Session } from "@supabase/supabase-js"
 import { BriefcaseBusiness, ChevronDown, FileCode2, LayoutDashboard, LogOut, Target, UserRound } from "lucide-react"
-import { ATSScorePanel } from "@/components/ats-score-panel"
-import { AuthDialog } from "@/components/auth-dialog"
-import { DashboardPanel } from "@/components/dashboard-panel"
 import { ErrorBoundary } from "@/components/error-boundary"
-import { JobApplicationsPanel } from "@/components/job-applications-panel"
-import { LatexSplitWorkspace } from "@/components/latex-split-workspace"
-import { LegalDialog } from "@/components/legal-dialog"
-import { ResumeInputPanel } from "@/components/resume-input-panel"
-import { ResumePreviewPanel } from "@/components/resume-preview-panel"
 import { BACKGROUND_THEMES, type BackgroundTheme } from "@/components/webgl-shader"
 import { Button } from "@/components/ui/button"
 import type { ATSScoreResponse } from "@/lib/ats-types"
@@ -79,12 +71,401 @@ const WebGLShader = dynamic(
   { ssr: false, loading: () => null }
 )
 
+const DashboardPanel = dynamic(() => import("@/components/dashboard-panel").then((mod) => mod.DashboardPanel), {
+  loading: () => null,
+})
+
+const JobApplicationsPanel = dynamic(
+  () => import("@/components/job-applications-panel").then((mod) => mod.JobApplicationsPanel),
+  { loading: () => null }
+)
+
+const ResumeInputPanel = dynamic(() => import("@/components/resume-input-panel").then((mod) => mod.ResumeInputPanel), {
+  loading: () => null,
+})
+
+const ResumePreviewPanel = dynamic(
+  () => import("@/components/resume-preview-panel").then((mod) => mod.ResumePreviewPanel),
+  { loading: () => null }
+)
+
+const ATSScorePanel = dynamic(() => import("@/components/ats-score-panel").then((mod) => mod.ATSScorePanel), {
+  loading: () => null,
+})
+
+const LatexSplitWorkspace = dynamic(
+  () => import("@/components/latex-split-workspace").then((mod) => mod.LatexSplitWorkspace),
+  { loading: () => null }
+)
+
+const AuthDialog = dynamic(() => import("@/components/auth-dialog").then((mod) => mod.AuthDialog), {
+  loading: () => null,
+})
+
+const LegalDialog = dynamic(() => import("@/components/legal-dialog").then((mod) => mod.LegalDialog), {
+  loading: () => null,
+})
+
 const supabase = getSupabaseBrowserClient()
+
+type DashboardPanelProps = ComponentProps<typeof DashboardPanel>
+type JobApplicationsPanelProps = ComponentProps<typeof JobApplicationsPanel>
+type ResumeInputPanelProps = ComponentProps<typeof ResumeInputPanel>
+type ResumePreviewPanelProps = ComponentProps<typeof ResumePreviewPanel>
+type ATSScorePanelProps = ComponentProps<typeof ATSScorePanel>
+type LatexSplitWorkspaceProps = ComponentProps<typeof LatexSplitWorkspace>
+type AuthDialogProps = ComponentProps<typeof AuthDialog>
+type LegalDialogProps = ComponentProps<typeof LegalDialog>
+
+const PageHeader = memo(function PageHeader({
+  mode,
+  userEmail,
+  pageContainerClass,
+  onModeChange,
+  onOpenAuth,
+  onSignOut,
+}: {
+  mode: AppMode
+  userEmail: string | null
+  pageContainerClass: string
+  onModeChange: (mode: AppMode) => void
+  onOpenAuth: () => void
+  onSignOut: () => Promise<void>
+}) {
+  return (
+    <div
+      className={cn(
+        "relative z-10 flex flex-col gap-3 pt-4 md:flex-row md:items-center md:justify-between lg:pt-5",
+        pageContainerClass
+      )}
+    >
+      <div className="w-full rounded-full border border-white/12 bg-black/25 p-1.5 shadow-[0_14px_40px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-xl md:w-fit">
+        <div className="flex items-stretch gap-2">
+          <Button
+            type="button"
+            variant="cool"
+            size="sm"
+            aria-pressed={mode === "dashboard"}
+            onClick={() => onModeChange("dashboard")}
+            className={cn(
+              "flex-1 rounded-full px-3 text-xs sm:flex-none sm:px-4 sm:text-sm",
+              mode === "dashboard"
+                ? "shadow-[0_10px_24px_rgba(34,197,94,0.28)]"
+                : "opacity-60 saturate-50 shadow-none hover:opacity-100"
+            )}
+          >
+            <LayoutDashboard className="h-4 w-4" />
+            <span className="text-xs font-medium sm:text-sm">Dashboard</span>
+          </Button>
+          <Button
+            type="button"
+            variant="cool"
+            size="sm"
+            aria-pressed={mode === "generate"}
+            onClick={() => onModeChange("generate")}
+            className={cn(
+              "flex-1 rounded-full px-3 text-xs sm:flex-none sm:px-4 sm:text-sm",
+              mode === "generate"
+                ? "shadow-[0_10px_24px_rgba(34,197,94,0.28)]"
+                : "opacity-60 saturate-50 shadow-none hover:opacity-100"
+            )}
+          >
+            <FileCode2 className="h-4 w-4" />
+            <span className="text-xs font-medium sm:text-sm">LaTeX Generator</span>
+          </Button>
+          <Button
+            type="button"
+            variant="cool"
+            size="sm"
+            aria-pressed={mode === "ats-score"}
+            onClick={() => onModeChange("ats-score")}
+            className={cn(
+              "flex-1 rounded-full px-3 text-xs sm:flex-none sm:px-4 sm:text-sm",
+              mode === "ats-score"
+                ? "shadow-[0_10px_24px_rgba(34,197,94,0.28)]"
+                : "opacity-60 saturate-50 shadow-none hover:opacity-100"
+            )}
+          >
+            <Target className="h-4 w-4" />
+            <span className="text-xs font-medium sm:text-sm">ATS Score</span>
+          </Button>
+          <Button
+            type="button"
+            variant="cool"
+            size="sm"
+            aria-pressed={mode === "job-tracker"}
+            onClick={() => onModeChange("job-tracker")}
+            className={cn(
+              "flex-1 rounded-full px-3 text-xs sm:flex-none sm:px-4 sm:text-sm",
+              mode === "job-tracker"
+                ? "shadow-[0_10px_24px_rgba(34,197,94,0.28)]"
+                : "opacity-60 saturate-50 shadow-none hover:opacity-100"
+            )}
+          >
+            <BriefcaseBusiness className="h-4 w-4" />
+            <span className="text-xs font-medium sm:text-sm">Job Tracker</span>
+          </Button>
+        </div>
+      </div>
+
+      <div className="w-full rounded-full border border-white/12 bg-black/25 p-1.5 shadow-[0_14px_40px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-xl md:w-fit">
+        <div className="flex items-stretch gap-2">
+          {userEmail ? (
+            <>
+              <Button
+                type="button"
+                variant="cool"
+                size="sm"
+                onClick={onOpenAuth}
+                className="flex-1 rounded-full px-3 text-xs shadow-[0_10px_24px_rgba(34,197,94,0.28)] sm:flex-none sm:px-4 sm:text-sm"
+              >
+                <UserRound className="h-4 w-4" />
+                <span className="text-xs font-medium sm:text-sm">Account</span>
+              </Button>
+              <Button
+                type="button"
+                variant="cool"
+                size="sm"
+                onClick={() => void onSignOut()}
+                className="flex-1 rounded-full px-3 text-xs shadow-[0_10px_24px_rgba(34,197,94,0.28)] sm:flex-none sm:px-4 sm:text-sm"
+              >
+                <LogOut className="h-4 w-4" />
+                <span className="text-xs font-medium sm:text-sm">Logout</span>
+              </Button>
+            </>
+          ) : (
+            <Button
+              type="button"
+              variant="cool"
+              size="sm"
+              onClick={onOpenAuth}
+              className="flex-1 rounded-full px-3 text-xs shadow-[0_10px_24px_rgba(34,197,94,0.28)] sm:flex-none sm:px-4 sm:text-sm"
+            >
+              <span className="text-xs font-medium sm:text-sm">Login</span>
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+})
+
+const ErrorBanner = memo(function ErrorBanner({
+  error,
+  pageContainerClass,
+  onDismiss,
+}: {
+  error: string | null
+  pageContainerClass: string
+  onDismiss: () => void
+}) {
+  if (!error) return null
+
+  return (
+    <div
+      className={cn(
+        "relative z-10 mt-3 flex items-start justify-between gap-3 rounded-2xl border border-red-500/20 bg-red-500/10 p-3 shadow-[0_16px_50px_rgba(0,0,0,0.2)] backdrop-blur-xl",
+        pageContainerClass
+      )}
+    >
+      <p className="flex-1 text-sm text-red-300">{error}</p>
+      <button
+        type="button"
+        onClick={onDismiss}
+        className="text-red-300 transition-colors hover:text-red-200"
+        aria-label="Close error"
+      >
+        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+  )
+})
+
+const MainContent = memo(function MainContent({
+  mode,
+  pageContainerClass,
+  panelShellClass,
+  outputPanelRef,
+  dashboardProps,
+  trackerProps,
+  inputProps,
+  previewProps,
+  atsProps,
+}: {
+  mode: AppMode
+  pageContainerClass: string
+  panelShellClass: string
+  outputPanelRef: RefObject<HTMLDivElement>
+  dashboardProps: DashboardPanelProps
+  trackerProps: JobApplicationsPanelProps
+  inputProps: ResumeInputPanelProps
+  previewProps: ResumePreviewPanelProps
+  atsProps: ATSScorePanelProps
+}) {
+  return (
+    <div
+      className={cn(
+        "relative z-10 flex min-h-0 flex-1 min-w-0 flex-col gap-4 overflow-y-auto pb-4 pt-4 md:overflow-hidden lg:gap-6 lg:pb-6",
+        pageContainerClass
+      )}
+    >
+      {mode === "dashboard" ? (
+        <div className={cn(panelShellClass, "md:basis-auto md:flex-auto")}>
+          <ErrorBoundary
+            context="dashboard-panel"
+            fallbackTitle="Dashboard unavailable"
+            fallbackMessage="The dashboard failed to render. You can reload just this section."
+          >
+            <DashboardPanel {...dashboardProps} />
+          </ErrorBoundary>
+        </div>
+      ) : mode === "job-tracker" ? (
+        <div className={cn(panelShellClass, "md:basis-auto md:flex-auto")}>
+          <ErrorBoundary
+            context="job-applications-panel"
+            fallbackTitle="Job tracker unavailable"
+            fallbackMessage="The job tracker failed to render. Your data is still intact."
+          >
+            <JobApplicationsPanel {...trackerProps} />
+          </ErrorBoundary>
+        </div>
+      ) : (
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 md:flex-row md:items-stretch md:overflow-hidden">
+          <div className={panelShellClass}>
+            <ErrorBoundary
+              context="resume-input-panel"
+              fallbackTitle="Input panel unavailable"
+              fallbackMessage="The input panel failed to render. Reload this section to continue."
+            >
+              <ResumeInputPanel {...inputProps} />
+            </ErrorBoundary>
+          </div>
+
+          <div ref={outputPanelRef} className={panelShellClass}>
+            {mode === "generate" ? (
+              <ErrorBoundary
+                context="resume-preview-panel"
+                fallbackTitle="Preview unavailable"
+                fallbackMessage="The resume preview failed to render. You can reload just this panel."
+              >
+                <ResumePreviewPanel {...previewProps} />
+              </ErrorBoundary>
+            ) : (
+              <ErrorBoundary
+                context="ats-score-panel"
+                fallbackTitle="ATS results unavailable"
+                fallbackMessage="The ATS results panel failed to render. Reload this section to continue."
+              >
+                <ATSScorePanel {...atsProps} />
+              </ErrorBoundary>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+})
+
+const SplitWorkspaceLayer = memo(function SplitWorkspaceLayer({
+  mode,
+  splitProps,
+}: {
+  mode: AppMode
+  splitProps: LatexSplitWorkspaceProps
+}) {
+  if (mode !== "generate") return null
+
+  return (
+    <ErrorBoundary
+      context="latex-split-workspace"
+      fallbackTitle="Workspace unavailable"
+      fallbackMessage="The side-by-side workspace failed to render. Close and reopen it to continue."
+      compact
+    >
+      <LatexSplitWorkspace {...splitProps} />
+    </ErrorBoundary>
+  )
+})
+
+const DialogLayer = memo(function DialogLayer({
+  authProps,
+  legalProps,
+}: {
+  authProps: AuthDialogProps
+  legalProps: LegalDialogProps
+}) {
+  return (
+    <>
+      <AuthDialog {...authProps} />
+      <LegalDialog {...legalProps} />
+    </>
+  )
+})
+
+const PageFooter = memo(function PageFooter({
+  hidden,
+  backgroundTheme,
+  onOpenPrivacy,
+  onOpenTerms,
+  onThemeChange,
+}: {
+  hidden: boolean
+  backgroundTheme: BackgroundTheme
+  onOpenPrivacy: () => void
+  onOpenTerms: () => void
+  onThemeChange: (theme: BackgroundTheme) => void
+}) {
+  if (hidden) return null
+
+  return (
+    <footer className="relative z-10 flex items-center justify-center gap-3 px-4 pb-4 text-[11px] text-white/24 md:pb-5">
+      <button type="button" onClick={onOpenPrivacy} className="transition-colors hover:text-white/50">
+        Privacy Policy
+      </button>
+      <span className="text-white/14">•</span>
+      <button type="button" onClick={onOpenTerms} className="transition-colors hover:text-white/50">
+        Terms of Service
+      </button>
+      <span className="text-white/14">•</span>
+      <details className="group relative">
+        <summary className="list-none">
+          <span className="inline-flex cursor-pointer items-center gap-1.5 text-[11px] text-white/45 transition-colors hover:text-white/70">
+            Background
+            <ChevronDown className="h-3.5 w-3.5 transition-transform duration-200 group-open:rotate-180" />
+          </span>
+        </summary>
+        <div className="absolute bottom-[calc(100%+0.6rem)] right-0 min-w-40 rounded-2xl border border-white/8 bg-[linear-gradient(180deg,rgba(8,12,24,0.1),rgba(3,7,18,0.03))] p-1.5 shadow-[0_18px_56px_rgba(0,0,0,0.18),inset_0_1px_0_rgba(255,255,255,0.1)] backdrop-blur-sm">
+          {BACKGROUND_THEMES.map((theme) => {
+            const active = backgroundTheme === theme.id
+            return (
+              <button
+                key={theme.id}
+                type="button"
+                onClick={() => onThemeChange(theme.id)}
+                className={cn(
+                  "flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-[11px] transition-colors",
+                  active ? "bg-white/10 text-white" : "text-white/55 hover:bg-white/6 hover:text-white/80"
+                )}
+              >
+                <span>{theme.label}</span>
+                <span className="text-[10px] uppercase tracking-[0.18em] text-white/30">
+                  {active ? "Live" : "Theme"}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      </details>
+    </footer>
+  )
+})
 
 export default function HomePage() {
   const atsRequestIdRef = useRef(0)
   const jobApplicationSaveTimersRef = useRef<Record<string, number>>({})
-  const outputPanelRef = useRef<HTMLDivElement | null>(null)
+  const outputPanelRef = useRef<HTMLDivElement>(null)
   const savedAtsRunIdRef = useRef<string | null>(null)
 
   const [mode, setMode] = useState<AppMode>("generate")
@@ -128,6 +509,9 @@ export default function HomePage() {
   const panelShellClass =
     "w-full min-w-0 rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(8,12,24,0.16),rgba(3,7,18,0.06))] p-4 sm:rounded-[28px] sm:p-5 md:basis-0 md:flex-1 lg:p-6 shadow-[0_18px_56px_rgba(0,0,0,0.18),inset_0_1px_0_rgba(255,255,255,0.1)] backdrop-blur-sm flex flex-col overflow-hidden min-h-[34rem] sm:min-h-[38rem] md:min-h-0"
   const isSplitWorkspaceActive = mode === "generate" && isSplitWorkspaceOpen
+  const isAuthenticated = Boolean(session?.user?.id)
+  const authAvailable = Boolean(supabase)
+  const userEmail = session?.user?.email ?? null
 
   useEffect(() => {
     if (!authMessage) return
@@ -956,6 +1340,146 @@ export default function HomePage() {
     setDeletingJobApplicationId(null)
   }
 
+  const handleOpenAuthDialog = useCallback(() => {
+    setIsAuthDialogOpen(true)
+  }, [])
+
+  const handleCloseAuthDialog = useCallback(() => {
+    setIsAuthDialogOpen(false)
+  }, [])
+
+  const handleOpenPrivacyDialog = useCallback(() => {
+    setLegalDialog("privacy")
+  }, [])
+
+  const handleOpenTermsDialog = useCallback(() => {
+    setLegalDialog("terms")
+  }, [])
+
+  const handleCloseLegalDialog = useCallback(() => {
+    setLegalDialog(null)
+  }, [])
+
+  const handleModeChange = useCallback((nextMode: AppMode) => {
+    setMode(nextMode)
+  }, [])
+
+  const handleBackgroundThemeChange = useCallback((nextTheme: BackgroundTheme) => {
+    setBackgroundTheme(nextTheme)
+  }, [])
+
+  const handleDismissError = useCallback(() => {
+    setError(null)
+  }, [])
+
+  const handleOpenSplitWorkspace = useCallback(() => {
+    setIsSplitWorkspaceOpen(true)
+  }, [])
+
+  const handleCloseSplitWorkspace = useCallback(() => {
+    setIsSplitWorkspaceOpen(false)
+  }, [])
+
+  const handleSelectHistoryRun = useCallback((runId: string) => {
+    setSelectedHistoryRunId(runId)
+  }, [])
+
+  const dashboardProps: DashboardPanelProps = {
+    authAvailable,
+    isAuthenticated,
+    userEmail,
+    userName,
+    historyItems,
+    historyLoading,
+    selectedRunId: selectedHistoryRunId,
+    deletingRunId,
+    onSelectRun: handleSelectHistoryRun,
+    onLoadRun: handleLoadRunFromDashboard,
+    onDeleteRun: handleDeleteRun,
+    onOpenAuth: handleOpenAuthDialog,
+    storageNotice,
+  }
+
+  const trackerProps: JobApplicationsPanelProps = {
+    authAvailable,
+    isAuthenticated,
+    storageNotice: jobApplicationsNotice,
+    applications: jobApplications,
+    applicationsLoading: jobApplicationsLoading,
+    savingApplicationId: savingJobApplicationId,
+    deletingApplicationId: deletingJobApplicationId,
+    onAddApplication: handleAddJobApplication,
+    onUpdateApplication: handleUpdateJobApplication,
+    onDeleteApplication: handleDeleteJobApplication,
+    onOpenAuth: handleOpenAuthDialog,
+  }
+
+  const inputMode: NonNullable<ResumeInputPanelProps["mode"]> =
+    mode === "ats-score" ? "ats-score" : "generate"
+
+  const inputProps: ResumeInputPanelProps = {
+    onGenerate: mode === "generate" ? handleGenerate : handleATSScore,
+    isGenerating: mode === "generate" ? isGenerating : isScoring,
+    mode: inputMode,
+    jobDescription,
+    resumeContent,
+    resumeFileName,
+    resumeFileMimeType,
+    extraInstructions,
+    onJobDescriptionChange: setJobDescription,
+    onResumeContentChange: setResumeContent,
+    onResumeFileNameChange: setResumeFileName,
+    onResumeFileMimeTypeChange: setResumeFileMimeType,
+    onResumeFileDataUrlChange: setResumeFileDataUrl,
+    onResumeArtifactsChange: setResumeArtifacts,
+    onExtraInstructionsChange: setExtraInstructions,
+  }
+
+  const previewProps: ResumePreviewPanelProps = {
+    latexContent,
+    editableLatex: editableLatexContent,
+    isGenerating,
+    onEditableLatexChange: setEditableLatexContent,
+    onOpenSplitWorkspace: handleOpenSplitWorkspace,
+    statusMessage,
+  }
+
+  const atsProps: ATSScorePanelProps = {
+    scoreData: atsScore,
+    isLoading: isScoring,
+    isLoadingInsights,
+    hasLoadedAIInsights,
+  }
+
+  const splitProps: LatexSplitWorkspaceProps = {
+    open: isSplitWorkspaceOpen,
+    latexContent: editableLatexContent,
+    isGenerating,
+    statusMessage,
+    onLatexChange: setEditableLatexContent,
+    onClose: handleCloseSplitWorkspace,
+  }
+
+  const authDialogProps: AuthDialogProps = {
+    open: isAuthDialogOpen,
+    authAvailable,
+    authLoading,
+    authMessage,
+    userEmail,
+    isExportingData,
+    isDeletingAccount,
+    onClose: handleCloseAuthDialog,
+    onGoogleAuth: handleSignInWithGoogle,
+    onExportData: handleExportData,
+    onDeleteAccount: handleDeleteAccount,
+  }
+
+  const legalDialogProps: LegalDialogProps = {
+    open: legalDialog !== null,
+    variant: legalDialog ?? "privacy",
+    onClose: handleCloseLegalDialog,
+  }
+
   return (
     <div className="relative flex min-h-dvh flex-col overflow-x-hidden bg-[#030712] md:h-screen md:overflow-hidden">
       <div className="fixed inset-0 h-full w-full">
@@ -973,335 +1497,42 @@ export default function HomePage() {
 
       {isSplitWorkspaceActive ? null : (
         <>
-          <div className={cn("relative z-10 flex flex-col gap-3 pt-4 md:flex-row md:items-center md:justify-between lg:pt-5", pageContainerClass)}>
-            <div className="w-full rounded-full border border-white/12 bg-black/25 p-1.5 shadow-[0_14px_40px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-xl md:w-fit">
-              <div className="flex items-stretch gap-2">
-                <Button
-                  type="button"
-                  variant="cool"
-                  size="sm"
-                  aria-pressed={mode === "dashboard"}
-                  onClick={() => setMode("dashboard")}
-                  className={cn(
-                    "flex-1 rounded-full px-3 text-xs sm:flex-none sm:px-4 sm:text-sm",
-                    mode === "dashboard"
-                      ? "shadow-[0_10px_24px_rgba(34,197,94,0.28)]"
-                      : "opacity-60 saturate-50 shadow-none hover:opacity-100"
-                  )}
-                >
-                  <LayoutDashboard className="h-4 w-4" />
-                  <span className="text-xs font-medium sm:text-sm">Dashboard</span>
-                </Button>
-                <Button
-                  type="button"
-                  variant="cool"
-                  size="sm"
-                  aria-pressed={mode === "generate"}
-                  onClick={() => setMode("generate")}
-                  className={cn(
-                    "flex-1 rounded-full px-3 text-xs sm:flex-none sm:px-4 sm:text-sm",
-                    mode === "generate"
-                      ? "shadow-[0_10px_24px_rgba(34,197,94,0.28)]"
-                      : "opacity-60 saturate-50 shadow-none hover:opacity-100"
-                  )}
-                >
-                  <FileCode2 className="h-4 w-4" />
-                  <span className="text-xs font-medium sm:text-sm">LaTeX Generator</span>
-                </Button>
-                <Button
-                  type="button"
-                  variant="cool"
-                  size="sm"
-                  aria-pressed={mode === "ats-score"}
-                  onClick={() => setMode("ats-score")}
-                  className={cn(
-                    "flex-1 rounded-full px-3 text-xs sm:flex-none sm:px-4 sm:text-sm",
-                    mode === "ats-score"
-                      ? "shadow-[0_10px_24px_rgba(34,197,94,0.28)]"
-                      : "opacity-60 saturate-50 shadow-none hover:opacity-100"
-                  )}
-                >
-                  <Target className="h-4 w-4" />
-                  <span className="text-xs font-medium sm:text-sm">ATS Score</span>
-                </Button>
-                <Button
-                  type="button"
-                  variant="cool"
-                  size="sm"
-                  aria-pressed={mode === "job-tracker"}
-                  onClick={() => setMode("job-tracker")}
-                  className={cn(
-                    "flex-1 rounded-full px-3 text-xs sm:flex-none sm:px-4 sm:text-sm",
-                    mode === "job-tracker"
-                      ? "shadow-[0_10px_24px_rgba(34,197,94,0.28)]"
-                      : "opacity-60 saturate-50 shadow-none hover:opacity-100"
-                  )}
-                >
-                  <BriefcaseBusiness className="h-4 w-4" />
-                  <span className="text-xs font-medium sm:text-sm">Job Tracker</span>
-                </Button>
-              </div>
-            </div>
+          <PageHeader
+            mode={mode}
+            userEmail={userEmail}
+            pageContainerClass={pageContainerClass}
+            onModeChange={handleModeChange}
+            onOpenAuth={handleOpenAuthDialog}
+            onSignOut={handleSignOut}
+          />
 
-            <div className="w-full rounded-full border border-white/12 bg-black/25 p-1.5 shadow-[0_14px_40px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-xl md:w-fit">
-              <div className="flex items-stretch gap-2">
-                {session?.user?.email ? (
-                  <>
-                    <Button
-                      type="button"
-                      variant="cool"
-                      size="sm"
-                      onClick={() => setIsAuthDialogOpen(true)}
-                      className="flex-1 rounded-full px-3 text-xs shadow-[0_10px_24px_rgba(34,197,94,0.28)] sm:flex-none sm:px-4 sm:text-sm"
-                    >
-                      <UserRound className="h-4 w-4" />
-                      <span className="text-xs font-medium sm:text-sm">Account</span>
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="cool"
-                      size="sm"
-                      onClick={handleSignOut}
-                      className="flex-1 rounded-full px-3 text-xs shadow-[0_10px_24px_rgba(34,197,94,0.28)] sm:flex-none sm:px-4 sm:text-sm"
-                    >
-                      <LogOut className="h-4 w-4" />
-                      <span className="text-xs font-medium sm:text-sm">Logout</span>
-                    </Button>
-                  </>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="cool"
-                    size="sm"
-                    onClick={() => setIsAuthDialogOpen(true)}
-                    className="flex-1 rounded-full px-3 text-xs shadow-[0_10px_24px_rgba(34,197,94,0.28)] sm:flex-none sm:px-4 sm:text-sm"
-                  >
-                    <span className="text-xs font-medium sm:text-sm">Login</span>
-                  </Button>
-                )}
-              </div>
-            </div>
-          </div>
+          <ErrorBanner error={error} pageContainerClass={pageContainerClass} onDismiss={handleDismissError} />
 
-          {error ? (
-            <div className={cn("relative z-10 mt-3 flex items-start justify-between gap-3 rounded-2xl border border-red-500/20 bg-red-500/10 p-3 shadow-[0_16px_50px_rgba(0,0,0,0.2)] backdrop-blur-xl", pageContainerClass)}>
-              <p className="flex-1 text-sm text-red-300">{error}</p>
-              <button
-                type="button"
-                onClick={() => setError(null)}
-                className="text-red-300 transition-colors hover:text-red-200"
-                aria-label="Close error"
-              >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-          ) : null}
-
-          <div className={cn("relative z-10 flex min-h-0 flex-1 min-w-0 flex-col gap-4 overflow-y-auto pb-4 pt-4 md:overflow-hidden lg:gap-6 lg:pb-6", pageContainerClass)}>
-            {mode === "dashboard" ? (
-              <div className={cn(panelShellClass, "md:basis-auto md:flex-auto")}>
-                <ErrorBoundary
-                  context="dashboard-panel"
-                  fallbackTitle="Dashboard unavailable"
-                  fallbackMessage="The dashboard failed to render. You can reload just this section."
-                >
-                  <DashboardPanel
-                    authAvailable={Boolean(supabase)}
-                    isAuthenticated={Boolean(session?.user?.id)}
-                    userEmail={session?.user?.email ?? null}
-                    userName={userName}
-                    historyItems={historyItems}
-                    historyLoading={historyLoading}
-                    selectedRunId={selectedHistoryRunId}
-                    deletingRunId={deletingRunId}
-                    onSelectRun={setSelectedHistoryRunId}
-                    onLoadRun={handleLoadRunFromDashboard}
-                    onDeleteRun={handleDeleteRun}
-                    onOpenAuth={() => setIsAuthDialogOpen(true)}
-                    storageNotice={storageNotice}
-                  />
-                </ErrorBoundary>
-              </div>
-            ) : mode === "job-tracker" ? (
-              <div className={cn(panelShellClass, "md:basis-auto md:flex-auto")}>
-                <ErrorBoundary
-                  context="job-applications-panel"
-                  fallbackTitle="Job tracker unavailable"
-                  fallbackMessage="The job tracker failed to render. Your data is still intact."
-                >
-                  <JobApplicationsPanel
-                    authAvailable={Boolean(supabase)}
-                    isAuthenticated={Boolean(session?.user?.id)}
-                    storageNotice={jobApplicationsNotice}
-                    applications={jobApplications}
-                    applicationsLoading={jobApplicationsLoading}
-                    savingApplicationId={savingJobApplicationId}
-                    deletingApplicationId={deletingJobApplicationId}
-                    onAddApplication={handleAddJobApplication}
-                    onUpdateApplication={handleUpdateJobApplication}
-                    onDeleteApplication={handleDeleteJobApplication}
-                    onOpenAuth={() => setIsAuthDialogOpen(true)}
-                  />
-                </ErrorBoundary>
-              </div>
-            ) : (
-              <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 md:flex-row md:items-stretch md:overflow-hidden">
-                <div className={panelShellClass}>
-                  <ErrorBoundary
-                    context="resume-input-panel"
-                    fallbackTitle="Input panel unavailable"
-                    fallbackMessage="The input panel failed to render. Reload this section to continue."
-                  >
-                    <ResumeInputPanel
-                      onGenerate={mode === "generate" ? handleGenerate : handleATSScore}
-                      isGenerating={mode === "generate" ? isGenerating : isScoring}
-                      mode={mode}
-                      jobDescription={jobDescription}
-                      resumeContent={resumeContent}
-                      resumeFileName={resumeFileName}
-                      resumeFileMimeType={resumeFileMimeType}
-                      extraInstructions={extraInstructions}
-                      onJobDescriptionChange={setJobDescription}
-                      onResumeContentChange={setResumeContent}
-                      onResumeFileNameChange={setResumeFileName}
-                      onResumeFileMimeTypeChange={setResumeFileMimeType}
-                      onResumeFileDataUrlChange={setResumeFileDataUrl}
-                      onResumeArtifactsChange={setResumeArtifacts}
-                      onExtraInstructionsChange={setExtraInstructions}
-                    />
-                  </ErrorBoundary>
-                </div>
-
-                <div ref={outputPanelRef} className={panelShellClass}>
-                  {mode === "generate" ? (
-                    <ErrorBoundary
-                      context="resume-preview-panel"
-                      fallbackTitle="Preview unavailable"
-                      fallbackMessage="The resume preview failed to render. You can reload just this panel."
-                    >
-                      <ResumePreviewPanel
-                        latexContent={latexContent}
-                        editableLatex={editableLatexContent}
-                        isGenerating={isGenerating}
-                        onEditableLatexChange={setEditableLatexContent}
-                        onOpenSplitWorkspace={() => setIsSplitWorkspaceOpen(true)}
-                        statusMessage={statusMessage}
-                      />
-                    </ErrorBoundary>
-                  ) : (
-                    <ErrorBoundary
-                      context="ats-score-panel"
-                      fallbackTitle="ATS results unavailable"
-                      fallbackMessage="The ATS results panel failed to render. Reload this section to continue."
-                    >
-                      <ATSScorePanel
-                        scoreData={atsScore}
-                        isLoading={isScoring}
-                        isLoadingInsights={isLoadingInsights}
-                        hasLoadedAIInsights={hasLoadedAIInsights}
-                      />
-                    </ErrorBoundary>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
+          <MainContent
+            mode={mode}
+            pageContainerClass={pageContainerClass}
+            panelShellClass={panelShellClass}
+            outputPanelRef={outputPanelRef}
+            dashboardProps={dashboardProps}
+            trackerProps={trackerProps}
+            inputProps={inputProps}
+            previewProps={previewProps}
+            atsProps={atsProps}
+          />
         </>
       )}
 
-      {mode === "generate" ? (
-        <ErrorBoundary
-          context="latex-split-workspace"
-          fallbackTitle="Workspace unavailable"
-          fallbackMessage="The side-by-side workspace failed to render. Close and reopen it to continue."
-          compact
-        >
-          <LatexSplitWorkspace
-            open={isSplitWorkspaceOpen}
-            latexContent={editableLatexContent}
-            isGenerating={isGenerating}
-            statusMessage={statusMessage}
-            onLatexChange={setEditableLatexContent}
-            onClose={() => setIsSplitWorkspaceOpen(false)}
-          />
-        </ErrorBoundary>
-      ) : null}
+      <SplitWorkspaceLayer mode={mode} splitProps={splitProps} />
 
-      <AuthDialog
-        open={isAuthDialogOpen}
-        authAvailable={Boolean(supabase)}
-        authLoading={authLoading}
-        authMessage={authMessage}
-        userEmail={session?.user?.email ?? null}
-        isExportingData={isExportingData}
-        isDeletingAccount={isDeletingAccount}
-        onClose={() => setIsAuthDialogOpen(false)}
-        onGoogleAuth={handleSignInWithGoogle}
-        onExportData={handleExportData}
-        onDeleteAccount={handleDeleteAccount}
+      <DialogLayer authProps={authDialogProps} legalProps={legalDialogProps} />
+
+      <PageFooter
+        hidden={isSplitWorkspaceActive}
+        backgroundTheme={backgroundTheme}
+        onOpenPrivacy={handleOpenPrivacyDialog}
+        onOpenTerms={handleOpenTermsDialog}
+        onThemeChange={handleBackgroundThemeChange}
       />
-
-      <LegalDialog
-        open={legalDialog !== null}
-        variant={legalDialog ?? "privacy"}
-        onClose={() => setLegalDialog(null)}
-      />
-
-      {isSplitWorkspaceActive ? null : (
-        <footer
-          className={cn(
-            "relative z-10 flex items-center justify-center gap-3 px-4 pb-4 text-[11px] text-white/24 md:pb-5"
-          )}
-        >
-          <button
-            type="button"
-            onClick={() => setLegalDialog("privacy")}
-            className="transition-colors hover:text-white/50"
-          >
-            Privacy Policy
-          </button>
-          <span className="text-white/14">•</span>
-          <button
-            type="button"
-            onClick={() => setLegalDialog("terms")}
-            className="transition-colors hover:text-white/50"
-          >
-            Terms of Service
-          </button>
-          <span className="text-white/14">•</span>
-          <details className="group relative">
-            <summary className="list-none">
-              <span className="inline-flex cursor-pointer items-center gap-1.5 text-[11px] text-white/45 transition-colors hover:text-white/70">
-                Background
-                <ChevronDown className="h-3.5 w-3.5 transition-transform duration-200 group-open:rotate-180" />
-              </span>
-            </summary>
-            <div className="absolute bottom-[calc(100%+0.6rem)] right-0 min-w-40 rounded-2xl border border-white/8 bg-[linear-gradient(180deg,rgba(8,12,24,0.1),rgba(3,7,18,0.03))] p-1.5 shadow-[0_18px_56px_rgba(0,0,0,0.18),inset_0_1px_0_rgba(255,255,255,0.1)] backdrop-blur-sm">
-              {BACKGROUND_THEMES.map((theme) => {
-                const active = backgroundTheme === theme.id
-                return (
-                  <button
-                    key={theme.id}
-                    type="button"
-                    onClick={() => setBackgroundTheme(theme.id)}
-                    className={cn(
-                      "flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-[11px] transition-colors",
-                      active ? "bg-white/10 text-white" : "text-white/55 hover:bg-white/6 hover:text-white/80"
-                    )}
-                  >
-                    <span>{theme.label}</span>
-                    <span className="text-[10px] uppercase tracking-[0.18em] text-white/30">
-                      {active ? "Live" : "Theme"}
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-          </details>
-        </footer>
-      )}
     </div>
   )
 }

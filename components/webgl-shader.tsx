@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { memo, useEffect, useRef, useState } from "react"
 import * as THREE from "three"
 import { reportClientError } from "@/lib/error-monitoring"
 
@@ -11,20 +11,61 @@ export const BACKGROUND_THEMES = [
 
 export type BackgroundTheme = (typeof BACKGROUND_THEMES)[number]["id"]
 
+type ShaderUniform = {
+  value: number | { set: (width: number, height: number) => void }
+}
+
+type ShaderLikeMaterial = {
+  uniforms: Record<string, ShaderUniform>
+  dispose: () => void
+}
+
+type AuroraMaterial = ShaderLikeMaterial & {
+  uniforms: ShaderLikeMaterial["uniforms"] & {
+    iTime: { value: number }
+    iResolution: { value: { set: (width: number, height: number) => void } }
+  }
+}
+
+type WaveMaterial = ShaderLikeMaterial & {
+  uniforms: ShaderLikeMaterial["uniforms"] & {
+    time: { value: number }
+    resolution: { value: { set: (width: number, height: number) => void } }
+  }
+}
+
+type SceneLike = {
+  add: (mesh: MeshLike) => void
+  remove: (mesh: MeshLike) => void
+}
+
+type RendererLike = {
+  setSize: (width: number, height: number, updateStyle?: boolean) => void
+  setPixelRatio: (value: number) => void
+  setClearColor: (color: unknown) => void
+  render: (scene: SceneLike, camera: object) => void
+  dispose: () => void
+}
+
+type MeshLike = {
+  geometry: { dispose: () => void }
+  material: { dispose: () => void }
+}
+
 type ThemeDefinition = {
   clearColor: number
   opacityClassName: string
-  createMaterial: (size: { width: number; height: number }) => THREE.ShaderMaterial | THREE.RawShaderMaterial
-  onResize?: (material: THREE.ShaderMaterial | THREE.RawShaderMaterial, width: number, height: number) => void
-  onFrame?: (material: THREE.ShaderMaterial | THREE.RawShaderMaterial, deltaSeconds: number) => void
+  createMaterial: (size: { width: number; height: number }) => ShaderLikeMaterial
+  onResize?: (material: ShaderLikeMaterial, width: number, height: number) => void
+  onFrame?: (material: ShaderLikeMaterial, deltaSeconds: number) => void
 }
 
 type SceneRefs = {
-  scene: THREE.Scene | null
-  camera: THREE.OrthographicCamera | null
-  renderer: THREE.WebGLRenderer | null
-  mesh: THREE.Mesh | null
-  material: THREE.ShaderMaterial | THREE.RawShaderMaterial | null
+  scene: SceneLike | null
+  camera: object | null
+  renderer: RendererLike | null
+  mesh: MeshLike | null
+  material: ShaderLikeMaterial | null
   animationId: number | null
 }
 
@@ -123,14 +164,12 @@ function getThemeDefinition(theme: BackgroundTheme, size: { width: number; heigh
               gl_FragColor = color * 1.5;
             }
           `,
-        }),
+        }) as AuroraMaterial,
       onResize: (material, width, height) => {
-        const shader = material as THREE.ShaderMaterial
-        shader.uniforms.iResolution.value.set(width, height)
+        ;(material as AuroraMaterial).uniforms.iResolution.value.set(width, height)
       },
       onFrame: (material, deltaSeconds) => {
-        const shader = material as THREE.ShaderMaterial
-        shader.uniforms.iTime.value += deltaSeconds
+        ;(material as AuroraMaterial).uniforms.iTime.value += deltaSeconds
       },
     }
   }
@@ -178,19 +217,17 @@ function getThemeDefinition(theme: BackgroundTheme, size: { width: number; heigh
           distortion: { value: 0.05 },
         },
         side: THREE.DoubleSide,
-      }),
+      }) as WaveMaterial,
     onResize: (material, width, height) => {
-      const shader = material as THREE.RawShaderMaterial
-      shader.uniforms.resolution.value.set(width, height)
+      ;(material as WaveMaterial).uniforms.resolution.value.set(width, height)
     },
     onFrame: (material, deltaSeconds) => {
-      const shader = material as THREE.RawShaderMaterial
-      shader.uniforms.time.value += deltaSeconds * 0.625
+      ;(material as WaveMaterial).uniforms.time.value += deltaSeconds * 0.625
     },
   }
 }
 
-export function WebGLShader({ theme = "current" }: { theme?: BackgroundTheme }) {
+function WebGLShaderComponent({ theme = "current" }: { theme?: BackgroundTheme }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [failed, setFailed] = useState(false)
   const sceneRef = useRef<SceneRefs>({
@@ -216,7 +253,12 @@ export function WebGLShader({ theme = "current" }: { theme?: BackgroundTheme }) 
       height: window.innerHeight,
     })
     let resizeAttached = false
+    let visibilityAttached = false
     let previousTime = performance.now()
+    let lastRenderTime = 0
+    let animationRunning = false
+    const maxPixelRatio = theme === "aurora" ? 1.1 : 1.35
+    const frameIntervalMs = theme === "aurora" ? 1000 / 24 : 1000 / 30
 
     const handleResize = () => {
       if (!refs.renderer || !refs.material) return
@@ -225,7 +267,56 @@ export function WebGLShader({ theme = "current" }: { theme?: BackgroundTheme }) 
       const height = window.innerHeight
 
       refs.renderer.setSize(width, height, false)
+      refs.renderer.setPixelRatio(Math.min(window.devicePixelRatio, maxPixelRatio))
       themeDefinition.onResize?.(refs.material, width, height)
+    }
+
+    const stopAnimation = () => {
+      animationRunning = false
+      if (refs.animationId !== null) {
+        window.cancelAnimationFrame(refs.animationId)
+        refs.animationId = null
+      }
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        stopAnimation()
+        return
+      }
+
+      if (animationRunning) return
+      previousTime = performance.now()
+      lastRenderTime = 0
+      animationRunning = true
+      refs.animationId = window.requestAnimationFrame(animate)
+    }
+
+    function animate(now: number) {
+      if (!animationRunning) return
+
+      refs.animationId = window.requestAnimationFrame(animate)
+      if (now - lastRenderTime < frameIntervalMs) return
+
+      const deltaSeconds = Math.min(0.033, (now - previousTime) / 1000)
+      previousTime = now
+      lastRenderTime = now
+
+      if (refs.material) {
+        themeDefinition.onFrame?.(refs.material, deltaSeconds)
+      }
+
+      if (refs.renderer && refs.scene && refs.camera) {
+        refs.renderer.render(refs.scene, refs.camera)
+      }
+    }
+
+    const startAnimation = () => {
+      if (animationRunning) return
+      animationRunning = true
+      previousTime = performance.now()
+      lastRenderTime = 0
+      refs.animationId = window.requestAnimationFrame(animate)
     }
 
     try {
@@ -233,16 +324,19 @@ export function WebGLShader({ theme = "current" }: { theme?: BackgroundTheme }) 
         throw new Error("WebGL is not available in this browser")
       }
 
-      refs.scene = new THREE.Scene()
-      refs.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
-      refs.renderer = new THREE.WebGLRenderer({
+      const scene = new THREE.Scene() as SceneLike
+      const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
+      const renderer = new THREE.WebGLRenderer({
         canvas,
         antialias: theme === "aurora",
         alpha: false,
         powerPreference: "high-performance",
-      })
-      refs.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-      refs.renderer.setClearColor(new THREE.Color(themeDefinition.clearColor))
+      }) as RendererLike
+      refs.scene = scene
+      refs.camera = camera
+      refs.renderer = renderer
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, maxPixelRatio))
+      renderer.setClearColor(new THREE.Color(themeDefinition.clearColor))
 
       const geometry = new THREE.BufferGeometry()
       geometry.setAttribute(
@@ -264,28 +358,16 @@ export function WebGLShader({ theme = "current" }: { theme?: BackgroundTheme }) 
         width: window.innerWidth,
         height: window.innerHeight,
       })
-      refs.mesh = new THREE.Mesh(geometry, refs.material)
-      refs.scene.add(refs.mesh)
-
-      const animate = (now: number) => {
-        const deltaSeconds = Math.min(0.033, (now - previousTime) / 1000)
-        previousTime = now
-
-        if (refs.material) {
-          themeDefinition.onFrame?.(refs.material, deltaSeconds)
-        }
-
-        if (refs.renderer && refs.scene && refs.camera) {
-          refs.renderer.render(refs.scene, refs.camera)
-        }
-
-        refs.animationId = window.requestAnimationFrame(animate)
-      }
+      const mesh = new THREE.Mesh(geometry, refs.material) as MeshLike
+      refs.mesh = mesh
+      scene.add(mesh)
 
       handleResize()
-      refs.animationId = window.requestAnimationFrame(animate)
+      startAnimation()
       window.addEventListener("resize", handleResize)
+      document.addEventListener("visibilitychange", handleVisibilityChange)
       resizeAttached = true
+      visibilityAttached = true
     } catch (error) {
       reportClientError(error, "webgl-shader-init")
       console.error("WebGL shader failed to initialize:", error)
@@ -301,12 +383,14 @@ export function WebGLShader({ theme = "current" }: { theme?: BackgroundTheme }) 
     }
 
     return () => {
-      if (refs.animationId !== null) {
-        window.cancelAnimationFrame(refs.animationId)
-      }
+      stopAnimation()
 
       if (resizeAttached) {
         window.removeEventListener("resize", handleResize)
+      }
+
+      if (visibilityAttached) {
+        document.removeEventListener("visibilitychange", handleVisibilityChange)
       }
 
       if (refs.mesh) {
@@ -336,3 +420,5 @@ export function WebGLShader({ theme = "current" }: { theme?: BackgroundTheme }) 
     />
   )
 }
+
+export const WebGLShader = memo(WebGLShaderComponent)

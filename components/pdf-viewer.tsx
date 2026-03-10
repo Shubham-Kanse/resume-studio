@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { Loader2 } from "lucide-react"
 import { getUserFacingMessage } from "@/lib/errors"
 import { reportClientError } from "@/lib/error-monitoring"
@@ -40,13 +40,26 @@ function ensurePromiseWithResolvers() {
 
 interface PDFPageCanvasProps {
   containerWidth: number
+  renderScale: number
   pageNumber: number
   pdfDocument: any
   onRenderError: (message: string) => void
 }
 
+function getPreferredPdfRenderScale() {
+  if (typeof navigator === "undefined") return 1.25
+
+  const memory = "deviceMemory" in navigator ? (navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 0 : 0
+  const cores = navigator.hardwareConcurrency || 4
+
+  if ((memory > 0 && memory <= 4) || cores <= 4) return 1
+  if ((memory > 0 && memory <= 8) || cores <= 8) return 1.2
+  return 1.4
+}
+
 function PDFPageCanvas({
   containerWidth,
+  renderScale,
   pageNumber,
   pdfDocument,
   onRenderError,
@@ -75,7 +88,7 @@ function PDFPageCanvas({
         const baseViewport = page.getViewport({ scale: 1 })
         const scale = Math.max(containerWidth / baseViewport.width, 0.1)
         const viewport = page.getViewport({ scale })
-        const outputScale = window.devicePixelRatio || 1
+        const outputScale = Math.min(window.devicePixelRatio || 1, renderScale)
         const context = canvas.getContext("2d", { alpha: false })
 
         if (!context) {
@@ -121,7 +134,7 @@ function PDFPageCanvas({
       renderTask?.cancel?.()
       currentPage?.cleanup?.()
     }
-  }, [containerWidth, onRenderError, pageNumber, pdfDocument])
+  }, [containerWidth, onRenderError, pageNumber, pdfDocument, renderScale])
 
   return (
     <div className="relative rounded-[6px] bg-white shadow-[0_18px_56px_rgba(0,0,0,0.28)]">
@@ -147,6 +160,7 @@ export function PDFViewer({ pdfData, isLoading }: PDFViewerProps) {
   const [renderError, setRenderError] = useState<string | null>(null)
   const [viewerReady, setViewerReady] = useState(false)
   const [isDocumentLoading, setIsDocumentLoading] = useState(false)
+  const [renderScale, setRenderScale] = useState(1.25)
 
   useEffect(() => {
     let cancelled = false
@@ -161,6 +175,7 @@ export function PDFViewer({ pdfData, isLoading }: PDFViewerProps) {
         import.meta.url
       ).toString()
       pdfjsLibRef.current = pdfjsLib
+      setRenderScale(getPreferredPdfRenderScale())
       setViewerReady(true)
     }
 
@@ -230,7 +245,7 @@ export function PDFViewer({ pdfData, isLoading }: PDFViewerProps) {
 
     const loadingTask = pdfjsLib.getDocument({
       data: new Uint8Array(pdfData.slice(0)),
-      disableWorker: true,
+      disableWorker: false,
       useWorkerFetch: false,
       isEvalSupported: false,
       isOffscreenCanvasSupported: false,
@@ -265,6 +280,10 @@ export function PDFViewer({ pdfData, isLoading }: PDFViewerProps) {
       loadingTask.destroy()
     }
   }, [pdfData, viewerReady])
+
+  const handleRenderError = useCallback((message: string) => {
+    setRenderError(message)
+  }, [])
 
   if (isLoading || isDocumentLoading) {
     return (
@@ -302,9 +321,10 @@ export function PDFViewer({ pdfData, isLoading }: PDFViewerProps) {
             <PDFPageCanvas
               key={`${index + 1}-${containerWidth}`}
               containerWidth={containerWidth}
+              renderScale={renderScale}
               pageNumber={index + 1}
               pdfDocument={pdfDocument}
-              onRenderError={(message) => setRenderError(message)}
+              onRenderError={handleRenderError}
             />
           ))}
         </div>

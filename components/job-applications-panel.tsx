@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState, type ChangeEvent } from "react"
+import { memo, useEffect, useMemo, useState, type ChangeEvent } from "react"
 import {
   BriefcaseBusiness,
   ChevronDown,
@@ -102,7 +102,7 @@ function readFileAsDataUrl(file: File): Promise<string> {
   })
 }
 
-export function JobApplicationsPanel({
+function JobApplicationsPanelComponent({
   authAvailable,
   isAuthenticated,
   storageNotice,
@@ -506,7 +506,7 @@ export function JobApplicationsPanel({
           ) : (
             <div className="scrollbar-dark flex-1 overflow-y-auto overflow-x-hidden rounded-2xl border border-white/8 bg-black/[0.06]">
               <table className="w-full table-fixed border-collapse">
-                <thead className="sticky top-0 z-10 bg-black/90 backdrop-blur-xl">
+                <thead className="sticky top-0 z-10 bg-white/[0.02] backdrop-blur-xl">
                   <tr className="text-left text-xs uppercase tracking-[0.18em] text-white/40">
                     <th className="w-[11%] border-b border-white/8 px-4 py-3 font-medium">Stage</th>
                     <th className="w-[20%] border-b border-white/8 px-4 py-3 font-medium">Company</th>
@@ -728,3 +728,5 @@ export function JobApplicationsPanel({
     </div>
   )
 }
+
+export const JobApplicationsPanel = memo(JobApplicationsPanelComponent)

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { memo, useEffect, useMemo, useRef, useState } from "react"
 import { formatDistanceToNow } from "date-fns"
 import {
   BarChart3,
@@ -59,7 +59,7 @@ function displayText(text: string | null | undefined) {
   return value || "Not available"
 }
 
-export function DashboardPanel({
+function DashboardPanelComponent({
   authAvailable,
   isAuthenticated,
   userEmail,
@@ -643,3 +643,5 @@ export function DashboardPanel({
     </div>
   )
 }
+
+export const DashboardPanel = memo(DashboardPanelComponent)

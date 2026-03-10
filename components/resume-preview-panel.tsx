@@ -1,6 +1,7 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import dynamic from "next/dynamic"
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
 import {
   AlertTriangle,
   Check,
@@ -13,7 +14,6 @@ import {
   Maximize2,
   Share2,
 } from "lucide-react"
-import { PDFViewer } from "@/components/pdf-viewer"
 import { Button } from "@/components/ui/button"
 import { getUserFacingMessage } from "@/lib/errors"
 import { reportClientError } from "@/lib/error-monitoring"
@@ -25,6 +25,10 @@ import {
 import { documentServiceClient } from "@/lib/services/gateway-client"
 import { cn } from "@/lib/utils"
 
+const PDFViewer = dynamic(() => import("@/components/pdf-viewer").then((mod) => mod.PDFViewer), {
+  loading: () => null,
+})
+
 interface ResumePreviewPanelProps {
   latexContent: string
   editableLatex?: string
@@ -34,7 +38,7 @@ interface ResumePreviewPanelProps {
   statusMessage?: string
 }
 
-export function ResumePreviewPanel({
+function ResumePreviewPanelComponent({
   latexContent,
   editableLatex: controlledEditableLatex,
   isGenerating,
@@ -57,6 +61,7 @@ export function ResumePreviewPanel({
 
   const editableLatex =
     controlledEditableLatex !== undefined ? controlledEditableLatex : internalEditableLatex
+  const deferredEditableLatex = useDeferredValue(editableLatex)
 
   const setEditableLatex = useCallback(
     (value: string) => {
@@ -70,15 +75,15 @@ export function ResumePreviewPanel({
     [onEditableLatexChange]
   )
 
-  const latexErrors = useMemo(() => validateLaTeX(editableLatex), [editableLatex])
+  const latexErrors = useMemo(() => validateLaTeX(deferredEditableLatex), [deferredEditableLatex])
   const hasErrors = latexErrors.some((error) => error.type === "error")
   const hasWarnings = latexErrors.some((error) => error.type === "warning")
 
   const lineNumbers = useMemo(() => {
-    if (!editableLatex) return []
-    const lineCount = (editableLatex.match(/\n/g) || []).length + 1
+    if (!deferredEditableLatex) return []
+    const lineCount = (deferredEditableLatex.match(/\n/g) || []).length + 1
     return Array.from({ length: lineCount }, (_, index) => index + 1)
-  }, [editableLatex])
+  }, [deferredEditableLatex])
 
   const errorLineNumbers = useMemo(() => {
     return new Set(latexErrors.filter((error) => error.line).map((error) => error.line!))
@@ -227,7 +232,7 @@ export function ResumePreviewPanel({
                 key={`${error.message}-${index}`}
                 onClick={() => {
                   if (error.line && editorRef.current) {
-                    const lines = editableLatex.split("\n")
+                    const lines = deferredEditableLatex.split("\n")
                     const lineStart =
                       lines.slice(0, error.line - 1).join("\n").length + (error.line > 1 ? 1 : 0)
                     editorRef.current.focus()
@@ -523,3 +528,5 @@ export function ResumePreviewPanel({
     </div>
   )
 }
+
+export const ResumePreviewPanel = memo(ResumePreviewPanelComponent)
