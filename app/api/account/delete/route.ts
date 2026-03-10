@@ -10,7 +10,7 @@ export const runtime = "nodejs"
 
 const deleteAccountSchema = z.object({
   confirmation: z.literal("DELETE", {
-    errorMap: () => ({ message: 'Type DELETE to confirm account deletion.' }),
+    error: "Type DELETE to confirm account deletion.",
   }),
 })
 
