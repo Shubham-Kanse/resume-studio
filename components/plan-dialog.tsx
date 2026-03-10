@@ -64,8 +64,7 @@ export function PlanDialog({
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-[11px] uppercase tracking-[0.28em] text-white/45">Plans</p>
-            <h2 className="mt-2 text-2xl font-semibold text-foreground">Free or Pro</h2>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">{featureHeadline(highlightedFeature)}</p>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{featureHeadline(highlightedFeature)}</p>
           </div>
           <button
             type="button"

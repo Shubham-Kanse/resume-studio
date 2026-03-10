@@ -319,33 +319,28 @@ const PageHeader = memo(function PageHeader({
 
 const ErrorBanner = memo(function ErrorBanner({
   error,
-  pageContainerClass,
   onDismiss,
 }: {
   error: string | null
-  pageContainerClass: string
   onDismiss: () => void
 }) {
   if (!error) return null
 
   return (
-    <div
-      className={cn(
-        "relative z-10 mt-3 flex items-start justify-between gap-3 rounded-2xl border border-red-500/20 bg-red-500/10 p-3 shadow-[0_16px_50px_rgba(0,0,0,0.2)] backdrop-blur-xl",
-        pageContainerClass
-      )}
-    >
-      <p className="flex-1 text-sm text-red-300">{error}</p>
-      <button
-        type="button"
-        onClick={onDismiss}
-        className="text-red-300 transition-colors hover:text-red-200"
-        aria-label="Close error"
-      >
-        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
+    <div className="pointer-events-none fixed inset-x-0 top-24 z-20 flex justify-center px-4">
+      <div className="pointer-events-auto flex w-full max-w-md items-start justify-between gap-3 rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-center shadow-[0_20px_60px_rgba(0,0,0,0.32)] backdrop-blur-xl">
+        <p className="flex-1 text-sm leading-6 text-red-100">{error}</p>
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="mt-0.5 text-red-200 transition-colors hover:text-red-50"
+          aria-label="Close error"
+        >
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
     </div>
   )
 })
@@ -595,6 +590,13 @@ export default function HomePage() {
     const timer = window.setTimeout(() => setAuthMessage(null), 4500)
     return () => window.clearTimeout(timer)
   }, [authMessage])
+
+  useEffect(() => {
+    if (!error) return
+
+    const timer = window.setTimeout(() => setError(null), 4500)
+    return () => window.clearTimeout(timer)
+  }, [error])
 
   useEffect(() => {
     const storedTheme =
@@ -1748,7 +1750,7 @@ export default function HomePage() {
             onSignOut={handleSignOut}
           />
 
-          <ErrorBanner error={error} pageContainerClass={pageContainerClass} onDismiss={handleDismissError} />
+          <ErrorBanner error={error} onDismiss={handleDismissError} />
 
           <MainContent
             mode={mode}

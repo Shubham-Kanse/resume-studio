@@ -6,12 +6,13 @@ import { reportClientError } from "@/lib/error-monitoring"
 
 export const BACKGROUND_THEMES = [
   { id: "current", label: "Wave" },
+  { id: "aurora", label: "Aurora" },
 ] as const
 
 export type BackgroundTheme = (typeof BACKGROUND_THEMES)[number]["id"]
 
 type ShaderUniform = {
-  value: number | { set: (width: number, height: number) => void }
+  value: unknown
 }
 
 type ShaderLikeMaterial = {
@@ -20,6 +21,13 @@ type ShaderLikeMaterial = {
 }
 
 type WaveMaterial = ShaderLikeMaterial & {
+  uniforms: ShaderLikeMaterial["uniforms"] & {
+    time: { value: number }
+    resolution: { value: { set: (width: number, height: number) => void } }
+  }
+}
+
+type AuroraMaterial = ShaderLikeMaterial & {
   uniforms: ShaderLikeMaterial["uniforms"] & {
     time: { value: number }
     resolution: { value: { set: (width: number, height: number) => void } }
@@ -62,6 +70,99 @@ type SceneRefs = {
 }
 
 function getThemeDefinition(theme: BackgroundTheme, size: { width: number; height: number }): ThemeDefinition {
+  if (theme === "aurora") {
+    return {
+      clearColor: 0x000000,
+      opacityClassName: "opacity-75",
+      createMaterial: ({ width, height }) =>
+        new THREE.RawShaderMaterial({
+          vertexShader: `
+            attribute vec3 position;
+            void main() {
+              gl_Position = vec4(position, 1.0);
+            }
+          `,
+          fragmentShader: `
+            precision highp float;
+            uniform vec2 resolution;
+            uniform float time;
+
+            float hash(vec2 p) {
+              return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+            }
+
+            float noise(vec2 p) {
+              vec2 i = floor(p);
+              vec2 f = fract(p);
+              vec2 u = f * f * (3.0 - 2.0 * f);
+
+              return mix(
+                mix(hash(i + vec2(0.0, 0.0)), hash(i + vec2(1.0, 0.0)), u.x),
+                mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x),
+                u.y
+              );
+            }
+
+            float fbm(vec2 p) {
+              float value = 0.0;
+              float amplitude = 0.5;
+
+              value += amplitude * noise(p);
+              p = p * 2.02 + vec2(7.1, 3.4);
+              amplitude *= 0.5;
+
+              value += amplitude * noise(p);
+              p = p * 2.03 + vec2(2.7, 9.2);
+              amplitude *= 0.5;
+
+              value += amplitude * noise(p);
+              return value;
+            }
+
+            void main() {
+              vec2 uv = gl_FragCoord.xy / resolution.xy;
+              vec2 p = uv - 0.5;
+              p.x *= resolution.x / resolution.y;
+
+              float drift = time * 0.065;
+              float band = sin(p.x * 4.4 + fbm(vec2(p.x * 1.35 + drift, p.y * 1.8)) * 2.6 + time * 0.22);
+              float ribbon = smoothstep(0.9, -0.45, abs(p.y - band * 0.24));
+
+              float veilA = fbm(vec2(p.x * 1.8 - drift * 1.2, p.y * 2.5 + drift * 0.5));
+              float veilB = fbm(vec2(p.x * 2.4 + drift * 0.7, p.y * 1.7 - drift * 0.35));
+              float veil = ribbon * (0.6 + veilA * 0.7 + veilB * 0.35);
+
+              vec3 colorA = vec3(0.08, 0.72, 0.54);
+              vec3 colorB = vec3(0.18, 0.42, 0.95);
+              vec3 colorC = vec3(0.48, 0.20, 0.88);
+
+              float mixAB = smoothstep(-0.3, 0.75, p.x + veilA * 0.25);
+              float mixBC = smoothstep(-0.35, 0.8, p.y + veilB * 0.18);
+              vec3 color = mix(colorA, colorB, mixAB);
+              color = mix(color, colorC, mixBC * 0.38);
+
+              float glow = exp(-6.5 * abs(p.y - band * 0.2));
+              float vignette = smoothstep(1.25, 0.15, length(p));
+              vec3 finalColor = color * veil * glow * vignette;
+
+              gl_FragColor = vec4(finalColor, 1.0);
+            }
+          `,
+          uniforms: {
+            resolution: { value: new THREE.Vector2(width, height) },
+            time: { value: 0 },
+          },
+          side: THREE.DoubleSide,
+        }) as AuroraMaterial,
+      onResize: (material, width, height) => {
+        ;(material as AuroraMaterial).uniforms.resolution.value.set(width, height)
+      },
+      onFrame: (material, deltaSeconds) => {
+        ;(material as AuroraMaterial).uniforms.time.value += deltaSeconds
+      },
+    }
+  }
+
   return {
     clearColor: 0x000000,
     opacityClassName: "opacity-80",

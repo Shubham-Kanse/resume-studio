@@ -534,7 +534,7 @@ function SubnavRow({ children }: { children: ReactNode }) {
         <button
           type="button"
           onClick={() => scrollByAmount("left")}
-          className="absolute left-0 top-1/2 z-10 hidden h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-black/70 text-white/70 backdrop-blur-sm transition-colors hover:border-white/20 hover:text-white sm:flex"
+          className="absolute left-2 top-1/2 z-10 hidden h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-white/6 text-white/65 backdrop-blur-sm transition-colors hover:border-white/18 hover:bg-white/10 hover:text-white sm:flex"
           aria-label="Scroll left"
         >
           <ChevronLeft className="h-3.5 w-3.5" />
@@ -544,13 +544,13 @@ function SubnavRow({ children }: { children: ReactNode }) {
         <button
           type="button"
           onClick={() => scrollByAmount("right")}
-          className="absolute right-0 top-1/2 z-10 hidden h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-black/70 text-white/70 backdrop-blur-sm transition-colors hover:border-white/20 hover:text-white sm:flex"
+          className="absolute right-2 top-1/2 z-10 hidden h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-white/6 text-white/65 backdrop-blur-sm transition-colors hover:border-white/18 hover:bg-white/10 hover:text-white sm:flex"
           aria-label="Scroll right"
         >
           <ChevronRight className="h-3.5 w-3.5" />
         </button>
       ) : null}
-      <div ref={scrollRef} className="scrollbar-hide flex min-w-0 gap-2 overflow-x-auto px-0 pb-1">
+      <div ref={scrollRef} className="scrollbar-hide flex min-w-0 gap-2 overflow-x-auto px-1 pb-1 sm:px-10">
         {children}
       </div>
     </div>
@@ -892,7 +892,7 @@ function ATSScorePanelComponent({
             onClick={onUpgradeToPro}
           >
             <Crown className="h-4 w-4" />
-            AI Insights Pro
+            AI Insights
           </Button>
         )}
       </div>
@@ -1013,10 +1013,10 @@ function ATSScorePanelComponent({
                   <div>
                     <h3 className="flex items-center gap-2 text-sm font-semibold text-sky-100">
                       <Crown className="h-4 w-4" />
-                      Pro unlock: AI ATS Insights
+                      Get AI ATS Insights with Pro
                     </h3>
                     <p className="mt-1 text-xs leading-5 text-sky-100/75">
-                      Overview scoring stays free. Upgrade to Pro for section breakdowns, issue prioritization, and AI recommendations.
+                      Upgrade to Pro for section breakdowns, issue prioritization, and AI recommendations.
                     </p>
                   </div>
                   <Button type="button" size="sm" variant="outline" className="rounded-full border-sky-400/25 bg-black/20 text-sky-50 hover:bg-black/30" onClick={onUpgradeToPro}>
