@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic"
 import { useEffect, useRef, useState } from "react"
 import type { Session } from "@supabase/supabase-js"
-import { BriefcaseBusiness, LayoutDashboard, FileCode2, LogOut, Target, UserRound } from "lucide-react"
+import { BriefcaseBusiness, ChevronDown, FileCode2, LayoutDashboard, LogOut, Target, UserRound } from "lucide-react"
 import { ATSScorePanel } from "@/components/ats-score-panel"
 import { AuthDialog } from "@/components/auth-dialog"
 import { DashboardPanel } from "@/components/dashboard-panel"
@@ -13,6 +13,7 @@ import { LatexSplitWorkspace } from "@/components/latex-split-workspace"
 import { LegalDialog } from "@/components/legal-dialog"
 import { ResumeInputPanel } from "@/components/resume-input-panel"
 import { ResumePreviewPanel } from "@/components/resume-preview-panel"
+import { BACKGROUND_THEMES, type BackgroundTheme } from "@/components/webgl-shader"
 import { Button } from "@/components/ui/button"
 import type { ATSScoreResponse } from "@/lib/ats-types"
 import type { DocumentArtifacts } from "@/lib/document-artifacts"
@@ -121,6 +122,7 @@ export default function HomePage() {
   const [deletingJobApplicationId, setDeletingJobApplicationId] = useState<string | null>(null)
   const [jobApplicationsNotice, setJobApplicationsNotice] = useState<string | null>(null)
   const [isSplitWorkspaceOpen, setIsSplitWorkspaceOpen] = useState(false)
+  const [backgroundTheme, setBackgroundTheme] = useState<BackgroundTheme>("current")
 
   const pageContainerClass = "mx-auto w-full max-w-[1680px] px-4 sm:px-6 lg:px-10 xl:px-12"
   const panelShellClass =
@@ -133,6 +135,19 @@ export default function HomePage() {
     const timer = window.setTimeout(() => setAuthMessage(null), 4500)
     return () => window.clearTimeout(timer)
   }, [authMessage])
+
+  useEffect(() => {
+    const storedTheme =
+      typeof window !== "undefined" ? window.localStorage.getItem("resume-studio:background-theme") : null
+    if (storedTheme && BACKGROUND_THEMES.some((theme) => theme.id === storedTheme)) {
+      setBackgroundTheme(storedTheme as BackgroundTheme)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    window.localStorage.setItem("resume-studio:background-theme", backgroundTheme)
+  }, [backgroundTheme])
 
   useEffect(() => {
     setEditableLatexContent(latexContent)
@@ -951,7 +966,7 @@ export default function HomePage() {
           fallbackMessage="The animated background failed to initialize. The workspace is still available."
           compact
         >
-          <WebGLShader />
+          <WebGLShader theme={backgroundTheme} />
         </ErrorBoundary>
         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.04),rgba(0,0,0,0.38))]" />
       </div>
@@ -1255,6 +1270,36 @@ export default function HomePage() {
           >
             Terms of Service
           </button>
+          <span className="text-white/14">•</span>
+          <details className="group relative">
+            <summary className="list-none">
+              <span className="inline-flex cursor-pointer items-center gap-1.5 text-[11px] text-white/45 transition-colors hover:text-white/70">
+                Background
+                <ChevronDown className="h-3.5 w-3.5 transition-transform duration-200 group-open:rotate-180" />
+              </span>
+            </summary>
+            <div className="absolute bottom-[calc(100%+0.6rem)] right-0 min-w-40 rounded-2xl border border-white/8 bg-[linear-gradient(180deg,rgba(8,12,24,0.1),rgba(3,7,18,0.03))] p-1.5 shadow-[0_18px_56px_rgba(0,0,0,0.18),inset_0_1px_0_rgba(255,255,255,0.1)] backdrop-blur-sm">
+              {BACKGROUND_THEMES.map((theme) => {
+                const active = backgroundTheme === theme.id
+                return (
+                  <button
+                    key={theme.id}
+                    type="button"
+                    onClick={() => setBackgroundTheme(theme.id)}
+                    className={cn(
+                      "flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-[11px] transition-colors",
+                      active ? "bg-white/10 text-white" : "text-white/55 hover:bg-white/6 hover:text-white/80"
+                    )}
+                  >
+                    <span>{theme.label}</span>
+                    <span className="text-[10px] uppercase tracking-[0.18em] text-white/30">
+                      {active ? "Live" : "Theme"}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </details>
         </footer>
       )}
     </div>
