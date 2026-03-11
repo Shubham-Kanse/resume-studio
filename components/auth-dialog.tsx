@@ -2,7 +2,14 @@
 
 import { useEffect, useState } from "react"
 
-import { Download, Loader2, Trash2, X } from "lucide-react"
+import {
+  CheckCircle2,
+  Circle,
+  Download,
+  Loader2,
+  Trash2,
+  X,
+} from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -17,8 +24,35 @@ interface AuthDialogProps {
   isDeletingAccount: boolean
   onClose: () => void
   onGoogleAuth: () => Promise<void>
+  onEmailSignIn: (email: string, password: string) => Promise<void>
+  onEmailSignUp: (input: {
+    firstName: string
+    lastName: string
+    email: string
+    password: string
+  }) => Promise<boolean>
   onExportData: () => Promise<void>
   onDeleteAccount: (confirmation: string) => Promise<void>
+}
+
+type EmailAuthMode = "signin" | "signup"
+
+function PasswordRequirement({ label, met }: { label: string; met: boolean }) {
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-2 text-xs transition-colors",
+        met ? "text-emerald-300" : "text-muted-foreground"
+      )}
+    >
+      {met ? (
+        <CheckCircle2 className="h-3.5 w-3.5" />
+      ) : (
+        <Circle className="h-3.5 w-3.5" />
+      )}
+      <span>{label}</span>
+    </div>
+  )
 }
 
 function GoogleMark() {
@@ -54,18 +88,87 @@ export function AuthDialog({
   isDeletingAccount,
   onClose,
   onGoogleAuth,
+  onEmailSignIn,
+  onEmailSignUp,
   onExportData,
   onDeleteAccount,
 }: AuthDialogProps) {
   const [deleteConfirmation, setDeleteConfirmation] = useState("")
+  const [emailAuthMode, setEmailAuthMode] = useState<EmailAuthMode>("signin")
+  const [pendingConfirmationEmail, setPendingConfirmationEmail] = useState<
+    string | null
+  >(null)
+  const [firstName, setFirstName] = useState("")
+  const [lastName, setLastName] = useState("")
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
 
   useEffect(() => {
     if (!open) {
       setDeleteConfirmation("")
+      setEmailAuthMode("signin")
+      setPendingConfirmationEmail(null)
+      setFirstName("")
+      setLastName("")
+      setEmail("")
+      setPassword("")
+      setConfirmPassword("")
     }
   }, [open])
 
   if (!open) return null
+
+  const passwordChecks = {
+    minLength: password.length >= 8,
+    uppercase: /[A-Z]/.test(password),
+    lowercase: /[a-z]/.test(password),
+    digit: /\d/.test(password),
+    symbol: /[^A-Za-z0-9]/.test(password),
+  }
+  const isStrongPassword = Object.values(passwordChecks).every(Boolean)
+
+  const isEmailAuthDisabled =
+    authLoading ||
+    !email.trim() ||
+    !password ||
+    (emailAuthMode === "signup" &&
+      (!firstName.trim() ||
+        !lastName.trim() ||
+        !isStrongPassword ||
+        password !== confirmPassword))
+
+  const handleEmailSubmit = async () => {
+    const trimmedEmail = email.trim()
+    if (!trimmedEmail || !password) return
+
+    if (emailAuthMode === "signup") {
+      const trimmedFirstName = firstName.trim()
+      const trimmedLastName = lastName.trim()
+      if (
+        !trimmedFirstName ||
+        !trimmedLastName ||
+        !isStrongPassword ||
+        password !== confirmPassword
+      ) {
+        return
+      }
+      const didCreateAccount = await onEmailSignUp({
+        firstName: trimmedFirstName,
+        lastName: trimmedLastName,
+        email: trimmedEmail,
+        password,
+      })
+      if (!didCreateAccount) return
+      setPendingConfirmationEmail(trimmedEmail)
+      setEmailAuthMode("signin")
+      setPassword("")
+      setConfirmPassword("")
+      return
+    }
+
+    await onEmailSignIn(trimmedEmail, password)
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 backdrop-blur-[6px]">
@@ -76,12 +179,12 @@ export function AuthDialog({
               Account
             </p>
             <h2 className="mt-2 text-2xl font-semibold text-foreground">
-              {userEmail ? "You are signed in" : "Continue with Google"}
+              {userEmail ? "You are signed in" : "Sign in or create an account"}
             </h2>
             <p className="mt-3 text-sm leading-6 text-muted-foreground">
               {userEmail
                 ? "Your generated resumes and ATS scores can now be saved to your account automatically."
-                : "Use Google sign-in if you want to track resumes and scores. The app still works without creating an account."}
+                : "Use email and password or Google to save resume history, ATS scans, and billing access to your account."}
             </p>
           </div>
           <button
@@ -163,24 +266,182 @@ export function AuthDialog({
             </div>
           </>
         ) : authAvailable ? (
-          <Button
-            type="button"
-            variant="outline"
-            className="mt-6 w-full justify-center rounded-2xl border-white/8 bg-black/12 py-6 text-sm hover:bg-white/8"
-            onClick={onGoogleAuth}
-            disabled={authLoading}
-          >
-            {authLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <GoogleMark />
-            )}
-            Sign in with Google
-          </Button>
+          <div className="mt-6 space-y-4">
+            <div className="rounded-2xl border border-white/10 bg-black/18 p-4">
+              <div className="inline-flex rounded-full border border-white/10 bg-black/20 p-1">
+                <button
+                  type="button"
+                  onClick={() => setEmailAuthMode("signin")}
+                  className={cn(
+                    "rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
+                    emailAuthMode === "signin"
+                      ? "bg-white/10 text-white"
+                      : "text-white/55 hover:text-white"
+                  )}
+                >
+                  Sign in
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEmailAuthMode("signup")}
+                  className={cn(
+                    "rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
+                    emailAuthMode === "signup"
+                      ? "bg-white/10 text-white"
+                      : "text-white/55 hover:text-white"
+                  )}
+                >
+                  Create account
+                </button>
+              </div>
+
+              {pendingConfirmationEmail ? (
+                <div className="mt-4 rounded-xl border border-emerald-400/20 bg-emerald-500/10 p-3 text-sm text-emerald-100">
+                  Check{" "}
+                  <span className="font-medium">
+                    {pendingConfirmationEmail}
+                  </span>{" "}
+                  for your confirmation email. After confirming, come back here
+                  and sign in with your email and password.
+                </div>
+              ) : null}
+
+              <div className="mt-4 grid gap-3">
+                {emailAuthMode === "signup" ? (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <input
+                      type="text"
+                      value={firstName}
+                      onChange={(event) => setFirstName(event.target.value)}
+                      className="h-11 w-full rounded-xl border border-white/10 bg-black/20 px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                      placeholder="First name"
+                      autoComplete="given-name"
+                      spellCheck={false}
+                    />
+                    <input
+                      type="text"
+                      value={lastName}
+                      onChange={(event) => setLastName(event.target.value)}
+                      className="h-11 w-full rounded-xl border border-white/10 bg-black/20 px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                      placeholder="Last name"
+                      autoComplete="family-name"
+                      spellCheck={false}
+                    />
+                  </div>
+                ) : null}
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  className="h-11 w-full rounded-xl border border-white/10 bg-black/20 px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                  placeholder="Email address"
+                  autoComplete="email"
+                  spellCheck={false}
+                />
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  className="h-11 w-full rounded-xl border border-white/10 bg-black/20 px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                  placeholder="Password"
+                  autoComplete={
+                    emailAuthMode === "signup"
+                      ? "new-password"
+                      : "current-password"
+                  }
+                />
+                {emailAuthMode === "signup" ? (
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                    className="h-11 w-full rounded-xl border border-white/10 bg-black/20 px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                    placeholder="Confirm password"
+                    autoComplete="new-password"
+                  />
+                ) : null}
+                {emailAuthMode === "signup" ? (
+                  <div className="rounded-xl border border-white/10 bg-black/18 p-3">
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <PasswordRequirement
+                        label="8+ characters"
+                        met={passwordChecks.minLength}
+                      />
+                      <PasswordRequirement
+                        label="Uppercase letter"
+                        met={passwordChecks.uppercase}
+                      />
+                      <PasswordRequirement
+                        label="Lowercase letter"
+                        met={passwordChecks.lowercase}
+                      />
+                      <PasswordRequirement
+                        label="Digit"
+                        met={passwordChecks.digit}
+                      />
+                      <PasswordRequirement
+                        label="Symbol"
+                        met={passwordChecks.symbol}
+                      />
+                      <PasswordRequirement
+                        label="Passwords match"
+                        met={Boolean(password) && password === confirmPassword}
+                      />
+                    </div>
+                    <p className="mt-3 text-xs leading-5 text-muted-foreground">
+                      After creating your account, you will need to confirm your
+                      email before signing in.
+                    </p>
+                  </div>
+                ) : null}
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full justify-center rounded-2xl border-white/8 bg-black/12 py-6 text-sm hover:bg-white/8"
+                  onClick={() => void handleEmailSubmit()}
+                  disabled={isEmailAuthDisabled}
+                >
+                  {authLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : null}
+                  {emailAuthMode === "signup"
+                    ? "Create account with email"
+                    : "Sign in with email"}
+                </Button>
+                {emailAuthMode === "signin" ? (
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    Already confirmed your email? Sign in here with the same
+                    email and password you used during sign-up.
+                  </p>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-white/35">
+              <span className="h-px flex-1 bg-white/10" />
+              Or
+              <span className="h-px flex-1 bg-white/10" />
+            </div>
+
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full justify-center rounded-2xl border-white/8 bg-black/12 py-6 text-sm hover:bg-white/8"
+              onClick={onGoogleAuth}
+              disabled={authLoading}
+            >
+              {authLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <GoogleMark />
+              )}
+              Continue with Google
+            </Button>
+          </div>
         ) : (
           <div className="mt-6 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-200">
             Add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-            to enable Google login.
+            to enable Supabase email/password and Google login.
           </div>
         )}
 

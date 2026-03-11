@@ -226,7 +226,7 @@ function getThemeDefinition(
 }
 
 function WebGLShaderComponent({
-  theme = "current",
+  theme = "aurora",
 }: {
   theme?: BackgroundTheme
 }) {

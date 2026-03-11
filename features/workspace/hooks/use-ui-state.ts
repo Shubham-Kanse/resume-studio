@@ -22,7 +22,7 @@ export function useUIState() {
   )
   const [isSplitWorkspaceOpen, setIsSplitWorkspaceOpen] = useState(false)
   const [backgroundTheme, setBackgroundTheme] =
-    useState<BackgroundTheme>("current")
+    useState<BackgroundTheme>("aurora")
 
   useEffect(() => {
     if (!authMessage) return

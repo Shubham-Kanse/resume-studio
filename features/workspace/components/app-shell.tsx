@@ -17,6 +17,7 @@ import {
   ChevronDown,
   Crown,
   FileCode2,
+  House,
   LayoutDashboard,
   LogOut,
   Target,
@@ -269,6 +270,22 @@ const PageHeader = memo(function PageHeader({
             type="button"
             variant="cool"
             size="sm"
+            aria-pressed={mode === APP_MODE.HOME}
+            onClick={() => onModeChange(APP_MODE.HOME)}
+            className={cn(
+              "flex-1 rounded-full px-3 text-xs sm:flex-none sm:px-4 sm:text-sm",
+              mode === APP_MODE.HOME
+                ? "shadow-[0_10px_24px_rgba(34,197,94,0.28)]"
+                : "opacity-60 saturate-50 shadow-none hover:opacity-100"
+            )}
+          >
+            <House className="h-4 w-4" />
+            <span className="text-xs font-medium sm:text-sm">Home</span>
+          </Button>
+          <Button
+            type="button"
+            variant="cool"
+            size="sm"
             aria-pressed={mode === APP_MODE.DASHBOARD}
             onClick={() => onModeChange(APP_MODE.DASHBOARD)}
             className={cn(
@@ -431,11 +448,95 @@ const ErrorBanner = memo(function ErrorBanner({
   )
 })
 
+const HomePanel = memo(function HomePanel({
+  panelShellClass,
+  onModeChange,
+}: {
+  panelShellClass: string
+  onModeChange: (mode: AppMode) => void
+}) {
+  return (
+    <div
+      className={cn(
+        panelShellClass,
+        "justify-center overflow-visible px-5 py-8 sm:px-8 sm:py-10 lg:px-10"
+      )}
+    >
+      <div className="mx-auto flex w-full max-w-4xl flex-col items-start gap-8">
+        <div className="space-y-4">
+          <div className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-black/20 px-3 py-1 text-[11px] uppercase tracking-[0.24em] text-white/60">
+            <FileCode2 className="h-3.5 w-3.5 text-primary" />
+            Resume Studio
+          </div>
+          <div className="space-y-3">
+            <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-white sm:text-4xl lg:text-5xl">
+              Build stronger applications from one workspace.
+            </h1>
+            <p className="max-w-2xl text-sm leading-7 text-white/68 sm:text-base">
+              Resume Studio helps you generate tailored LaTeX resumes and review
+              ATS compatibility before you apply, while keeping account access
+              and the rest of the workspace available from the same UI.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
+          <Button
+            type="button"
+            variant="cool"
+            size="lg"
+            onClick={() => onModeChange(TRACKED_RUN_MODE.GENERATE)}
+            className="h-11 rounded-full px-6 text-sm"
+          >
+            <FileCode2 className="h-4 w-4" />
+            Try LaTeX Generator
+          </Button>
+          <Button
+            type="button"
+            variant="cool"
+            size="lg"
+            onClick={() => onModeChange(TRACKED_RUN_MODE.ATS_SCORE)}
+            className="h-11 rounded-full px-6 text-sm"
+          >
+            <Target className="h-4 w-4" />
+            Get ATS Score
+          </Button>
+        </div>
+
+        <div className="grid w-full gap-4 md:grid-cols-3">
+          <div className="rounded-[22px] border border-white/10 bg-black/18 p-4 backdrop-blur-sm">
+            <p className="text-sm font-medium text-white">Tailored output</p>
+            <p className="mt-2 text-sm leading-6 text-white/58">
+              Generate role-specific LaTeX resumes without leaving the app.
+            </p>
+          </div>
+          <div className="rounded-[22px] border border-white/10 bg-black/18 p-4 backdrop-blur-sm">
+            <p className="text-sm font-medium text-white">ATS review</p>
+            <p className="mt-2 text-sm leading-6 text-white/58">
+              Check structure and keyword alignment before submitting.
+            </p>
+          </div>
+          <div className="rounded-[22px] border border-white/10 bg-black/18 p-4 backdrop-blur-sm">
+            <p className="text-sm font-medium text-white">
+              Dashboard and tracking
+            </p>
+            <p className="mt-2 text-sm leading-6 text-white/58">
+              Review saved runs in the dashboard and stay on top of your
+              applications with the built-in job tracker.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+})
+
 const MainContent = memo(function MainContent({
   mode,
   pageContainerClass,
   panelShellClass,
   outputPanelRef,
+  onModeChange,
   dashboardProps,
   trackerProps,
   inputProps,
@@ -446,6 +547,7 @@ const MainContent = memo(function MainContent({
   pageContainerClass: string
   panelShellClass: string
   outputPanelRef: RefObject<HTMLDivElement>
+  onModeChange: (mode: AppMode) => void
   dashboardProps: DashboardPanelProps
   trackerProps: JobApplicationsPanelProps
   inputProps: ResumeInputPanelProps
@@ -459,7 +561,12 @@ const MainContent = memo(function MainContent({
         pageContainerClass
       )}
     >
-      {mode === APP_MODE.DASHBOARD ? (
+      {mode === APP_MODE.HOME ? (
+        <HomePanel
+          panelShellClass={cn(panelShellClass, "md:basis-auto md:flex-auto")}
+          onModeChange={onModeChange}
+        />
+      ) : mode === APP_MODE.DASHBOARD ? (
         <div className={cn(panelShellClass, "md:basis-auto md:flex-auto")}>
           <ErrorBoundary
             context="dashboard-panel"
@@ -908,6 +1015,12 @@ export default function AppShell() {
       active = false
     }
   }, [session?.access_token, session?.user, setAuthMessage])
+
+  useEffect(() => {
+    if (!session?.user?.id) return
+
+    setIsAuthDialogOpen(false)
+  }, [session?.user?.id, setIsAuthDialogOpen])
 
   const scrollToOutputOnMobile = () => {
     if (typeof window === "undefined") return
@@ -1456,6 +1569,80 @@ export default function AppShell() {
       setAuthLoading(false)
       setAuthMessage(signInError.message)
     }
+  }
+
+  const handleEmailSignIn = async (email: string, password: string) => {
+    if (!supabase) {
+      setAuthMessage("Supabase is not configured yet.")
+      return
+    }
+
+    setAuthLoading(true)
+    setAuthMessage(null)
+
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    })
+
+    if (signInError) {
+      setAuthLoading(false)
+      setAuthMessage(signInError.message)
+      return
+    }
+
+    setAuthLoading(false)
+    setAuthMessage("Signed in successfully.")
+  }
+
+  const handleEmailSignUp = async (input: {
+    firstName: string
+    lastName: string
+    email: string
+    password: string
+  }) => {
+    if (!supabase) {
+      setAuthMessage("Supabase is not configured yet.")
+      return false
+    }
+
+    setAuthLoading(true)
+    setAuthMessage(null)
+
+    const redirectTo =
+      typeof window !== "undefined"
+        ? `${window.location.origin}${window.location.pathname}`
+        : process.env.NEXT_PUBLIC_APP_URL
+
+    const fullName = `${input.firstName} ${input.lastName}`.trim()
+
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email: input.email,
+      password: input.password,
+      options: {
+        emailRedirectTo: redirectTo,
+        data: {
+          first_name: input.firstName,
+          last_name: input.lastName,
+          full_name: fullName,
+          name: fullName,
+        },
+      },
+    })
+
+    if (signUpError) {
+      setAuthLoading(false)
+      setAuthMessage(signUpError.message)
+      return false
+    }
+
+    setAuthLoading(false)
+    setAuthMessage(
+      data.session
+        ? "Account created and signed in."
+        : "Account created. Check your email to confirm your address before signing in."
+    )
+    return true
   }
 
   const handleSignOut = async () => {
@@ -2012,6 +2199,8 @@ export default function AppShell() {
     isDeletingAccount,
     onClose: handleCloseAuthDialog,
     onGoogleAuth: handleSignInWithGoogle,
+    onEmailSignIn: handleEmailSignIn,
+    onEmailSignUp: handleEmailSignUp,
     onExportData: handleExportData,
     onDeleteAccount: handleDeleteAccount,
   }
@@ -2068,6 +2257,7 @@ export default function AppShell() {
             pageContainerClass={pageContainerClass}
             panelShellClass={panelShellClass}
             outputPanelRef={outputPanelRef}
+            onModeChange={handleModeChange}
             dashboardProps={dashboardProps}
             trackerProps={trackerProps}
             inputProps={inputProps}

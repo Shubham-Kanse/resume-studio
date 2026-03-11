@@ -3,10 +3,11 @@
 import { useEffect, useState } from "react"
 
 import type { DocumentArtifacts } from "@/lib/document-artifacts"
-import { TRACKED_RUN_MODE, type TrackedRunMode } from "@/lib/tracked-runs"
+import type { TrackedRunMode } from "@/lib/tracked-runs"
 import type { ATSScoreResponse } from "@/types/ats"
 
 const APP_MODE = {
+  HOME: "home",
   DASHBOARD: "dashboard",
   JOB_TRACKER: "job-tracker",
 } as const
@@ -15,7 +16,7 @@ export { APP_MODE }
 export type AppMode = (typeof APP_MODE)[keyof typeof APP_MODE] | TrackedRunMode
 
 export function useWorkspaceState() {
-  const [mode, setMode] = useState<AppMode>(TRACKED_RUN_MODE.GENERATE)
+  const [mode, setMode] = useState<AppMode>(APP_MODE.HOME)
   const [jobDescription, setJobDescription] = useState("")
   const [resumeContent, setResumeContent] = useState("")
   const [resumeFileName, setResumeFileName] = useState("")
