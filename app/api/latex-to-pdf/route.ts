@@ -1,8 +1,16 @@
 import { NextRequest, NextResponse } from "next/server"
+
 import { enforceRateLimit } from "@/lib/api-rate-limit"
-import { validationErrorResponse } from "@/lib/api-response"
+import {
+  customError,
+  errorResponse,
+  validationErrorResponse,
+} from "@/lib/api-response"
 import { reportServerError } from "@/lib/error-monitoring"
-import { compileLatexPdf, latexToPdfSchema } from "@/lib/services/document-service"
+import {
+  compileLatexPdf,
+  latexToPdfSchema,
+} from "@/lib/services/document-service"
 
 export const runtime = "nodejs"
 export const maxDuration = 30
@@ -23,19 +31,17 @@ export async function POST(request: NextRequest) {
       return validationErrorResponse(parsed.error)
     }
 
-    const { latex, preview } = parsed.data
+    const { preview } = parsed.data
 
     const result = await compileLatexPdf(parsed.data)
 
     if (!result.ok) {
-      return NextResponse.json(
-        {
-          error: "LaTeX compilation failed.",
-          details: result.details.slice(0, 2000),
-          provider: result.provider,
-        },
-        { status: 400 }
-      )
+      return customError("LaTeX compilation failed.", {
+        status: 400,
+        code: "BAD_REQUEST",
+        details: result.details.slice(0, 2000),
+        retryable: false,
+      })
     }
 
     return new NextResponse(result.pdf, {
@@ -49,12 +55,6 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     reportServerError(error, "latex-to-pdf")
-
-    return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "Failed to compile LaTeX",
-      },
-      { status: 500 }
-    )
+    return errorResponse(error, "Failed to compile LaTeX")
   }
 }

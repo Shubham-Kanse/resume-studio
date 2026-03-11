@@ -1,4 +1,7 @@
 export const serviceContracts = {
+  auth: {
+    session: "/api/auth/session",
+  },
   account: {
     delete: "/api/account/delete",
     export: "/api/account/export",

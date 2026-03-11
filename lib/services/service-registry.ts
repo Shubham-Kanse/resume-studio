@@ -14,16 +14,26 @@ export const serviceRegistry = [
   {
     domain: "document",
     description: "Resume extraction and LaTeX to PDF compilation",
-    routes: [serviceContracts.document.extractResume, serviceContracts.document.latexToPdf],
+    routes: [
+      serviceContracts.document.extractResume,
+      serviceContracts.document.latexToPdf,
+    ],
   },
   {
     domain: "account",
     description: "Authenticated export and deletion workflows",
-    routes: [serviceContracts.account.export, serviceContracts.account.delete, serviceContracts.account.plan],
+    routes: [
+      serviceContracts.account.export,
+      serviceContracts.account.delete,
+      serviceContracts.account.plan,
+    ],
   },
   {
     domain: "billing",
     description: "Polar checkout and billing portal workflows",
-    routes: [serviceContracts.billing.checkout, serviceContracts.billing.portal],
+    routes: [
+      serviceContracts.billing.checkout,
+      serviceContracts.billing.portal,
+    ],
   },
 ] as const

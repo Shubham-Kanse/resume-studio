@@ -1,10 +1,19 @@
 import { NextRequest, NextResponse } from "next/server"
+
 import { z } from "zod"
+
+import { deleteAccount } from "@/features/subscription/server/account-service"
 import { enforceRateLimit } from "@/lib/api-rate-limit"
-import { isLikelyConfigurationError } from "@/lib/errors"
+import {
+  errorResponse,
+  serviceUnavailable,
+  unauthorized,
+  validationErrorResponse,
+} from "@/lib/api-response"
+import { APP_PERMISSION, authorizeRequest } from "@/lib/authorization"
+import { verifyCsrfRequest } from "@/lib/csrf"
 import { reportServerError } from "@/lib/error-monitoring"
-import { serviceUnavailable, unauthorized, validationErrorResponse } from "@/lib/api-response"
-import { deleteAccount } from "@/lib/services/account-service"
+import { isLikelyConfigurationError } from "@/lib/errors"
 
 export const runtime = "nodejs"
 
@@ -15,6 +24,9 @@ const deleteAccountSchema = z.object({
 })
 
 export async function DELETE(request: NextRequest) {
+  const csrfError = verifyCsrfRequest(request)
+  if (csrfError) return csrfError
+
   const rateLimitResponse = await enforceRateLimit(request, {
     key: "account-delete",
     limit: 3,
@@ -23,6 +35,17 @@ export async function DELETE(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse
 
   try {
+    const { context, response } = await authorizeRequest(request, {
+      permission: APP_PERMISSION.MANAGE_ACCOUNT,
+      unauthorizedMessage: "Sign in to manage your account.",
+    })
+    if (response) {
+      return response
+    }
+    if (!context.user) {
+      return unauthorized()
+    }
+
     const body = await request.json().catch(() => ({}))
     const parsed = deleteAccountSchema.safeParse(body)
     if (!parsed.success) {
@@ -30,7 +53,10 @@ export async function DELETE(request: NextRequest) {
     }
 
     try {
-      const result = await deleteAccount(request.headers.get("authorization"))
+      const result = await deleteAccount(
+        request.headers.get("authorization"),
+        context.accessToken
+      )
       if (!result) {
         return unauthorized()
       }
@@ -38,18 +64,15 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json(result)
     } catch (error) {
       if (isLikelyConfigurationError(error)) {
-        return serviceUnavailable("Account deletion requires SUPABASE_SERVICE_ROLE_KEY to be configured.")
+        return serviceUnavailable(
+          "Account deletion requires SUPABASE_SERVICE_ROLE_KEY to be configured."
+        )
       }
 
       throw error
     }
   } catch (error) {
     reportServerError(error, "account-delete")
-    return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "Failed to delete account",
-      },
-      { status: 500 }
-    )
+    return errorResponse(error, "Failed to delete account")
   }
 }

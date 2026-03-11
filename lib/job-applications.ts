@@ -9,14 +9,19 @@ export const JOB_APPLICATION_STAGES = [
 export type JobApplicationStage = (typeof JOB_APPLICATION_STAGES)[number]
 
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
-const DISPLAY_DATE_PATTERN = /^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[0-2])\/\d{2}$/
+const DISPLAY_DATE_PATTERN =
+  /^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[0-2])\/\d{2}$/
 
 function padDatePart(value: number) {
   return value.toString().padStart(2, "0")
 }
 
 function isValidDateParts(day: number, month: number, year: number) {
-  if (!Number.isInteger(day) || !Number.isInteger(month) || !Number.isInteger(year)) {
+  if (
+    !Number.isInteger(day) ||
+    !Number.isInteger(month) ||
+    !Number.isInteger(year)
+  ) {
     return false
   }
 
@@ -47,11 +52,15 @@ export interface JobApplicationRecord {
   updated_at: string
 }
 
-export function isJobApplicationStage(value: string): value is JobApplicationStage {
+export function isJobApplicationStage(
+  value: string
+): value is JobApplicationStage {
   return JOB_APPLICATION_STAGES.includes(value as JobApplicationStage)
 }
 
-export function normalizeJobApplicationStage(value: unknown): JobApplicationStage {
+export function normalizeJobApplicationStage(
+  value: unknown
+): JobApplicationStage {
   if (typeof value === "string" && isJobApplicationStage(value)) {
     return value
   }
@@ -65,6 +74,8 @@ export function isJobApplicationDisplayDate(value: string) {
   }
 
   const [day, month, year] = value.split("/").map(Number)
+  if (day === undefined || month === undefined || year === undefined)
+    return false
   return isValidDateParts(day, month, 2000 + year)
 }
 
@@ -76,7 +87,9 @@ export function normalizeJobApplicationDateInput(value: string) {
   return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`
 }
 
-export function formatJobApplicationDateForDisplay(value: string | null | undefined) {
+export function formatJobApplicationDateForDisplay(
+  value: string | null | undefined
+) {
   if (!value) return null
 
   const trimmed = value.trim()
@@ -88,7 +101,11 @@ export function formatJobApplicationDateForDisplay(value: string | null | undefi
 
   if (ISO_DATE_PATTERN.test(trimmed)) {
     const [year, month, day] = trimmed.split("-").map(Number)
-    return isValidDateParts(day, month, year) ? formatDisplayDate(day, month, year) : trimmed
+    if (year === undefined || month === undefined || day === undefined)
+      return trimmed
+    return isValidDateParts(day, month, year)
+      ? formatDisplayDate(day, month, year)
+      : trimmed
   }
 
   const displayYearMatch = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
@@ -97,13 +114,17 @@ export function formatJobApplicationDateForDisplay(value: string | null | undefi
     const day = Number(dayText)
     const month = Number(monthText)
     const year = Number(yearText)
-    return isValidDateParts(day, month, year) ? formatDisplayDate(day, month, year) : trimmed
+    return isValidDateParts(day, month, year)
+      ? formatDisplayDate(day, month, year)
+      : trimmed
   }
 
   return trimmed
 }
 
-export function formatJobApplicationDateForStorage(value: string | null | undefined) {
+export function formatJobApplicationDateForStorage(
+  value: string | null | undefined
+) {
   if (!value) return null
 
   const trimmed = value.trim()
@@ -111,6 +132,8 @@ export function formatJobApplicationDateForStorage(value: string | null | undefi
 
   if (ISO_DATE_PATTERN.test(trimmed)) {
     const [year, month, day] = trimmed.split("-").map(Number)
+    if (year === undefined || month === undefined || day === undefined)
+      return null
     return isValidDateParts(day, month, year)
       ? `${year.toString().padStart(4, "0")}-${padDatePart(month)}-${padDatePart(day)}`
       : null
@@ -118,6 +141,8 @@ export function formatJobApplicationDateForStorage(value: string | null | undefi
 
   if (isJobApplicationDisplayDate(trimmed)) {
     const [day, month, year] = trimmed.split("/").map(Number)
+    if (day === undefined || month === undefined || year === undefined)
+      return null
     const fullYear = 2000 + year
     return `${fullYear.toString().padStart(4, "0")}-${padDatePart(month)}-${padDatePart(day)}`
   }
@@ -140,10 +165,14 @@ export function formatJobApplicationDateForStorage(value: string | null | undefi
 export function sortJobApplications(records: JobApplicationRecord[]) {
   return [...records].sort((a, b) => {
     const appliedA = formatJobApplicationDateForStorage(a.applied_on)
-      ? new Date(`${formatJobApplicationDateForStorage(a.applied_on)}T00:00:00Z`).getTime()
+      ? new Date(
+          `${formatJobApplicationDateForStorage(a.applied_on)}T00:00:00Z`
+        ).getTime()
       : 0
     const appliedB = formatJobApplicationDateForStorage(b.applied_on)
-      ? new Date(`${formatJobApplicationDateForStorage(b.applied_on)}T00:00:00Z`).getTime()
+      ? new Date(
+          `${formatJobApplicationDateForStorage(b.applied_on)}T00:00:00Z`
+        ).getTime()
       : 0
 
     if (appliedA !== appliedB) {
@@ -154,13 +183,17 @@ export function sortJobApplications(records: JobApplicationRecord[]) {
   })
 }
 
-export function createJobApplicationDraft(userId: string): JobApplicationRecord {
+export function createJobApplicationDraft(
+  userId: string
+): JobApplicationRecord {
   const now = new Date()
   const timestamp = now.toISOString()
   const appliedOn = formatJobApplicationDateForDisplay(timestamp.slice(0, 10))
 
   return {
-    id: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    id:
+      globalThis.crypto?.randomUUID?.() ??
+      `${Date.now()}-${Math.random().toString(16).slice(2)}`,
     user_id: userId,
     company: "",
     position: "",

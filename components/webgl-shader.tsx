@@ -1,15 +1,11 @@
 "use client"
 
 import { memo, useEffect, useRef, useState } from "react"
+
 import * as THREE from "three"
+
+import { type BackgroundTheme } from "@/features/workspace/background-themes"
 import { reportClientError } from "@/lib/error-monitoring"
-
-export const BACKGROUND_THEMES = [
-  { id: "current", label: "Wave" },
-  { id: "aurora", label: "Aurora" },
-] as const
-
-export type BackgroundTheme = (typeof BACKGROUND_THEMES)[number]["id"]
 
 type ShaderUniform = {
   value: unknown
@@ -55,8 +51,15 @@ type MeshLike = {
 type ThemeDefinition = {
   clearColor: number
   opacityClassName: string
-  createMaterial: (size: { width: number; height: number }) => ShaderLikeMaterial
-  onResize?: (material: ShaderLikeMaterial, width: number, height: number) => void
+  createMaterial: (size: {
+    width: number
+    height: number
+  }) => ShaderLikeMaterial
+  onResize?: (
+    material: ShaderLikeMaterial,
+    width: number,
+    height: number
+  ) => void
   onFrame?: (material: ShaderLikeMaterial, deltaSeconds: number) => void
 }
 
@@ -69,7 +72,10 @@ type SceneRefs = {
   animationId: number | null
 }
 
-function getThemeDefinition(theme: BackgroundTheme, size: { width: number; height: number }): ThemeDefinition {
+function getThemeDefinition(
+  theme: BackgroundTheme,
+  _size: { width: number; height: number }
+): ThemeDefinition {
   if (theme === "aurora") {
     return {
       clearColor: 0x000000,
@@ -155,7 +161,10 @@ function getThemeDefinition(theme: BackgroundTheme, size: { width: number; heigh
           side: THREE.DoubleSide,
         }) as AuroraMaterial,
       onResize: (material, width, height) => {
-        ;(material as AuroraMaterial).uniforms.resolution.value.set(width, height)
+        ;(material as AuroraMaterial).uniforms.resolution.value.set(
+          width,
+          height
+        )
       },
       onFrame: (material, deltaSeconds) => {
         ;(material as AuroraMaterial).uniforms.time.value += deltaSeconds
@@ -216,7 +225,11 @@ function getThemeDefinition(theme: BackgroundTheme, size: { width: number; heigh
   }
 }
 
-function WebGLShaderComponent({ theme = "current" }: { theme?: BackgroundTheme }) {
+function WebGLShaderComponent({
+  theme = "current",
+}: {
+  theme?: BackgroundTheme
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [failed, setFailed] = useState(false)
   const sceneRef = useRef<SceneRefs>({
@@ -256,7 +269,9 @@ function WebGLShaderComponent({ theme = "current" }: { theme?: BackgroundTheme }
       const height = window.innerHeight
 
       refs.renderer.setSize(width, height, false)
-      refs.renderer.setPixelRatio(Math.min(window.devicePixelRatio, maxPixelRatio))
+      refs.renderer.setPixelRatio(
+        Math.min(window.devicePixelRatio, maxPixelRatio)
+      )
       themeDefinition.onResize?.(refs.material, width, height)
     }
 
@@ -332,12 +347,7 @@ function WebGLShaderComponent({ theme = "current" }: { theme?: BackgroundTheme }
         "position",
         new THREE.BufferAttribute(
           new Float32Array([
-            -1, -1, 0,
-            1, -1, 0,
-            -1, 1, 0,
-            1, -1, 0,
-            -1, 1, 0,
-            1, 1, 0,
+            -1, -1, 0, 1, -1, 0, -1, 1, 0, 1, -1, 0, -1, 1, 0, 1, 1, 0,
           ]),
           3
         )

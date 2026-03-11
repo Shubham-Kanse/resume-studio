@@ -1,9 +1,15 @@
-import { validateLaTeX } from "@/lib/latex-editor"
-import { compileLatexDocument } from "@/lib/latex-compiler"
+import { AppError } from "@/lib/errors"
 import { createGroqChatCompletion, getGroqModel } from "@/lib/groq"
+import { compileLatexDocument } from "@/lib/latex-compiler"
+import { validateLaTeX } from "@/lib/latex-editor"
 
 type LatexIssueSeverity = "high" | "medium" | "low"
-type LatexIssueType = "latex_error" | "format_violation" | "unsupported_claim" | "keyword_alignment" | "other"
+type LatexIssueType =
+  | "latex_error"
+  | "format_violation"
+  | "unsupported_claim"
+  | "keyword_alignment"
+  | "other"
 
 interface LatexVerificationIssue {
   type: LatexIssueType
@@ -33,7 +39,9 @@ interface VerifyAndRepairLatexInput {
 
 function stripCodeFences(text: string): string {
   let cleaned = text.trim()
-  const fencedMatch = cleaned.match(/^```(?:latex|tex|json)?\s*\n?([\s\S]*?)\n?```$/i)
+  const fencedMatch = cleaned.match(
+    /^```(?:latex|tex|json)?\s*\n?([\s\S]*?)\n?```$/i
+  )
   if (fencedMatch?.[1]) return fencedMatch[1].trim()
   if (cleaned.startsWith("```latex")) cleaned = cleaned.slice(8).trim()
   else if (cleaned.startsWith("```tex")) cleaned = cleaned.slice(6).trim()
@@ -48,7 +56,12 @@ function extractJsonObject(text: string): string {
   const start = cleaned.indexOf("{")
   const end = cleaned.lastIndexOf("}")
   if (start === -1 || end === -1 || end <= start) {
-    throw new Error("Latex verifier returned invalid JSON")
+    throw new AppError("Latex verifier returned invalid JSON", {
+      code: "UPSTREAM_ERROR",
+      status: 502,
+      userMessage: "AI LaTeX verification returned an invalid response.",
+      retryable: true,
+    })
   }
   return cleaned.slice(start, end + 1)
 }
@@ -68,14 +81,18 @@ function sanitizePlainTextLatex(latex: string): string {
       const escapedLine = line.replace(/\\%/g, "__ESCAPED_PERCENT__")
       const commentStart = escapedLine.indexOf("%")
       const codePart =
-        commentStart >= 0 ? line.slice(0, commentStart).replace(/__ESCAPED_PERCENT__/g, "\\%") : line
+        commentStart >= 0
+          ? line.slice(0, commentStart).replace(/__ESCAPED_PERCENT__/g, "\\%")
+          : line
       const commentPart = commentStart >= 0 ? line.slice(commentStart) : ""
 
       const beginMatch = codePart.match(/\\begin\{([^}]+)\}/)
-      if (beginMatch) envStack.push(beginMatch[1])
+      if (beginMatch?.[1]) envStack.push(beginMatch[1])
 
       const inAlignmentEnv = envStack.some((env) =>
-        ["tabular", "tabular*", "array", "align", "align*", "aligned"].includes(env)
+        ["tabular", "tabular*", "array", "align", "align*", "aligned"].includes(
+          env
+        )
       )
 
       let sanitized = codePart
@@ -89,7 +106,7 @@ function sanitizePlainTextLatex(latex: string): string {
       const endMatch = codePart.match(/\\end\{([^}]+)\}/)
       if (endMatch) {
         const last = envStack[envStack.length - 1]
-        if (last === endMatch[1]) envStack.pop()
+        if (last && last === endMatch[1]) envStack.pop()
       }
 
       return `${sanitized}${commentPart}`
@@ -97,7 +114,9 @@ function sanitizePlainTextLatex(latex: string): string {
     .join("\n")
 }
 
-export function buildLocalLatexVerification(latex: string): LatexVerificationResult {
+export function buildLocalLatexVerification(
+  latex: string
+): LatexVerificationResult {
   const issues = validateLaTeX(latex).map((issue) => ({
     type: issue.type === "error" ? "latex_error" : "format_violation",
     severity: issue.type === "error" ? "high" : "medium",
@@ -113,7 +132,9 @@ export function buildLocalLatexVerification(latex: string): LatexVerificationRes
   }
 }
 
-async function compileLatexForDiagnostics(latex: string): Promise<LatexCompileResult> {
+async function compileLatexForDiagnostics(
+  latex: string
+): Promise<LatexCompileResult> {
   const result = await compileLatexDocument(latex)
   if (!result.ok && result.details === "Empty response from LaTeX compiler.") {
     return {
@@ -144,7 +165,7 @@ async function compileLatexForDiagnostics(latex: string): Promise<LatexCompileRe
   const lines = excerpt.split("\n")
 
   for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index].trim()
+    const line = (lines[index] || "").trim()
     if (!line.startsWith("!")) continue
     const detail = lines[index + 1]?.trim()
     issues.push({
@@ -170,7 +191,10 @@ async function compileLatexForDiagnostics(latex: string): Promise<LatexCompileRe
   }
 }
 
-function buildVerificationPrompt(input: VerifyAndRepairLatexInput, localResult: LatexVerificationResult): string {
+function buildVerificationPrompt(
+  input: VerifyAndRepairLatexInput,
+  localResult: LatexVerificationResult
+): string {
   return `Review this generated LaTeX resume against the source resume and job description.
 
 Your task:
@@ -222,10 +246,14 @@ Requirements:
 Repair issues:
 ${JSON.stringify(verification, null, 2)}
 
-${compileResult?.logExcerpt ? `Compiler diagnostics:
+${
+  compileResult?.logExcerpt
+    ? `Compiler diagnostics:
 ${compileResult.logExcerpt}
 
-` : ""}Focus on fixing any real pdflatex compilation errors first, then formatting or alignment issues.
+`
+    : ""
+}Focus on fixing any real pdflatex compilation errors first, then formatting or alignment issues.
 
 ## JOB DESCRIPTION
 ${input.jobDescription}
@@ -261,7 +289,9 @@ async function verifyLatexWithGroq(
   })
 
   const content = data.choices?.[0]?.message?.content || ""
-  const parsed = JSON.parse(extractJsonObject(content)) as Partial<LatexVerificationResult>
+  const parsed = JSON.parse(
+    extractJsonObject(content)
+  ) as Partial<LatexVerificationResult>
   const issues = Array.isArray(parsed.issues)
     ? parsed.issues
         .map((issue) => ({
@@ -273,7 +303,9 @@ async function verifyLatexWithGroq(
     : []
 
   return {
-    pass: Boolean(parsed.pass) && issues.every((issue) => issue.severity !== "high"),
+    pass:
+      Boolean(parsed.pass) &&
+      issues.every((issue) => issue.severity !== "high"),
     summary: String(parsed.summary || "Verification completed."),
     issues,
   }
@@ -312,7 +344,9 @@ export async function verifyAndRepairLatex(
   verification: LatexVerificationResult
   repaired: boolean
 }> {
-  const normalized = sanitizePlainTextLatex(normalizeGeneratedLatex(input.latex))
+  const normalized = sanitizePlainTextLatex(
+    normalizeGeneratedLatex(input.latex)
+  )
   const localResult = buildLocalLatexVerification(normalized)
   let combinedResult = localResult
   let compileResult: LatexCompileResult | null = null
@@ -363,21 +397,29 @@ export async function verifyAndRepairLatex(
     )
 
     const repairedValidation = buildLocalLatexVerification(repairedLatex)
-    const repairedCompile = await compileLatexForDiagnostics(repairedLatex).catch(() => null)
+    const repairedCompile = await compileLatexForDiagnostics(
+      repairedLatex
+    ).catch(() => null)
     const repairedIssues = [
       ...repairedValidation.issues,
-      ...(repairedCompile && !repairedCompile.pass ? repairedCompile.issues : []),
+      ...(repairedCompile && !repairedCompile.pass
+        ? repairedCompile.issues
+        : []),
     ]
-    const repairedPass = repairedValidation.pass && (repairedCompile?.pass ?? true)
+    const repairedPass =
+      repairedValidation.pass && (repairedCompile?.pass ?? true)
     return {
       latex: repairedLatex,
       verification: {
         pass: repairedPass,
         summary: repairedPass
-          ? repairedCompile?.summary || repairedValidation.summary || "Repair attempt completed."
+          ? repairedCompile?.summary ||
+            repairedValidation.summary ||
+            "Repair attempt completed."
           : (!repairedValidation.pass
               ? repairedValidation.summary
-              : repairedCompile?.summary) || "Repair attempt failed validation.",
+              : repairedCompile?.summary) ||
+            "Repair attempt failed validation.",
         issues: repairedIssues,
       },
       repaired: true,

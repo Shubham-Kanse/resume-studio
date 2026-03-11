@@ -1,5 +1,11 @@
 import { z } from "zod"
-import { documentArtifactsSchema, type DocumentArtifacts, type DocumentBlock } from "@/lib/document-artifacts"
+
+import {
+  documentArtifactsSchema,
+  type DocumentArtifacts,
+  type DocumentBlock,
+} from "@/lib/document-artifacts"
+import { AppError } from "@/lib/errors"
 import { compileLatexDocument } from "@/lib/latex-compiler"
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024
@@ -16,7 +22,10 @@ export const latexToPdfSchema = z.object({
 export const extractResumeSchema = z.object({
   name: z.string().min(1, "A file is required."),
   type: z.string().max(200).optional().default(""),
-  size: z.number().positive("Uploaded file is empty.").max(MAX_UPLOAD_BYTES, "Resume file is too large. Use a file under 10MB."),
+  size: z
+    .number()
+    .positive("Uploaded file is empty.")
+    .max(MAX_UPLOAD_BYTES, "Resume file is too large. Use a file under 10MB."),
 })
 
 function normalizeExtractedText(value: string) {
@@ -31,7 +40,8 @@ function classifyBlockKind(text: string): DocumentBlock["kind"] {
   if (/@|linkedin\.com|github\.com|https?:\/\//i.test(text)) return "contact"
   if (/^\s*[-*•]\s+/.test(text)) return "bullet"
   if (/\|.+\|/.test(text) || /\t/.test(text)) return "tableish"
-  if (text.length <= 80 && /^[A-Z0-9][A-Za-z0-9 &/(),.+-]+:?$/.test(text)) return "heading"
+  if (text.length <= 80 && /^[A-Z0-9][A-Za-z0-9 &/(),.+-]+:?$/.test(text))
+    return "heading"
   if (text.length >= 25) return "paragraph"
   return "other"
 }
@@ -52,11 +62,17 @@ async function extractFromPDF(buffer: ArrayBuffer): Promise<DocumentArtifacts> {
     extractedText,
     layout: {
       pageCount: parsed.numpages || 1,
-      hasTableEvidence: lines.some((line) => (line.match(/\|/g) || []).length >= 2 || /\t/.test(line)),
-      hasHeaderFooterEvidence: lines.some((line) => /page\s+\d+|@|linkedin\.com|github\.com|https?:\/\//i.test(line)),
+      hasTableEvidence: lines.some(
+        (line) => (line.match(/\|/g) || []).length >= 2 || /\t/.test(line)
+      ),
+      hasHeaderFooterEvidence: lines.some((line) =>
+        /page\s+\d+|@|linkedin\.com|github\.com|https?:\/\//i.test(line)
+      ),
       hasMultiColumnEvidence: false,
       readingOrderRisk: 0,
-      averageBlocksPerPage: Number((blocks.length / Math.max(1, parsed.numpages || 1)).toFixed(1)),
+      averageBlocksPerPage: Number(
+        (blocks.length / Math.max(1, parsed.numpages || 1)).toFixed(1)
+      ),
     },
     blocks,
   }
@@ -64,7 +80,10 @@ async function extractFromPDF(buffer: ArrayBuffer): Promise<DocumentArtifacts> {
   return documentArtifactsSchema.parse(artifacts)
 }
 
-async function extractFromWord(buffer: ArrayBuffer, sourceType: "docx" | "doc"): Promise<DocumentArtifacts> {
+async function extractFromWord(
+  buffer: ArrayBuffer,
+  sourceType: "docx" | "doc"
+): Promise<DocumentArtifacts> {
   const mammoth = (await import("mammoth")).default
   const [rawText, htmlResult] = await Promise.all([
     mammoth.extractRawText({ buffer: Buffer.from(buffer) }),
@@ -72,11 +91,13 @@ async function extractFromWord(buffer: ArrayBuffer, sourceType: "docx" | "doc"):
   ])
 
   const html = htmlResult.value || ""
-  const blockMatches = [...html.matchAll(/<(p|h1|h2|h3|li)[^>]*>([\s\S]*?)<\/\1>/gi)]
+  const blockMatches = [
+    ...html.matchAll(/<(p|h1|h2|h3|li)[^>]*>([\s\S]*?)<\/\1>/gi),
+  ]
   const blocks: DocumentBlock[] = blockMatches
-    .map((match, index) => {
-      const tag = match[1].toLowerCase()
-      const text = match[2]
+    .map((match) => {
+      const tag = (match[1] || "").toLowerCase()
+      const text = (match[2] || "")
         .replace(/<[^>]+>/g, " ")
         .replace(/&nbsp;/g, " ")
         .replace(/&amp;/g, "&")
@@ -97,14 +118,18 @@ async function extractFromWord(buffer: ArrayBuffer, sourceType: "docx" | "doc"):
     })
     .filter((block): block is DocumentBlock => Boolean(block))
 
-  const extractedText = normalizeExtractedText(rawText.value || blocks.map((block) => block.text).join("\n"))
+  const extractedText = normalizeExtractedText(
+    rawText.value || blocks.map((block) => block.text).join("\n")
+  )
   const artifacts = {
     sourceType,
     extractedText,
     layout: {
       pageCount: 1,
       hasTableEvidence: /<table|<tr|<td/i.test(html),
-      hasHeaderFooterEvidence: /header|footer/i.test(htmlResult.messages.map((message) => message.message).join(" ")),
+      hasHeaderFooterEvidence: /header|footer/i.test(
+        htmlResult.messages.map((message) => message.message).join(" ")
+      ),
       hasMultiColumnEvidence: false,
       readingOrderRisk: 0,
       averageBlocksPerPage: blocks.length,
@@ -119,7 +144,9 @@ export async function compileLatexPdf(input: z.infer<typeof latexToPdfSchema>) {
   return compileLatexDocument(input.latex)
 }
 
-export async function extractResumeDocument(file: File): Promise<DocumentArtifacts> {
+export async function extractResumeDocument(
+  file: File
+): Promise<DocumentArtifacts> {
   const buffer = await file.arrayBuffer()
   const fileName = file.name.toLowerCase()
   const fileType = file.type
@@ -152,15 +179,27 @@ export async function extractResumeDocument(file: File): Promise<DocumentArtifac
       },
       blocks: splitLines(text)
         .slice(0, 250)
-        .map((line) => ({ page: 1, text: line, kind: classifyBlockKind(line) })),
+        .map((line) => ({
+          page: 1,
+          text: line,
+          kind: classifyBlockKind(line),
+        })),
     })
   }
 
-  throw new Error("Unsupported file type")
+  throw new AppError("Unsupported file type", {
+    code: "BAD_REQUEST",
+    status: 400,
+    userMessage: "Unsupported file type",
+    retryable: false,
+  })
 }
 
 function splitLines(value: string): string[] {
-  return value.split("\n").map((line) => line.trim()).filter(Boolean)
+  return value
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
 }
 
 export async function extractResumeText(file: File) {

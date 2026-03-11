@@ -16,7 +16,9 @@ function isBrowser() {
   return typeof window !== "undefined"
 }
 
-function normalizeLocalJobApplication(record: Record<string, unknown>): JobApplicationRecord {
+function normalizeLocalJobApplication(
+  record: Record<string, unknown>
+): JobApplicationRecord {
   return {
     id: String(record.id),
     user_id: String(record.user_id),
@@ -31,9 +33,13 @@ function normalizeLocalJobApplication(record: Record<string, unknown>): JobAppli
           ? record.resume_label
           : null,
     resume_file_mime_type:
-      typeof record.resume_file_mime_type === "string" ? record.resume_file_mime_type : null,
+      typeof record.resume_file_mime_type === "string"
+        ? record.resume_file_mime_type
+        : null,
     resume_file_data_url:
-      typeof record.resume_file_data_url === "string" ? record.resume_file_data_url : null,
+      typeof record.resume_file_data_url === "string"
+        ? record.resume_file_data_url
+        : null,
     applied_on:
       typeof record.applied_on === "string"
         ? formatJobApplicationDateForDisplay(record.applied_on)
@@ -43,7 +49,9 @@ function normalizeLocalJobApplication(record: Record<string, unknown>): JobAppli
   }
 }
 
-export function loadLocalJobApplications(userId: string): JobApplicationRecord[] {
+export function loadLocalJobApplications(
+  userId: string
+): JobApplicationRecord[] {
   if (!isBrowser()) return []
 
   try {
@@ -54,7 +62,10 @@ export function loadLocalJobApplications(userId: string): JobApplicationRecord[]
     return Array.isArray(parsed)
       ? sortJobApplications(
           parsed
-            .filter((record): record is Record<string, unknown> => typeof record === "object" && record !== null)
+            .filter(
+              (record): record is Record<string, unknown> =>
+                typeof record === "object" && record !== null
+            )
             .map(normalizeLocalJobApplication)
             .filter((record) => shouldKeepCachedRecord(record.updated_at))
         )
@@ -64,14 +75,19 @@ export function loadLocalJobApplications(userId: string): JobApplicationRecord[]
   }
 }
 
-export function persistLocalJobApplications(userId: string, records: JobApplicationRecord[]) {
+export function persistLocalJobApplications(
+  userId: string,
+  records: JobApplicationRecord[]
+) {
   if (!isBrowser()) return
 
   try {
     window.localStorage.setItem(
       storageKey(userId),
       JSON.stringify(
-        sortJobApplications(records).filter((record) => shouldKeepCachedRecord(record.updated_at))
+        sortJobApplications(records).filter((record) =>
+          shouldKeepCachedRecord(record.updated_at)
+        )
       )
     )
   } catch {
@@ -79,7 +95,10 @@ export function persistLocalJobApplications(userId: string, records: JobApplicat
   }
 }
 
-export function removeLocalJobApplication(userId: string, applicationId: string) {
+export function removeLocalJobApplication(
+  userId: string,
+  applicationId: string
+) {
   const records = loadLocalJobApplications(userId)
   const next = records.filter((record) => record.id !== applicationId)
   persistLocalJobApplications(userId, next)
@@ -96,7 +115,10 @@ export function clearLocalJobApplications(userId: string) {
   }
 }
 
-export function mergeJobApplications(remote: JobApplicationRecord[], local: JobApplicationRecord[]) {
+export function mergeJobApplications(
+  remote: JobApplicationRecord[],
+  local: JobApplicationRecord[]
+) {
   const byId = new Map<string, JobApplicationRecord>()
 
   ;[...remote, ...local].forEach((record) => {

@@ -1,16 +1,26 @@
 import { NextRequest, NextResponse } from "next/server"
+
+import {
+  getFeatureUpgradeMessage,
+  PREMIUM_FEATURE,
+} from "@/features/subscription/types"
 import { enforceRateLimit } from "@/lib/api-rate-limit"
-import { errorResponse, forbidden, unauthorized, validationErrorResponse } from "@/lib/api-response"
+import { errorResponse, validationErrorResponse } from "@/lib/api-response"
+import { APP_PERMISSION, authorizeRequest } from "@/lib/authorization"
+import { verifyCsrfRequest } from "@/lib/csrf"
 import { reportServerError } from "@/lib/error-monitoring"
-import { atsScoreSchema, scoreResumeWithInsights } from "@/lib/services/ats-service"
-import { resolvePlanSnapshotForUser } from "@/lib/services/subscription-service"
-import { getAuthenticatedUserFromRequest } from "@/lib/supabase-server"
-import { canAccessFeature, getFeatureUpgradeMessage, PREMIUM_FEATURE } from "@/lib/subscription"
+import {
+  atsScoreSchema,
+  scoreResumeWithInsights,
+} from "@/lib/services/ats-service"
 
 export const runtime = "nodejs"
 export const maxDuration = 60
 
 export async function POST(request: NextRequest) {
+  const csrfError = verifyCsrfRequest(request)
+  if (csrfError) return csrfError
+
   const rateLimitResponse = await enforceRateLimit(request, {
     key: "ats-insights",
     limit: 12,
@@ -19,14 +29,15 @@ export async function POST(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse
 
   try {
-    const auth = await getAuthenticatedUserFromRequest(request.headers.get("authorization"))
-    if (!auth) {
-      return unauthorized("Sign in to access Pro features.")
-    }
-
-    const planSnapshot = await resolvePlanSnapshotForUser(auth.user, auth.accessToken)
-    if (!canAccessFeature(planSnapshot, PREMIUM_FEATURE.AI_ATS_INSIGHTS)) {
-      return forbidden(getFeatureUpgradeMessage(PREMIUM_FEATURE.AI_ATS_INSIGHTS))
+    const { response } = await authorizeRequest(request, {
+      permission: APP_PERMISSION.USE_AI_ATS_INSIGHTS,
+      unauthorizedMessage: "Sign in to access Pro features.",
+      forbiddenMessage: getFeatureUpgradeMessage(
+        PREMIUM_FEATURE.AI_ATS_INSIGHTS
+      ),
+    })
+    if (response) {
+      return response
     }
 
     const body = await request.json()

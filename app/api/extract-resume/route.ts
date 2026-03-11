@@ -1,8 +1,16 @@
 import { NextRequest, NextResponse } from "next/server"
+
 import { enforceRateLimit } from "@/lib/api-rate-limit"
-import { badRequest, validationErrorResponse } from "@/lib/api-response"
+import {
+  badRequest,
+  errorResponse,
+  validationErrorResponse,
+} from "@/lib/api-response"
 import { reportServerError } from "@/lib/error-monitoring"
-import { extractResumeDocument, extractResumeSchema } from "@/lib/services/document-service"
+import {
+  extractResumeDocument,
+  extractResumeSchema,
+} from "@/lib/services/document-service"
 
 export async function POST(req: NextRequest) {
   const rateLimitResponse = await enforceRateLimit(req, {
@@ -15,7 +23,7 @@ export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData()
     const file = formData.get("file")
-    
+
     if (!(file instanceof File)) {
       return badRequest("No file provided")
     }
@@ -44,9 +52,6 @@ export async function POST(req: NextRequest) {
     }
   } catch (error) {
     reportServerError(error, "extract-resume")
-    return NextResponse.json(
-      { error: `Extraction failed: ${error instanceof Error ? error.message : "Unknown error"}` },
-      { status: 500 }
-    )
+    return errorResponse(error, "Extraction failed")
   }
 }

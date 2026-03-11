@@ -1,11 +1,13 @@
 import { Polar } from "@polar-sh/sdk"
+
 import { AppError } from "@/lib/errors"
 
 export const BILLING_PROVIDER = {
   POLAR: "polar",
 } as const
 
-export type BillingProvider = (typeof BILLING_PROVIDER)[keyof typeof BILLING_PROVIDER]
+export type BillingProvider =
+  (typeof BILLING_PROVIDER)[keyof typeof BILLING_PROVIDER]
 
 export const POLAR_SERVER = {
   SANDBOX: "sandbox",
@@ -29,7 +31,9 @@ function requireEnv(name: string) {
 }
 
 export function getPolarServer(): PolarServer {
-  return process.env.POLAR_SERVER === POLAR_SERVER.SANDBOX ? POLAR_SERVER.SANDBOX : POLAR_SERVER.PRODUCTION
+  return process.env.POLAR_SERVER === POLAR_SERVER.SANDBOX
+    ? POLAR_SERVER.SANDBOX
+    : POLAR_SERVER.PRODUCTION
 }
 
 export function getPolarAccessToken() {

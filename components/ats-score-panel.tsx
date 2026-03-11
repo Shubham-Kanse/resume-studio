@@ -1,6 +1,14 @@
 "use client"
 
-import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import {
+  memo,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react"
+
 import {
   Target,
   CheckCircle2,
@@ -12,18 +20,18 @@ import {
   ChevronRight,
   Lightbulb,
   FileSearch,
-  BarChart3,
   Wrench,
 } from "lucide-react"
+
+import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 import type {
   ATSDebugSection,
   ATSIssue,
   ATSRecommendation,
   ATSScoreResponse,
   ATSSectionReview,
-} from "@/lib/ats-types"
-import { Button } from "@/components/ui/button"
-import { cn } from "@/lib/utils"
+} from "@/types/ats"
 
 interface ATSScorePanelProps {
   scoreData: ATSScoreResponse | null
@@ -70,21 +78,6 @@ const getBandBadgeColor = (band: ColorBand) => {
       return "border-blue-500/30 bg-blue-500/15 text-blue-400"
     default:
       return "border-gray-500/30 bg-gray-500/15 text-gray-400"
-  }
-}
-
-const getBandCardColor = (band: ColorBand) => {
-  switch (band) {
-    case "red":
-      return "text-red-500 bg-red-500/10 border-red-500/20"
-    case "yellow":
-      return "text-yellow-500 bg-yellow-500/10 border-yellow-500/20"
-    case "green":
-      return "text-green-500 bg-green-500/10 border-green-500/20"
-    case "blue":
-      return "text-blue-500 bg-blue-500/10 border-blue-500/20"
-    default:
-      return "text-gray-500 bg-gray-500/10 border-gray-500/20"
   }
 }
 
@@ -173,7 +166,9 @@ const getSectionStatusColor = (status: ATSSectionReview["status"]) => {
   }
 }
 
-const getDebugSeverityClasses = (severity: ATSDebugSection["items"][number]["severity"]) => {
+const getDebugSeverityClasses = (
+  severity: ATSDebugSection["items"][number]["severity"]
+) => {
   switch (severity) {
     case "good":
       return getBandBadgeColor("green")
@@ -237,7 +232,10 @@ function ATSLoadingPanel() {
               const isCurrent = index === activeStep
 
               return (
-                <div key={step.title} className="relative flex items-center gap-3">
+                <div
+                  key={step.title}
+                  className="relative flex items-center gap-3"
+                >
                   <div
                     className={`absolute -left-[1.05rem] top-1.5 z-10 flex h-3 w-3 items-center justify-center rounded-full border ${
                       isCurrent
@@ -284,7 +282,11 @@ function ATSLoadingPanel() {
   )
 }
 
-function EvidenceSummaryPanel({ data }: { data: ATSScoreResponse["evidenceSummary"] }) {
+function EvidenceSummaryPanel({
+  data,
+}: {
+  data: ATSScoreResponse["evidenceSummary"]
+}) {
   if (!data) return null
 
   const sectionCoverage = data.keywordCoverageBySection
@@ -314,23 +316,37 @@ function EvidenceSummaryPanel({ data }: { data: ATSScoreResponse["evidenceSummar
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-lg border border-white/8 bg-black/20 p-3">
-          <div className="text-[11px] uppercase tracking-[0.16em] text-white/40">Sections</div>
-          <p className="mt-2 text-sm text-foreground">{data.requiredSectionsPresent.length} present</p>
+          <div className="text-[11px] uppercase tracking-[0.16em] text-white/40">
+            Sections
+          </div>
+          <p className="mt-2 text-sm text-foreground">
+            {data.requiredSectionsPresent.length} present
+          </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            {data.missingSections.length > 0 ? `${data.missingSections.length} missing` : "No required sections missing"}
+            {data.missingSections.length > 0
+              ? `${data.missingSections.length} missing`
+              : "No required sections missing"}
           </p>
         </div>
 
         <div className="rounded-lg border border-white/8 bg-black/20 p-3">
-          <div className="text-[11px] uppercase tracking-[0.16em] text-white/40">Keywords</div>
-          <p className="mt-2 text-sm text-foreground">{data.matchedKeywords.length} matched</p>
+          <div className="text-[11px] uppercase tracking-[0.16em] text-white/40">
+            Keywords
+          </div>
+          <p className="mt-2 text-sm text-foreground">
+            {data.matchedKeywords.length} matched
+          </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            {data.missingKeywords.length > 0 ? `${data.missingKeywords.length} still missing` : "No critical keywords missing"}
+            {data.missingKeywords.length > 0
+              ? `${data.missingKeywords.length} still missing`
+              : "No critical keywords missing"}
           </p>
         </div>
 
         <div className="rounded-lg border border-white/8 bg-black/20 p-3">
-          <div className="text-[11px] uppercase tracking-[0.16em] text-white/40">Qualifications</div>
+          <div className="text-[11px] uppercase tracking-[0.16em] text-white/40">
+            Qualifications
+          </div>
           <p className="mt-2 text-sm text-foreground">
             {data.yearsEstimated ?? "--"} yrs
             {data.yearsRequired !== null ? ` / ${data.yearsRequired} req` : ""}
@@ -343,30 +359,46 @@ function EvidenceSummaryPanel({ data }: { data: ATSScoreResponse["evidenceSummar
         </div>
 
         <div className="rounded-lg border border-white/8 bg-black/20 p-3">
-          <div className="text-[11px] uppercase tracking-[0.16em] text-white/40">Parseability</div>
-          <p className="mt-2 text-sm text-foreground">{data.parseabilityIssues.length} issues</p>
-          <p className="mt-1 text-xs text-muted-foreground">{data.parseabilityWarnings.length} warnings</p>
-        </div>
-      </div>
-
-      <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-        <div className="rounded-lg border border-white/8 bg-black/20 p-3">
-          <div className="text-xs font-medium text-foreground">Missing Sections</div>
-          <p className="mt-2 text-xs leading-5 text-muted-foreground">
-            {data.missingSections.length > 0 ? data.missingSections.join(", ") : "None"}
+          <div className="text-[11px] uppercase tracking-[0.16em] text-white/40">
+            Parseability
+          </div>
+          <p className="mt-2 text-sm text-foreground">
+            {data.parseabilityIssues.length} issues
           </p>
-        </div>
-        <div className="rounded-lg border border-white/8 bg-black/20 p-3">
-          <div className="text-xs font-medium text-foreground">Missing Certifications</div>
-          <p className="mt-2 text-xs leading-5 text-muted-foreground">
-            {data.missingCertifications.length > 0 ? data.missingCertifications.join(", ") : "None"}
+          <p className="mt-1 text-xs text-muted-foreground">
+            {data.parseabilityWarnings.length} warnings
           </p>
         </div>
       </div>
 
       <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
         <div className="rounded-lg border border-white/8 bg-black/20 p-3">
-          <div className="text-xs font-medium text-foreground">Seniority Alignment</div>
+          <div className="text-xs font-medium text-foreground">
+            Missing Sections
+          </div>
+          <p className="mt-2 text-xs leading-5 text-muted-foreground">
+            {data.missingSections.length > 0
+              ? data.missingSections.join(", ")
+              : "None"}
+          </p>
+        </div>
+        <div className="rounded-lg border border-white/8 bg-black/20 p-3">
+          <div className="text-xs font-medium text-foreground">
+            Missing Certifications
+          </div>
+          <p className="mt-2 text-xs leading-5 text-muted-foreground">
+            {data.missingCertifications.length > 0
+              ? data.missingCertifications.join(", ")
+              : "None"}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div className="rounded-lg border border-white/8 bg-black/20 p-3">
+          <div className="text-xs font-medium text-foreground">
+            Seniority Alignment
+          </div>
           <p className="mt-2 text-xs leading-5 text-muted-foreground">
             {data.expectedSeniority
               ? `${data.observedSeniority || "No clear seniority signal"} vs expected ${data.expectedSeniority}`
@@ -382,19 +414,27 @@ function EvidenceSummaryPanel({ data }: { data: ATSScoreResponse["evidenceSummar
         </div>
 
         <div className="rounded-lg border border-white/8 bg-black/20 p-3">
-          <div className="text-xs font-medium text-foreground">Leadership Requirement</div>
+          <div className="text-xs font-medium text-foreground">
+            Leadership Requirement
+          </div>
           <p className="mt-2 text-xs leading-5 text-muted-foreground">
-            {data.managementRequired ? "The JD requests management/leadership ownership." : "No management requirement found."}
+            {data.managementRequired
+              ? "The JD requests management/leadership ownership."
+              : "No management requirement found."}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            {data.managementObserved ? "Leadership evidence appears in the resume." : "Limited leadership evidence detected."}
+            {data.managementObserved
+              ? "Leadership evidence appears in the resume."
+              : "Limited leadership evidence detected."}
           </p>
         </div>
       </div>
 
       {sectionCoverage.length > 0 ? (
         <div className="mt-3 rounded-lg border border-white/8 bg-black/20 p-3">
-          <div className="text-xs font-medium text-foreground">Keyword Coverage By Section</div>
+          <div className="text-xs font-medium text-foreground">
+            Keyword Coverage By Section
+          </div>
           <div className="mt-3 flex flex-wrap gap-2">
             {sectionCoverage.map(([label, count]) => (
               <span
@@ -441,7 +481,9 @@ function PillButton({
         <span
           className={cn(
             "rounded-full px-1.5 py-0.5 text-[10px]",
-            active ? "bg-black/15 text-primary-foreground" : "bg-white/10 text-muted-foreground"
+            active
+              ? "bg-black/15 text-primary-foreground"
+              : "bg-white/10 text-muted-foreground"
           )}
         >
           {badge}
@@ -481,7 +523,9 @@ function SubPillButton({
         <span
           className={cn(
             "rounded-full px-1.5 py-0.5 text-[10px]",
-            active ? "bg-black/15 text-primary-foreground" : "bg-white/8 text-muted-foreground"
+            active
+              ? "bg-black/15 text-primary-foreground"
+              : "bg-white/8 text-muted-foreground"
           )}
         >
           {badge}
@@ -550,7 +594,10 @@ function SubnavRow({ children }: { children: ReactNode }) {
           <ChevronRight className="h-3.5 w-3.5" />
         </button>
       ) : null}
-      <div ref={scrollRef} className="scrollbar-hide flex min-w-0 gap-2 overflow-x-auto px-1 pb-1 sm:px-10">
+      <div
+        ref={scrollRef}
+        className="scrollbar-hide flex min-w-0 gap-2 overflow-x-auto px-1 pb-1 sm:px-10"
+      >
         {children}
       </div>
     </div>
@@ -576,13 +623,21 @@ function IssueCard({ issue }: { issue: ATSIssue }) {
               >
                 {issue.severity}
               </span>
-              <span className="text-xs text-muted-foreground">{issue.category}</span>
+              <span className="text-xs text-muted-foreground">
+                {issue.category}
+              </span>
             </div>
-            <h4 className="mb-1 text-sm font-semibold text-foreground">{issue.issue}</h4>
+            <h4 className="mb-1 text-sm font-semibold text-foreground">
+              {issue.issue}
+            </h4>
             <p className="mb-2 text-xs text-muted-foreground">{issue.impact}</p>
           </div>
           <span className="self-end rounded p-1 transition-colors hover:bg-white/8 sm:self-auto">
-            {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            {expanded ? (
+              <ChevronUp className="h-4 w-4" />
+            ) : (
+              <ChevronDown className="h-4 w-4" />
+            )}
           </span>
         </div>
       </button>
@@ -590,12 +645,18 @@ function IssueCard({ issue }: { issue: ATSIssue }) {
       {expanded && (
         <div className="mt-3 space-y-2 border-t border-white/8 pt-3">
           <div>
-            <p className="mb-1 text-xs font-semibold text-foreground">How to Fix:</p>
+            <p className="mb-1 text-xs font-semibold text-foreground">
+              How to Fix:
+            </p>
             <p className="text-xs text-muted-foreground">{issue.howToFix}</p>
           </div>
           <div>
-            <p className="mb-1 text-xs font-semibold text-foreground">Example:</p>
-            <div className="rounded bg-black/12 p-2 font-mono text-xs text-muted-foreground">{issue.example}</div>
+            <p className="mb-1 text-xs font-semibold text-foreground">
+              Example:
+            </p>
+            <div className="rounded bg-black/12 p-2 font-mono text-xs text-muted-foreground">
+              {issue.example}
+            </div>
           </div>
         </div>
       )}
@@ -623,18 +684,26 @@ function RecommendationCard({ rec }: { rec: ATSRecommendation }) {
                 {rec.priority} Priority
               </span>
             </div>
-            <h4 className="mb-1 text-sm font-semibold text-foreground">{rec.action}</h4>
+            <h4 className="mb-1 text-sm font-semibold text-foreground">
+              {rec.action}
+            </h4>
             <p className="text-xs text-muted-foreground">{rec.benefit}</p>
           </div>
           <span className="self-end rounded p-1 transition-colors hover:bg-white/8 sm:self-auto">
-            {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            {expanded ? (
+              <ChevronUp className="h-4 w-4" />
+            ) : (
+              <ChevronDown className="h-4 w-4" />
+            )}
           </span>
         </div>
       </button>
 
       {expanded && (
-          <div className="mt-3 border-t border-white/8 pt-3">
-          <p className="mb-1 text-xs font-semibold text-foreground">Implementation:</p>
+        <div className="mt-3 border-t border-white/8 pt-3">
+          <p className="mb-1 text-xs font-semibold text-foreground">
+            Implementation:
+          </p>
           <p className="text-xs text-muted-foreground">{rec.implementation}</p>
         </div>
       )}
@@ -657,7 +726,10 @@ function SectionBreakdown({
         const isExpanded = expandedMetric === section.id
 
         return (
-          <div key={section.id} className="min-w-0 overflow-hidden rounded-lg border border-white/8 bg-black/10">
+          <div
+            key={section.id}
+            className="min-w-0 overflow-hidden rounded-lg border border-white/8 bg-black/10"
+          >
             <button
               type="button"
               onClick={() => setExpandedMetric(isExpanded ? null : section.id)}
@@ -667,38 +739,58 @@ function SectionBreakdown({
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0 flex-1">
                   <div className="flex min-w-0 flex-wrap items-center gap-2">
-                    <span className="min-w-0 break-words text-sm font-medium text-foreground sm:truncate">{section.title}</span>
+                    <span className="min-w-0 break-words text-sm font-medium text-foreground sm:truncate">
+                      {section.title}
+                    </span>
                     <span
                       className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${getSectionStatusColor(section.status)}`}
                     >
                       {getSectionStatusLabel(section.status)}
                     </span>
                   </div>
-                  <div className="mt-1 line-clamp-2 text-xs text-muted-foreground break-words">{section.diagnosis}</div>
+                  <div className="mt-1 line-clamp-2 text-xs text-muted-foreground break-words">
+                    {section.diagnosis}
+                  </div>
                 </div>
                 <div className="flex w-full shrink-0 items-center justify-between gap-3 sm:w-auto sm:justify-start">
-                  <span className={`text-sm font-bold ${getScoreColor(section.score)}`}>{section.score}%</span>
-                  <span className={`transition-transform ${isExpanded ? "rotate-90" : ""}`}>
+                  <span
+                    className={`text-sm font-bold ${getScoreColor(section.score)}`}
+                  >
+                    {section.score}%
+                  </span>
+                  <span
+                    className={`transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                  >
                     <ChevronDown className="h-4 w-4 text-muted-foreground" />
                   </span>
                 </div>
               </div>
               <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
-                <div className={`h-full transition-all ${getBarColor(section.score)}`} style={{ width: `${section.score}%` }} />
+                <div
+                  className={`h-full transition-all ${getBarColor(section.score)}`}
+                  style={{ width: `${section.score}%` }}
+                />
               </div>
             </button>
 
             {isExpanded && (
               <div className="min-w-0 px-3 pb-3 pt-0">
                 <div className="min-w-0 space-y-3 border-t border-white/10 pt-3">
-                  <p className="text-xs text-muted-foreground break-words">{section.diagnosis}</p>
+                  <p className="text-xs text-muted-foreground break-words">
+                    {section.diagnosis}
+                  </p>
 
                   {section.whatWorks.length > 0 && (
                     <div>
-                      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-green-400">What&apos;s Working</p>
+                      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-green-400">
+                        What&apos;s Working
+                      </p>
                       <ul className="space-y-1">
                         {section.whatWorks.map((item, idx) => (
-                          <li key={idx} className="flex items-start gap-2 text-xs text-muted-foreground">
+                          <li
+                            key={idx}
+                            className="flex items-start gap-2 text-xs text-muted-foreground"
+                          >
                             <span className="mt-0.5 text-green-500">•</span>
                             <span className="break-words">{item}</span>
                           </li>
@@ -709,10 +801,15 @@ function SectionBreakdown({
 
                   {section.gaps.length > 0 && (
                     <div>
-                      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-yellow-400">Gaps</p>
+                      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-yellow-400">
+                        Gaps
+                      </p>
                       <ul className="space-y-1">
                         {section.gaps.map((item, idx) => (
-                          <li key={idx} className="flex items-start gap-2 text-xs text-muted-foreground">
+                          <li
+                            key={idx}
+                            className="flex items-start gap-2 text-xs text-muted-foreground"
+                          >
                             <span className="mt-0.5 text-yellow-500">•</span>
                             <span className="break-words">{item}</span>
                           </li>
@@ -723,10 +820,15 @@ function SectionBreakdown({
 
                   {section.actions.length > 0 && (
                     <div>
-                      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-primary">How to Improve</p>
+                      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-primary">
+                        How to Improve
+                      </p>
                       <ul className="space-y-1">
                         {section.actions.map((item, idx) => (
-                          <li key={idx} className="flex items-start gap-2 text-xs text-muted-foreground">
+                          <li
+                            key={idx}
+                            className="flex items-start gap-2 text-xs text-muted-foreground"
+                          >
                             <span className="mt-0.5 text-primary">•</span>
                             <span className="break-words">{item}</span>
                           </li>
@@ -748,17 +850,28 @@ function DebugSectionCard({ section }: { section: ATSDebugSection }) {
   return (
     <div className="rounded-lg border border-white/8 bg-black/10 p-3 sm:p-4">
       <div className="mb-3">
-        <h3 className="text-sm font-semibold text-foreground">{section.title}</h3>
+        <h3 className="text-sm font-semibold text-foreground">
+          {section.title}
+        </h3>
         <p className="mt-1 text-xs text-muted-foreground">{section.summary}</p>
       </div>
-        <div className="space-y-2">
+      <div className="space-y-2">
         {section.items.map((item) => (
-          <div key={`${section.id}-${item.label}`} className="rounded-lg border border-white/8 bg-black/10 p-3">
+          <div
+            key={`${section.id}-${item.label}`}
+            className="rounded-lg border border-white/8 bg-black/10 p-3"
+          >
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-semibold uppercase tracking-wide text-foreground">{item.label}</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-foreground">
+                  {item.label}
+                </p>
                 <p className="mt-1 text-sm text-foreground">{item.detail}</p>
-                {item.suggestion ? <p className="mt-2 text-xs text-muted-foreground">{item.suggestion}</p> : null}
+                {item.suggestion ? (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {item.suggestion}
+                  </p>
+                ) : null}
               </div>
               <span
                 className={`self-end shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide sm:self-auto ${getDebugSeverityClasses(item.severity)}`}
@@ -781,9 +894,15 @@ function ATSScorePanelComponent({
   canUseAiInsights,
   onUpgradeToPro,
 }: ATSScorePanelProps) {
-  const [activeTab, setActiveTab] = useState<"overview" | "insights">("overview")
-  const [activeOverviewDebug, setActiveOverviewDebug] = useState<string | null>(null)
-  const [activeInsightView, setActiveInsightView] = useState<"sections" | "keywords" | "issues" | "tips">("sections")
+  const [activeTab, setActiveTab] = useState<"overview" | "insights">(
+    "overview"
+  )
+  const [activeOverviewDebug, setActiveOverviewDebug] = useState<string | null>(
+    null
+  )
+  const [activeInsightView, setActiveInsightView] = useState<
+    "sections" | "keywords" | "issues" | "tips"
+  >("sections")
   const [expandedMetric, setExpandedMetric] = useState<string | null>(null)
   const [isScoreVisible, setIsScoreVisible] = useState(false)
 
@@ -812,7 +931,11 @@ function ATSScorePanelComponent({
 
   const activeDebugSection = useMemo(() => {
     if (!scoreData?.debugAnalysis?.length) return null
-    return scoreData.debugAnalysis.find((section) => section.id === activeOverviewDebug) || scoreData.debugAnalysis[0]
+    return (
+      scoreData.debugAnalysis.find(
+        (section) => section.id === activeOverviewDebug
+      ) || scoreData.debugAnalysis[0]
+    )
   }, [activeOverviewDebug, scoreData])
 
   if (isLoading) {
@@ -823,19 +946,23 @@ function ATSScorePanelComponent({
     return (
       <div className="h-full flex flex-col items-center justify-center p-4 text-center sm:p-6">
         <FileSearch className="w-16 h-16 text-muted-foreground mb-4" />
-        <h3 className="text-lg font-semibold text-foreground mb-2">No ATS Score Yet</h3>
+        <h3 className="text-lg font-semibold text-foreground mb-2">
+          No ATS Score Yet
+        </h3>
         <p className="text-muted-foreground text-sm max-w-md">
-          Enter your resume and job description, then click &quot;Get ATS Score&quot; to receive a comprehensive analysis.
+          Enter your resume and job description, then click &quot;Get ATS
+          Score&quot; to receive a comprehensive analysis.
         </p>
       </div>
     )
   }
 
   const data = scoreData
-  const isResumeOnly = data.analysisMode === "resume-only"
   const hasKeywordAnalysis = data.keywordAnalysis !== null
   const hasTargetRoleScore = data.targetRoleScore !== null
-  const primaryScore = hasTargetRoleScore ? (data.targetRoleScore ?? 0) : data.resumeQualityScore
+  const primaryScore = hasTargetRoleScore
+    ? (data.targetRoleScore ?? 0)
+    : data.resumeQualityScore
 
   return (
     <div
@@ -850,13 +977,19 @@ function ATSScorePanelComponent({
               <Target className="h-5 w-5 text-primary" />
               ATS Score Analysis
             </h2>
-            <p className="text-sm text-muted-foreground">Comprehensive resume evaluation</p>
+            <p className="text-sm text-muted-foreground">
+              Comprehensive resume evaluation
+            </p>
           </div>
           <div className="flex w-full shrink-0 items-center justify-between rounded-xl border border-white/8 bg-black/10 px-3 py-2 sm:w-auto sm:justify-start sm:gap-3 sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0">
-            <div className={`text-3xl font-bold leading-none sm:text-4xl ${getScoreColor(primaryScore)}`}>
+            <div
+              className={`text-3xl font-bold leading-none sm:text-4xl ${getScoreColor(primaryScore)}`}
+            >
               {primaryScore}
             </div>
-            <div className={`rounded-full border px-3 py-1 text-xs font-semibold ${getRatingBadgeColor(primaryScore)}`}>
+            <div
+              className={`rounded-full border px-3 py-1 text-xs font-semibold ${getRatingBadgeColor(primaryScore)}`}
+            >
               {data.rating}
             </div>
           </div>
@@ -864,7 +997,11 @@ function ATSScorePanelComponent({
       </div>
 
       <div className="scrollbar-dark mb-3 flex min-w-0 flex-shrink-0 gap-2 overflow-x-auto pb-1">
-        <PillButton active={activeTab === "overview"} label="Overview" onClick={() => setActiveTab("overview")} />
+        <PillButton
+          active={activeTab === "overview"}
+          label="Overview"
+          onClick={() => setActiveTab("overview")}
+        />
         {hasLoadedAIInsights ? (
           <PillButton
             active={activeTab === "insights"}
@@ -880,7 +1017,9 @@ function ATSScorePanelComponent({
             variant="outline"
             className="h-9 rounded-full border-white/8 bg-black/12 px-3 text-xs whitespace-nowrap text-muted-foreground/90 disabled:cursor-default disabled:opacity-100 sm:px-4 sm:text-sm"
           >
-            <Lightbulb className={`h-4 w-4 ${isLoadingInsights ? "animate-pulse" : ""}`} />
+            <Lightbulb
+              className={`h-4 w-4 ${isLoadingInsights ? "animate-pulse" : ""}`}
+            />
             {isLoadingInsights ? "AI Insights Loading..." : "AI Insights"}
           </Button>
         ) : (
@@ -904,41 +1043,68 @@ function ATSScorePanelComponent({
               <div className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2">
                 <div className="min-w-0 overflow-hidden rounded-xl border border-white/8 bg-black/10 p-3">
                   <div className="flex items-start justify-between gap-3">
-                    <div className="text-xs text-muted-foreground">Resume ATS Score</div>
-                    <div className={`text-2xl font-bold leading-none ${getScoreColor(data.resumeQualityScore)}`}>
+                    <div className="text-xs text-muted-foreground">
+                      Resume ATS Score
+                    </div>
+                    <div
+                      className={`text-2xl font-bold leading-none ${getScoreColor(data.resumeQualityScore)}`}
+                    >
                       {data.resumeQualityScore}
                     </div>
                   </div>
-                  <div className="mt-2 text-[11px] text-muted-foreground">How strong your resume is on its own</div>
+                  <div className="mt-2 text-[11px] text-muted-foreground">
+                    How strong your resume is on its own
+                  </div>
                   <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
-                    <div className={`h-full transition-all ${getBarColor(data.resumeQualityScore)}`} style={{ width: `${data.resumeQualityScore}%` }} />
+                    <div
+                      className={`h-full transition-all ${getBarColor(data.resumeQualityScore)}`}
+                      style={{ width: `${data.resumeQualityScore}%` }}
+                    />
                   </div>
                 </div>
 
                 <div className="min-w-0 overflow-hidden rounded-xl border border-primary/15 bg-black/10 p-3">
                   <div className="flex items-start justify-between gap-3">
-                    <div className="text-xs text-muted-foreground">Target Role Score</div>
-                    <div className={`text-2xl font-bold leading-none ${getScoreColor(data.targetRoleScore || 0)}`}>
+                    <div className="text-xs text-muted-foreground">
+                      Target Role Score
+                    </div>
+                    <div
+                      className={`text-2xl font-bold leading-none ${getScoreColor(data.targetRoleScore || 0)}`}
+                    >
                       {data.targetRoleScore}
                     </div>
                   </div>
-                  <div className="mt-2 text-[11px] text-muted-foreground">How well the resume fits this job description</div>
+                  <div className="mt-2 text-[11px] text-muted-foreground">
+                    How well the resume fits this job description
+                  </div>
                   <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
-                    <div className={`h-full transition-all ${getBarColor(data.targetRoleScore || 0)}`} style={{ width: `${data.targetRoleScore || 0}%` }} />
+                    <div
+                      className={`h-full transition-all ${getBarColor(data.targetRoleScore || 0)}`}
+                      style={{ width: `${data.targetRoleScore || 0}%` }}
+                    />
                   </div>
                 </div>
               </div>
             ) : (
               <div className="min-w-0 overflow-hidden rounded-xl border border-white/8 bg-black/10 p-3">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="text-xs text-muted-foreground">Resume ATS Score</div>
-                  <div className={`text-2xl font-bold leading-none ${getScoreColor(data.resumeQualityScore)}`}>
+                  <div className="text-xs text-muted-foreground">
+                    Resume ATS Score
+                  </div>
+                  <div
+                    className={`text-2xl font-bold leading-none ${getScoreColor(data.resumeQualityScore)}`}
+                  >
                     {data.resumeQualityScore}
                   </div>
                 </div>
-                <div className="mt-2 text-[11px] text-muted-foreground">Standalone ATS strength of the uploaded resume</div>
+                <div className="mt-2 text-[11px] text-muted-foreground">
+                  Standalone ATS strength of the uploaded resume
+                </div>
                 <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
-                  <div className={`h-full transition-all ${getBarColor(data.resumeQualityScore)}`} style={{ width: `${data.resumeQualityScore}%` }} />
+                  <div
+                    className={`h-full transition-all ${getBarColor(data.resumeQualityScore)}`}
+                    style={{ width: `${data.resumeQualityScore}%` }}
+                  />
                 </div>
               </div>
             )}
@@ -951,7 +1117,10 @@ function ATSScorePanelComponent({
                 </h3>
                 <ul className="space-y-2">
                   {data.keyFindings.strengths.map((strength, idx) => (
-                    <li key={idx} className="min-w-0 flex items-start gap-2 text-xs text-muted-foreground">
+                    <li
+                      key={idx}
+                      className="min-w-0 flex items-start gap-2 text-xs text-muted-foreground"
+                    >
                       <span className="mt-0.5 text-green-500">•</span>
                       <span className="break-words">{strength}</span>
                     </li>
@@ -966,7 +1135,10 @@ function ATSScorePanelComponent({
                 </h3>
                 <ul className="space-y-2">
                   {data.keyFindings.weaknesses.map((weakness, idx) => (
-                    <li key={idx} className="min-w-0 flex items-start gap-2 text-xs text-muted-foreground">
+                    <li
+                      key={idx}
+                      className="min-w-0 flex items-start gap-2 text-xs text-muted-foreground"
+                    >
                       <span className="mt-0.5 text-red-500">•</span>
                       <span className="break-words">{weakness}</span>
                     </li>
@@ -986,21 +1158,22 @@ function ATSScorePanelComponent({
                       Scorer Debug
                     </h3>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Deterministic checks from the local ATS scorer for this specific resume.
+                      Deterministic checks from the local ATS scorer for this
+                      specific resume.
                     </p>
                   </div>
                 </div>
                 <div className="mb-4">
                   <SubnavRow>
-                  {data.debugAnalysis.map((section) => (
-                    <SubPillButton
-                      key={section.id}
-                      active={activeDebugSection.id === section.id}
-                      label={section.title}
-                      onClick={() => setActiveOverviewDebug(section.id)}
-                      badge={section.items.length}
-                    />
-                  ))}
+                    {data.debugAnalysis.map((section) => (
+                      <SubPillButton
+                        key={section.id}
+                        active={activeDebugSection.id === section.id}
+                        label={section.title}
+                        onClick={() => setActiveOverviewDebug(section.id)}
+                        badge={section.items.length}
+                      />
+                    ))}
                   </SubnavRow>
                 </div>
                 <DebugSectionCard section={activeDebugSection} />
@@ -1016,10 +1189,17 @@ function ATSScorePanelComponent({
                       Get AI ATS Insights with Pro
                     </h3>
                     <p className="mt-1 text-xs leading-5 text-sky-100/75">
-                      Upgrade to Pro for section breakdowns, issue prioritization, and AI recommendations.
+                      Upgrade to Pro for section breakdowns, issue
+                      prioritization, and AI recommendations.
                     </p>
                   </div>
-                  <Button type="button" size="sm" variant="outline" className="rounded-full border-sky-400/25 bg-black/20 text-sky-50 hover:bg-black/30" onClick={onUpgradeToPro}>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="rounded-full border-sky-400/25 bg-black/20 text-sky-50 hover:bg-black/30"
+                    onClick={onUpgradeToPro}
+                  >
                     View Plans
                   </Button>
                 </div>
@@ -1031,12 +1211,30 @@ function ATSScorePanelComponent({
         {activeTab === "insights" && hasLoadedAIInsights && (
           <div className="space-y-4">
             <SubnavRow>
-              <SubPillButton active={activeInsightView === "sections"} label="Section Breakdown" onClick={() => setActiveInsightView("sections")} />
+              <SubPillButton
+                active={activeInsightView === "sections"}
+                label="Section Breakdown"
+                onClick={() => setActiveInsightView("sections")}
+              />
               {hasKeywordAnalysis ? (
-                <SubPillButton active={activeInsightView === "keywords"} label="Keyword Analysis" onClick={() => setActiveInsightView("keywords")} />
+                <SubPillButton
+                  active={activeInsightView === "keywords"}
+                  label="Keyword Analysis"
+                  onClick={() => setActiveInsightView("keywords")}
+                />
               ) : null}
-              <SubPillButton active={activeInsightView === "issues"} label="Issues" onClick={() => setActiveInsightView("issues")} badge={data.detailedIssues.length} />
-              <SubPillButton active={activeInsightView === "tips"} label="Tips" onClick={() => setActiveInsightView("tips")} badge={data.recommendations.length} />
+              <SubPillButton
+                active={activeInsightView === "issues"}
+                label="Issues"
+                onClick={() => setActiveInsightView("issues")}
+                badge={data.detailedIssues.length}
+              />
+              <SubPillButton
+                active={activeInsightView === "tips"}
+                label="Tips"
+                onClick={() => setActiveInsightView("tips")}
+                badge={data.recommendations.length}
+              />
             </SubnavRow>
 
             {activeInsightView === "sections" && (
@@ -1047,70 +1245,105 @@ function ATSScorePanelComponent({
               />
             )}
 
-            {activeInsightView === "keywords" && hasKeywordAnalysis && data.keywordAnalysis && (
-              <div className="space-y-4">
-                <div className="rounded-lg border border-white/8 bg-black/10 p-4">
-                  <h3 className="mb-3 text-sm font-semibold text-foreground">Keyword Analysis</h3>
-                  <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <div>
-                      <p className="mb-1 text-xs text-muted-foreground">Match Rate</p>
-                      <p className="text-2xl font-bold text-foreground">{data.keywordAnalysis.matchPercentage.toFixed(1)}%</p>
-                      <p className="text-xs text-muted-foreground">
-                        {data.keywordAnalysis.matchedKeywords} of {data.keywordAnalysis.totalKeywordsInJD} keywords
-                      </p>
+            {activeInsightView === "keywords" &&
+              hasKeywordAnalysis &&
+              data.keywordAnalysis && (
+                <div className="space-y-4">
+                  <div className="rounded-lg border border-white/8 bg-black/10 p-4">
+                    <h3 className="mb-3 text-sm font-semibold text-foreground">
+                      Keyword Analysis
+                    </h3>
+                    <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <div>
+                        <p className="mb-1 text-xs text-muted-foreground">
+                          Match Rate
+                        </p>
+                        <p className="text-2xl font-bold text-foreground">
+                          {data.keywordAnalysis.matchPercentage.toFixed(1)}%
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {data.keywordAnalysis.matchedKeywords} of{" "}
+                          {data.keywordAnalysis.totalKeywordsInJD} keywords
+                        </p>
+                      </div>
+                      <div>
+                        <p className="mb-1 text-xs text-muted-foreground">
+                          Keyword Density
+                        </p>
+                        <p className="text-2xl font-bold text-foreground">
+                          {data.keywordAnalysis.keywordDensity.toFixed(1)}%
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Target: 2-4%
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="mb-1 text-xs text-muted-foreground">Keyword Density</p>
-                      <p className="text-2xl font-bold text-foreground">{data.keywordAnalysis.keywordDensity.toFixed(1)}%</p>
-                      <p className="text-xs text-muted-foreground">Target: 2-4%</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div className="rounded-lg border border-white/8 bg-black/10 p-4">
+                      <h3 className="mb-3 text-sm font-semibold text-green-400">
+                        Present Keywords
+                      </h3>
+                      <div className="flex flex-wrap gap-2">
+                        {data.keyFindings.presentKeywords?.map((kw, idx) => (
+                          <span
+                            key={idx}
+                            className="rounded border border-green-500/30 bg-green-500/20 px-2 py-1 text-xs text-green-400"
+                          >
+                            {kw}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border border-white/8 bg-black/10 p-4">
+                      <h3 className="mb-3 text-sm font-semibold text-red-400">
+                        Missing Keywords
+                      </h3>
+                      <div className="flex flex-wrap gap-2">
+                        {data.keyFindings.missingKeywords?.map((kw, idx) => (
+                          <span
+                            key={idx}
+                            className="rounded border border-red-500/30 bg-red-500/20 px-2 py-1 text-xs text-red-400"
+                          >
+                            {kw}
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>
-
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div className="rounded-lg border border-white/8 bg-black/10 p-4">
-                    <h3 className="mb-3 text-sm font-semibold text-green-400">Present Keywords</h3>
-                    <div className="flex flex-wrap gap-2">
-                      {data.keyFindings.presentKeywords?.map((kw, idx) => (
-                        <span key={idx} className="rounded border border-green-500/30 bg-green-500/20 px-2 py-1 text-xs text-green-400">
-                          {kw}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="rounded-lg border border-white/8 bg-black/10 p-4">
-                    <h3 className="mb-3 text-sm font-semibold text-red-400">Missing Keywords</h3>
-                    <div className="flex flex-wrap gap-2">
-                      {data.keyFindings.missingKeywords?.map((kw, idx) => (
-                        <span key={idx} className="rounded border border-red-500/30 bg-red-500/20 px-2 py-1 text-xs text-red-400">
-                          {kw}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
+              )}
 
             {activeInsightView === "issues" && (
               <div className="space-y-3">
-                <h3 className="text-sm font-semibold text-foreground">Issues</h3>
+                <h3 className="text-sm font-semibold text-foreground">
+                  Issues
+                </h3>
                 {data.detailedIssues.length === 0 ? (
                   <div className="py-8 text-center">
                     <CheckCircle2 className="mx-auto mb-3 h-12 w-12 text-green-500" />
-                    <p className="font-medium text-foreground">No major issues found</p>
-                    <p className="text-sm text-muted-foreground">Your resume looks good.</p>
+                    <p className="font-medium text-foreground">
+                      No major issues found
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Your resume looks good.
+                    </p>
                   </div>
                 ) : (
-                  data.detailedIssues.map((issue, idx) => <IssueCard key={idx} issue={issue} />)
+                  data.detailedIssues.map((issue, idx) => (
+                    <IssueCard key={idx} issue={issue} />
+                  ))
                 )}
               </div>
             )}
 
             {activeInsightView === "tips" && (
               <div className="space-y-3">
-                <h3 className="text-sm font-semibold text-foreground">Tips And Fixes</h3>
+                <h3 className="text-sm font-semibold text-foreground">
+                  Tips And Fixes
+                </h3>
                 {data.recommendations.map((rec, idx) => (
                   <RecommendationCard key={idx} rec={rec} />
                 ))}

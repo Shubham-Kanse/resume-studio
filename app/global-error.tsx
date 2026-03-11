@@ -1,9 +1,10 @@
 "use client"
 
 import { useEffect } from "react"
+
 import { ErrorFallback } from "@/components/error-fallback"
-import { getUserFacingMessage } from "@/lib/errors"
 import { reportClientError } from "@/lib/error-monitoring"
+import { getUserFacingMessage } from "@/lib/errors"
 
 export default function GlobalError({
   error,

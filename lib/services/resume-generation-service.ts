@@ -1,4 +1,6 @@
 import { z } from "zod"
+
+import { AppError } from "@/lib/errors"
 import {
   createGroqChatCompletion,
   getGroqApiKey,
@@ -7,7 +9,11 @@ import {
   type GroqChatCompletionResponse,
 } from "@/lib/groq"
 import { verifyAndRepairLatex } from "@/lib/latex-generation"
-import { buildKnowledgePrompt, buildSystemPrompt, buildUserPrompt } from "@/lib/llm-context"
+import {
+  buildKnowledgePrompt,
+  buildSystemPrompt,
+  buildUserPrompt,
+} from "@/lib/llm-context"
 
 export const generateResumeSchema = z.object({
   jobDescription: z
@@ -35,7 +41,9 @@ function parseMaxTokens(value: string | undefined, fallback: number) {
 
 function stripCodeFences(text: string) {
   let cleaned = text.trim()
-  const fencedMatch = cleaned.match(/^```(?:latex|tex)?\s*\n?([\s\S]*?)\n?```$/i)
+  const fencedMatch = cleaned.match(
+    /^```(?:latex|tex)?\s*\n?([\s\S]*?)\n?```$/i
+  )
   if (fencedMatch?.[1]) return fencedMatch[1].trim()
   if (cleaned.startsWith("```latex")) cleaned = cleaned.slice(8).trim()
   else if (cleaned.startsWith("```tex")) cleaned = cleaned.slice(6).trim()
@@ -44,7 +52,9 @@ function stripCodeFences(text: string) {
   return cleaned
 }
 
-export async function generateResume(input: z.infer<typeof generateResumeSchema>) {
+export async function generateResume(
+  input: z.infer<typeof generateResumeSchema>
+) {
   getGroqApiKey()
 
   const systemPrompt = buildSystemPrompt()
@@ -79,9 +89,16 @@ export async function generateResume(input: z.infer<typeof generateResumeSchema>
   let latex = message?.content || ""
 
   if (!latex) {
-    throw new Error(
-      `Model ${model} returned no LaTeX. Increase GROQ_MAX_TOKENS or use a different model.`
-    )
+    throw new AppError("Model returned no LaTeX.", {
+      code: "UPSTREAM_ERROR",
+      status: 502,
+      userMessage:
+        "The AI model returned an empty resume. Please try again shortly.",
+      retryable: true,
+      details: {
+        model,
+      },
+    })
   }
 
   latex = stripCodeFences(latex)

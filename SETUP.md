@@ -29,6 +29,7 @@ POLAR_SERVER=sandbox
 ```
 
 Optional settings:
+
 ```bash
 # Use a different model (default: deepseek/deepseek-chat)
 OPENROUTER_MODEL=anthropic/claude-3-5-sonnet
@@ -38,6 +39,7 @@ NEXT_PUBLIC_APP_URL=https://your-domain.com
 ```
 
 Supabase is optional for guests. If you want Google login and saved history:
+
 1. Create a free Supabase project
 2. In Supabase, enable the Google provider under Authentication > Providers
 3. Add your local and production redirect URLs under Authentication > URL Configuration
@@ -67,16 +69,19 @@ Open [http://localhost:3000](http://localhost:3000)
 ## Troubleshooting
 
 ### "API key not configured"
+
 - Make sure `.env.local` exists in the root directory
 - Verify the key starts with `sk-or-v1-`
 - Restart the dev server after creating `.env.local`
 
 ### "Failed to generate resume"
+
 - Check your OpenRouter account has credits
 - Try a different model (e.g., `deepseek/deepseek-chat` is cheaper)
 - Check the browser console for detailed errors
 
 ### PDF preview not working
+
 - The LaTeX compilation service may be temporarily down
 - Try downloading the .tex file and compiling locally
 - Check for LaTeX syntax errors in the "Edit LaTeX" tab
@@ -90,6 +95,7 @@ Open [http://localhost:3000](http://localhost:3000)
 ## Available Models
 
 Popular models on OpenRouter:
+
 - `deepseek/deepseek-chat` (fast, cheap, recommended)
 - `anthropic/claude-3-5-sonnet` (high quality)
 - `openai/gpt-4o` (balanced)

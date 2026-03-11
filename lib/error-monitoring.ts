@@ -3,7 +3,10 @@ import { getUserFacingMessage, normalizeError } from "@/lib/errors"
 function redactMessage(message: string) {
   return message
     .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[REDACTED_EMAIL]")
-    .replace(/\b(?:https?:\/\/)?(?:www\.)?linkedin\.com\/[^\s)]+/gi, "[REDACTED_LINKEDIN]")
+    .replace(
+      /\b(?:https?:\/\/)?(?:www\.)?linkedin\.com\/[^\s)]+/gi,
+      "[REDACTED_LINKEDIN]"
+    )
     .replace(/\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b/g, "[REDACTED_PHONE]")
 }
 

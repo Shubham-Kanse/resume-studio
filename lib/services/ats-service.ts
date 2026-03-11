@@ -1,19 +1,38 @@
 import { z } from "zod"
+
+import { buildEvidenceSummary } from "@/lib/ats-evidence"
 import { filterUnsupportedFeedback } from "@/lib/ats-feedback"
 import { documentArtifactsSchema } from "@/lib/document-artifacts"
-import { buildEvidenceSummary } from "@/lib/ats-evidence"
-import { createGroqChatCompletion, getGroqModel, GroqApiError } from "@/lib/groq"
+import { reportServerError } from "@/lib/error-monitoring"
+import { AppError } from "@/lib/errors"
+import {
+  createGroqChatCompletion,
+  getGroqModel,
+  GroqApiError,
+} from "@/lib/groq"
 import {
   buildATSKnowledgePrompt,
   buildATSSystemPrompt,
   buildATSUserPrompt,
 } from "@/lib/llm-context"
-import { scoreResumeDeterministically, type DeterministicATSResult } from "@/lib/local-ats-scorer"
-import type { ATSIssue, ATSRecommendation, ATSScoreResponse, ATSSectionReview } from "@/lib/ats-types"
-import { reportServerError } from "@/lib/error-monitoring"
+import {
+  scoreResumeDeterministically,
+  type DeterministicATSResult,
+} from "@/lib/local-ats-scorer"
+import type {
+  ATSIssue,
+  ATSRecommendation,
+  ATSScoreResponse,
+  ATSSectionReview,
+} from "@/types/ats"
 
 export const atsScoreSchema = z.object({
-  jobDescription: z.string().trim().max(30000, "Job description is too long.").optional().default(""),
+  jobDescription: z
+    .string()
+    .trim()
+    .max(30000, "Job description is too long.")
+    .optional()
+    .default(""),
   resumeContent: z
     .string()
     .trim()
@@ -22,7 +41,10 @@ export const atsScoreSchema = z.object({
   extractionArtifacts: documentArtifactsSchema.nullish().default(null),
 })
 
-type NarrativeSectionReview = Pick<ATSSectionReview, "id" | "diagnosis" | "whatWorks" | "gaps" | "actions">
+type NarrativeSectionReview = Pick<
+  ATSSectionReview,
+  "id" | "diagnosis" | "whatWorks" | "gaps" | "actions"
+>
 
 interface ATSNarrativeResponse {
   keyFindings: {
@@ -66,7 +88,12 @@ function extractJsonObject(text: string) {
   const start = cleaned.indexOf("{")
   const end = cleaned.lastIndexOf("}")
   if (start === -1 || end === -1 || end <= start) {
-    throw new Error("ATS model returned invalid JSON")
+    throw new AppError("ATS model returned invalid JSON", {
+      code: "UPSTREAM_ERROR",
+      status: 502,
+      userMessage: "AI ATS insights returned an invalid response.",
+      retryable: true,
+    })
   }
   return cleaned.slice(start, end + 1)
 }
@@ -74,6 +101,16 @@ function extractJsonObject(text: string) {
 function toStringArray(value: unknown) {
   if (!Array.isArray(value)) return []
   return value.map((item) => String(item).trim()).filter(Boolean)
+}
+
+function toRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : {}
+}
+
+function toRecordArray(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value) ? value.map((item) => toRecord(item)) : []
 }
 
 function toPublicResponse(result: DeterministicATSResult): ATSScoreResponse {
@@ -85,7 +122,7 @@ function toPublicResponse(result: DeterministicATSResult): ATSScoreResponse {
 }
 
 function sanitizeNarrativeResponse(data: unknown): ATSNarrativeResponse {
-  const obj = (data && typeof data === "object" ? data : {}) as Record<string, any>
+  const obj = toRecord(data)
   const allowedIds = new Set<ATSSectionReview["id"]>([
     "professionalSummary",
     "workExperience",
@@ -97,43 +134,55 @@ function sanitizeNarrativeResponse(data: unknown): ATSNarrativeResponse {
 
   return {
     keyFindings: {
-      strengths: toStringArray(obj.keyFindings?.strengths).slice(0, 6),
-      weaknesses: toStringArray(obj.keyFindings?.weaknesses).slice(0, 6),
+      strengths: toStringArray(toRecord(obj.keyFindings).strengths).slice(0, 6),
+      weaknesses: toStringArray(toRecord(obj.keyFindings).weaknesses).slice(
+        0,
+        6
+      ),
     },
-    detailedIssues: Array.isArray(obj.detailedIssues)
-      ? obj.detailedIssues.slice(0, 8).map((issue: any) => ({
-          severity: ["critical", "high", "medium", "low"].includes(issue?.severity) ? issue.severity : "medium",
-          category: String(issue?.category || "General"),
-          issue: String(issue?.issue || "Issue not provided"),
-          impact: String(issue?.impact || "Impact not provided"),
-          howToFix: String(issue?.howToFix || "Fix not provided"),
-          example: String(issue?.example || "No example provided"),
-        }))
-      : [],
-    recommendations: Array.isArray(obj.recommendations)
-      ? obj.recommendations.slice(0, 6).map((rec: any) => ({
-          priority: ["high", "medium", "low"].includes(rec?.priority) ? rec.priority : "medium",
-          action: String(rec?.action || "Improve resume alignment"),
-          benefit: String(rec?.benefit || "Stronger ATS and recruiter performance"),
-          implementation: String(rec?.implementation || "Revise the relevant section with stronger evidence."),
-        }))
-      : [],
-    sectionReviews: Array.isArray(obj.sectionReviews)
-      ? obj.sectionReviews
-          .slice(0, 6)
-          .map((section: any) => {
-            const id = String(section?.id || "") as ATSSectionReview["id"]
-            if (!allowedIds.has(id)) return null
-            return {
-              id,
-              diagnosis: String(section?.diagnosis || ""),
-              whatWorks: toStringArray(section?.whatWorks).slice(0, 3),
-              gaps: toStringArray(section?.gaps).slice(0, 3),
-              actions: toStringArray(section?.actions).slice(0, 4),
-            } satisfies NarrativeSectionReview
-          })
-          .filter((section): section is NarrativeSectionReview => section !== null)
-      : [],
+    detailedIssues: toRecordArray(obj.detailedIssues)
+      .slice(0, 8)
+      .map((issue) => ({
+        severity: ["critical", "high", "medium", "low"].includes(
+          String(issue.severity)
+        )
+          ? (String(issue.severity) as ATSIssue["severity"])
+          : "medium",
+        category: String(issue.category || "General"),
+        issue: String(issue.issue || "Issue not provided"),
+        impact: String(issue.impact || "Impact not provided"),
+        howToFix: String(issue.howToFix || "Fix not provided"),
+        example: String(issue.example || "No example provided"),
+      })),
+    recommendations: toRecordArray(obj.recommendations)
+      .slice(0, 6)
+      .map((rec) => ({
+        priority: ["high", "medium", "low"].includes(String(rec.priority))
+          ? (String(rec.priority) as ATSRecommendation["priority"])
+          : "medium",
+        action: String(rec.action || "Improve resume alignment"),
+        benefit: String(
+          rec.benefit || "Stronger ATS and recruiter performance"
+        ),
+        implementation: String(
+          rec.implementation ||
+            "Revise the relevant section with stronger evidence."
+        ),
+      })),
+    sectionReviews: toRecordArray(obj.sectionReviews)
+      .slice(0, 6)
+      .map((section) => {
+        const id = String(section.id || "") as ATSSectionReview["id"]
+        if (!allowedIds.has(id)) return null
+        return {
+          id,
+          diagnosis: String(section.diagnosis || ""),
+          whatWorks: toStringArray(section.whatWorks).slice(0, 3),
+          gaps: toStringArray(section.gaps).slice(0, 3),
+          actions: toStringArray(section.actions).slice(0, 4),
+        } satisfies NarrativeSectionReview
+      })
+      .filter((section): section is NarrativeSectionReview => section !== null),
   }
 }
 
@@ -142,27 +191,43 @@ function mergeNarrative(
   narrative: ATSNarrativeResponse
 ): ATSScoreResponse {
   const base = toPublicResponse(deterministic)
-  const narrativeSections = new Map(narrative.sectionReviews.map((section) => [section.id, section]))
+  const narrativeSections = new Map(
+    narrative.sectionReviews.map((section) => [section.id, section])
+  )
 
   return {
     ...base,
     keyFindings: {
-      strengths: narrative.keyFindings.strengths.length ? narrative.keyFindings.strengths : base.keyFindings.strengths,
-      weaknesses: narrative.keyFindings.weaknesses.length ? narrative.keyFindings.weaknesses : base.keyFindings.weaknesses,
+      strengths: narrative.keyFindings.strengths.length
+        ? narrative.keyFindings.strengths
+        : base.keyFindings.strengths,
+      weaknesses: narrative.keyFindings.weaknesses.length
+        ? narrative.keyFindings.weaknesses
+        : base.keyFindings.weaknesses,
       missingKeywords: base.keyFindings.missingKeywords,
       presentKeywords: base.keyFindings.presentKeywords,
     },
-    detailedIssues: narrative.detailedIssues.length ? narrative.detailedIssues : base.detailedIssues,
-    recommendations: narrative.recommendations.length ? narrative.recommendations : base.recommendations,
+    detailedIssues: narrative.detailedIssues.length
+      ? narrative.detailedIssues
+      : base.detailedIssues,
+    recommendations: narrative.recommendations.length
+      ? narrative.recommendations
+      : base.recommendations,
     sectionReviews: base.sectionReviews.map((section) => {
       const narrativeSection = narrativeSections.get(section.id)
       if (!narrativeSection) return section
       return {
         ...section,
         diagnosis: narrativeSection.diagnosis || section.diagnosis,
-        whatWorks: narrativeSection.whatWorks.length ? narrativeSection.whatWorks : section.whatWorks,
-        gaps: narrativeSection.gaps.length ? narrativeSection.gaps : section.gaps,
-        actions: narrativeSection.actions.length ? narrativeSection.actions : section.actions,
+        whatWorks: narrativeSection.whatWorks.length
+          ? narrativeSection.whatWorks
+          : section.whatWorks,
+        gaps: narrativeSection.gaps.length
+          ? narrativeSection.gaps
+          : section.gaps,
+        actions: narrativeSection.actions.length
+          ? narrativeSection.actions
+          : section.actions,
       }
     }),
   }
@@ -170,10 +235,15 @@ function mergeNarrative(
 
 export async function scoreResume(input: z.infer<typeof atsScoreSchema>) {
   const deterministic = scoreResumeDeterministically(input)
-  return filterUnsupportedFeedback(toPublicResponse(deterministic), input.resumeContent)
+  return filterUnsupportedFeedback(
+    toPublicResponse(deterministic),
+    input.resumeContent
+  )
 }
 
-export async function scoreResumeWithInsights(input: z.infer<typeof atsScoreSchema>) {
+export async function scoreResumeWithInsights(
+  input: z.infer<typeof atsScoreSchema>
+) {
   const deterministic = scoreResumeDeterministically(input)
   const deterministicPayload = JSON.stringify(
     {
@@ -196,8 +266,15 @@ export async function scoreResumeWithInsights(input: z.infer<typeof atsScoreSche
   if (process.env.GROQ_API_KEY) {
     try {
       const systemPrompt = buildATSSystemPrompt()
-      const knowledgePrompt = buildATSKnowledgePrompt(input.jobDescription, input.resumeContent)
-      const userPrompt = buildATSUserPrompt(input.jobDescription, input.resumeContent, deterministicPayload)
+      const knowledgePrompt = buildATSKnowledgePrompt(
+        input.jobDescription,
+        input.resumeContent
+      )
+      const userPrompt = buildATSUserPrompt(
+        input.jobDescription,
+        input.resumeContent,
+        deterministicPayload
+      )
       const model = getGroqModel()
       const maxTokens = resolveNarrativeMaxTokens()
 
@@ -216,7 +293,10 @@ export async function scoreResumeWithInsights(input: z.infer<typeof atsScoreSche
       const content = data?.choices?.[0]?.message?.content
       if (content) {
         const parsed = JSON.parse(extractJsonObject(content))
-        finalResponse = mergeNarrative(deterministic, sanitizeNarrativeResponse(parsed))
+        finalResponse = mergeNarrative(
+          deterministic,
+          sanitizeNarrativeResponse(parsed)
+        )
       }
     } catch (error) {
       reportServerError(error, "ats-insights-narrative")

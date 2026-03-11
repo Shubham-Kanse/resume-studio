@@ -1,7 +1,17 @@
 "use client"
 
+import {
+  memo,
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
+
 import dynamic from "next/dynamic"
-import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
+
 import {
   AlertTriangle,
   Check,
@@ -14,20 +24,24 @@ import {
   Maximize2,
   Share2,
 } from "lucide-react"
+
 import { Button } from "@/components/ui/button"
-import { getUserFacingMessage } from "@/lib/errors"
+import { useDocumentActions } from "@/hooks/use-document-actions"
 import { reportClientError } from "@/lib/error-monitoring"
+import { getUserFacingMessage } from "@/lib/errors"
 import {
   AUTO_COMPILE_DELAY,
   MAX_LATEX_LENGTH,
   validateLaTeX,
 } from "@/lib/latex-editor"
-import { documentServiceClient } from "@/lib/services/gateway-client"
 import { cn } from "@/lib/utils"
 
-const PDFViewer = dynamic(() => import("@/components/pdf-viewer").then((mod) => mod.PDFViewer), {
-  loading: () => null,
-})
+const PDFViewer = dynamic(
+  () => import("@/components/pdf-viewer").then((mod) => mod.PDFViewer),
+  {
+    loading: () => null,
+  }
+)
 
 interface ResumePreviewPanelProps {
   latexContent: string
@@ -46,9 +60,13 @@ function ResumePreviewPanelComponent({
   onOpenSplitWorkspace,
   statusMessage,
 }: ResumePreviewPanelProps) {
+  const { compilePdfDownload, compilePreviewPdf } = useDocumentActions()
   const [copied, setCopied] = useState(false)
-  const [activeTab, setActiveTab] = useState<"edit" | "preview" | "info">("edit")
-  const [internalEditableLatex, setInternalEditableLatex] = useState<string>(latexContent)
+  const [activeTab, setActiveTab] = useState<"edit" | "preview" | "info">(
+    "edit"
+  )
+  const [internalEditableLatex, setInternalEditableLatex] =
+    useState<string>(latexContent)
   const [convertingToPDF, setConvertingToPDF] = useState(false)
   const [pdfError, setPdfError] = useState<string | null>(null)
   const [pdfData, setPdfData] = useState<ArrayBuffer | null>(null)
@@ -60,7 +78,9 @@ function ResumePreviewPanelComponent({
   const autoCompileTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   const editableLatex =
-    controlledEditableLatex !== undefined ? controlledEditableLatex : internalEditableLatex
+    controlledEditableLatex !== undefined
+      ? controlledEditableLatex
+      : internalEditableLatex
   const deferredEditableLatex = useDeferredValue(editableLatex)
 
   const setEditableLatex = useCallback(
@@ -75,7 +95,10 @@ function ResumePreviewPanelComponent({
     [onEditableLatexChange]
   )
 
-  const latexErrors = useMemo(() => validateLaTeX(deferredEditableLatex), [deferredEditableLatex])
+  const latexErrors = useMemo(
+    () => validateLaTeX(deferredEditableLatex),
+    [deferredEditableLatex]
+  )
   const hasErrors = latexErrors.some((error) => error.type === "error")
   const hasWarnings = latexErrors.some((error) => error.type === "warning")
 
@@ -86,12 +109,15 @@ function ResumePreviewPanelComponent({
   }, [deferredEditableLatex])
 
   const errorLineNumbers = useMemo(() => {
-    return new Set(latexErrors.filter((error) => error.line).map((error) => error.line!))
+    return new Set(
+      latexErrors.filter((error) => error.line).map((error) => error.line!)
+    )
   }, [latexErrors])
 
   const handleEditorScroll = useCallback(() => {
     if (editorRef.current && lineNumbersRef.current) {
-      const child = lineNumbersRef.current.firstElementChild as HTMLElement | null
+      const child = lineNumbersRef.current
+        .firstElementChild as HTMLElement | null
       if (child) {
         child.style.transform = `translateY(-${editorRef.current.scrollTop}px)`
       }
@@ -108,38 +134,38 @@ function ResumePreviewPanelComponent({
     setPdfError(null)
   }, [controlledEditableLatex, latexContent])
 
-  const compilePreview = useCallback(async (content: string) => {
-    if (!content.trim()) {
-      setPdfData(null)
-      setPreviewError("No LaTeX content to preview.")
-      return
-    }
-
-    setIsLoadingPreview(true)
-    setPreviewError(null)
-    setPdfError(null)
-
-    try {
-      const response = await documentServiceClient.compileLatex({
-        latex: content,
-        preview: true,
-      })
-
-      const arrayBuffer = await response.arrayBuffer()
-
-      if (!arrayBuffer || arrayBuffer.byteLength === 0) {
-        throw new Error("Empty PDF returned.")
+  const compilePreview = useCallback(
+    async (content: string) => {
+      if (!content.trim()) {
+        setPdfData(null)
+        setPreviewError("No LaTeX content to preview.")
+        return
       }
 
-      setPdfData(arrayBuffer)
-    } catch (error) {
-      reportClientError(error, "resume-preview-compile")
-      setPdfData(null)
-      setPreviewError(getUserFacingMessage(error, "Failed to generate preview."))
-    } finally {
-      setIsLoadingPreview(false)
-    }
-  }, [])
+      setIsLoadingPreview(true)
+      setPreviewError(null)
+      setPdfError(null)
+
+      try {
+        const arrayBuffer = await compilePreviewPdf(content)
+
+        if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+          throw new Error("Empty PDF returned.")
+        }
+
+        setPdfData(arrayBuffer)
+      } catch (error) {
+        reportClientError(error, "resume-preview-compile")
+        setPdfData(null)
+        setPreviewError(
+          getUserFacingMessage(error, "Failed to generate preview.")
+        )
+      } finally {
+        setIsLoadingPreview(false)
+      }
+    },
+    [compilePreviewPdf]
+  )
 
   useEffect(() => {
     if (activeTab !== "preview") return
@@ -200,18 +226,27 @@ function ResumePreviewPanelComponent({
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <div className="flex-shrink-0 border-b border-white/8 bg-black/12 px-4 py-2">
         <div className="mb-1 flex items-center justify-between">
-          <p className="text-xs font-semibold text-muted-foreground">LATEX FORMAT CHECK</p>
+          <p className="text-xs font-semibold text-muted-foreground">
+            LATEX FORMAT CHECK
+          </p>
           {editableLatex ? (
             <div className="flex items-center gap-2">
               {hasErrors ? (
                 <span className="flex items-center gap-1 text-xs text-red-400">
                   <AlertTriangle className="h-3 w-3" />
-                  {latexErrors.filter((error) => error.type === "error").length} error(s)
+                  {
+                    latexErrors.filter((error) => error.type === "error").length
+                  }{" "}
+                  error(s)
                 </span>
               ) : hasWarnings ? (
                 <span className="flex items-center gap-1 text-xs text-yellow-400">
                   <AlertTriangle className="h-3 w-3" />
-                  {latexErrors.filter((error) => error.type === "warning").length} warning(s)
+                  {
+                    latexErrors.filter((error) => error.type === "warning")
+                      .length
+                  }{" "}
+                  warning(s)
                 </span>
               ) : (
                 <span className="flex items-center gap-1 text-xs text-emerald-400">
@@ -234,11 +269,12 @@ function ResumePreviewPanelComponent({
                   if (error.line && editorRef.current) {
                     const lines = deferredEditableLatex.split("\n")
                     const lineStart =
-                      lines.slice(0, error.line - 1).join("\n").length + (error.line > 1 ? 1 : 0)
+                      lines.slice(0, error.line - 1).join("\n").length +
+                      (error.line > 1 ? 1 : 0)
                     editorRef.current.focus()
                     editorRef.current.setSelectionRange(
                       lineStart,
-                      lineStart + lines[error.line - 1].length
+                      lineStart + (lines[error.line - 1]?.length || 0)
                     )
                     editorRef.current.scrollTop = (error.line - 1) * 20 - 100
                   }
@@ -249,7 +285,9 @@ function ResumePreviewPanelComponent({
               >
                 <AlertTriangle className="mt-0.5 h-3 w-3 flex-shrink-0" />
                 <span>
-                  {error.line ? <span className="font-semibold">Line {error.line}: </span> : null}
+                  {error.line ? (
+                    <span className="font-semibold">Line {error.line}: </span>
+                  ) : null}
                   {error.message}
                 </span>
               </div>
@@ -303,8 +341,12 @@ function ResumePreviewPanelComponent({
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex-shrink-0 border-b border-white/8 bg-black/12 px-4 py-2">
         <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold text-muted-foreground">LIVE PDF PREVIEW</p>
-          <div className="text-xs text-muted-foreground">Auto-updates after you stop typing</div>
+          <p className="text-xs font-semibold text-muted-foreground">
+            LIVE PDF PREVIEW
+          </p>
+          <div className="text-xs text-muted-foreground">
+            Auto-updates after you stop typing
+          </div>
         </div>
       </div>
 
@@ -312,7 +354,9 @@ function ResumePreviewPanelComponent({
         {previewError ? (
           <div className="flex h-full flex-col items-center justify-center p-4 text-muted-foreground">
             <AlertTriangle className="mb-2 h-8 w-8 text-red-400" />
-            <p className="max-w-md text-center text-sm text-red-400">{previewError}</p>
+            <p className="max-w-md text-center text-sm text-red-400">
+              {previewError}
+            </p>
           </div>
         ) : (
           <PDFViewer pdfData={pdfData} isLoading={isLoadingPreview} />
@@ -325,7 +369,9 @@ function ResumePreviewPanelComponent({
     <div className="scrollbar-dark h-full overflow-y-auto p-4">
       <div className="space-y-3">
         <div className="rounded-lg border border-white/8 bg-black/10 p-4">
-          <h3 className="mb-3 text-sm font-semibold text-foreground">Quick Reference</h3>
+          <h3 className="mb-3 text-sm font-semibold text-foreground">
+            Quick Reference
+          </h3>
           <div className="space-y-1.5 font-mono text-xs text-muted-foreground">
             <div>{`\\textbf{bold text}`} → Bold</div>
             <div>{`\\textit{italic text}`} → Italic</div>
@@ -366,12 +412,7 @@ function ResumePreviewPanelComponent({
     setPdfError(null)
 
     try {
-      const response = await documentServiceClient.compileLatex({
-        latex: currentContent,
-        preview: false,
-      })
-
-      const blob = await response.blob()
+      const blob = await compilePdfDownload(currentContent)
       const url = URL.createObjectURL(blob)
 
       const anchor = document.createElement("a")
@@ -384,7 +425,10 @@ function ResumePreviewPanelComponent({
     } catch (error) {
       reportClientError(error, "resume-preview-download")
       setPdfError(
-        getUserFacingMessage(error, "Failed to convert to PDF. Please check your LaTeX syntax.")
+        getUserFacingMessage(
+          error,
+          "Failed to convert to PDF. Please check your LaTeX syntax."
+        )
       )
     } finally {
       setConvertingToPDF(false)

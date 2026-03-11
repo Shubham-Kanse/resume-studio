@@ -13,61 +13,50 @@ interface LegalDialogProps {
 const privacySections = [
   {
     title: "Information We Process",
-    body:
-      "Resume Studio may process the information you provide in order to generate resumes, score resumes against job descriptions, and maintain your saved workspace history. This can include your Google account email, uploaded resume files, job descriptions, generated LaTeX output, ATS analysis results, and job tracker entries you choose to store.",
+    body: "Resume Studio may process the information you provide in order to generate resumes, score resumes against job descriptions, and maintain your saved workspace history. This can include your Google account email, uploaded resume files, job descriptions, generated LaTeX output, ATS analysis results, and job tracker entries you choose to store.",
   },
   {
     title: "How Your Data Is Used",
-    body:
-      "The app uses your data only to provide the requested features, such as resume generation, ATS scoring, saved history, and job application tracking. If you do not sign in, core generation features can still work without attaching saved account history to your profile.",
+    body: "The app uses your data only to provide the requested features, such as resume generation, ATS scoring, saved history, and job application tracking. If you do not sign in, core generation features can still work without attaching saved account history to your profile.",
   },
   {
     title: "Storage And Processors",
-    body:
-      "Account authentication and saved application data may be stored using Supabase. Resume generation and ATS-related requests may be processed by third-party model providers used by the app. Uploaded and generated content is handled only to fulfill the features you invoke inside the product.",
+    body: "Account authentication and saved application data may be stored using Supabase. Resume generation and ATS-related requests may be processed by third-party model providers used by the app. Uploaded and generated content is handled only to fulfill the features you invoke inside the product.",
   },
   {
     title: "Retention And Deletion",
-    body:
-      "You can remove saved history and job tracker entries from within the app. Local browser fallback data stays on the device and browser where it was created. Cloud-saved records remain available until you delete them or the service removes them according to future policy updates.",
+    body: "You can remove saved history and job tracker entries from within the app. Local browser fallback data stays on the device and browser where it was created. Cloud-saved records remain available until you delete them or the service removes them according to future policy updates.",
   },
   {
     title: "Security",
-    body:
-      "Reasonable technical measures are used to protect stored data, but no online service can guarantee absolute security. You should avoid uploading material you are not permitted to share or highly sensitive information unless you are comfortable with that risk.",
+    body: "Reasonable technical measures are used to protect stored data, but no online service can guarantee absolute security. You should avoid uploading material you are not permitted to share or highly sensitive information unless you are comfortable with that risk.",
   },
 ]
 
 const termsSections = [
   {
     title: "Use Of The Service",
-    body:
-      "You may use Resume Studio only for lawful purposes and only with content you have the right to upload, analyze, store, or transform. You are responsible for the accuracy and legality of the information you submit.",
+    body: "You may use Resume Studio only for lawful purposes and only with content you have the right to upload, analyze, store, or transform. You are responsible for the accuracy and legality of the information you submit.",
   },
   {
     title: "Accounts",
-    body:
-      "Some features are available without signing in, while saved history and job tracking may require an account. You are responsible for the activity associated with your account and for keeping access to it secure.",
+    body: "Some features are available without signing in, while saved history and job tracking may require an account. You are responsible for the activity associated with your account and for keeping access to it secure.",
   },
   {
     title: "AI-Generated Output",
-    body:
-      "Resume suggestions, LaTeX output, ATS feedback, and other generated results are provided for informational assistance only. They may be incomplete, inaccurate, or unsuitable for a specific application and should be reviewed before use.",
+    body: "Resume suggestions, LaTeX output, ATS feedback, and other generated results are provided for informational assistance only. They may be incomplete, inaccurate, or unsuitable for a specific application and should be reviewed before use.",
   },
   {
     title: "Uploaded Materials",
-    body:
-      "You retain responsibility for your resumes, job descriptions, and other uploaded files. By using the service, you authorize Resume Studio to process that material solely for delivering the app features you request.",
+    body: "You retain responsibility for your resumes, job descriptions, and other uploaded files. By using the service, you authorize Resume Studio to process that material solely for delivering the app features you request.",
   },
   {
     title: "Availability And Changes",
-    body:
-      "The service may change, improve, pause, or remove features at any time. Access may be limited temporarily for maintenance, security, or reliability reasons.",
+    body: "The service may change, improve, pause, or remove features at any time. Access may be limited temporarily for maintenance, security, or reliability reasons.",
   },
   {
     title: "Disclaimer",
-    body:
-      "Resume Studio is provided on an as-is and as-available basis, without guarantees of uninterrupted operation, perfect accuracy, or suitability for any specific hiring outcome.",
+    body: "Resume Studio is provided on an as-is and as-available basis, without guarantees of uninterrupted operation, perfect accuracy, or suitability for any specific hiring outcome.",
   },
 ]
 
@@ -86,9 +75,15 @@ export function LegalDialog({ open, variant, onClose }: LegalDialogProps) {
       <div className="w-full max-w-2xl rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,rgba(8,12,24,0.1),rgba(3,7,18,0.03))] p-6 shadow-[0_18px_56px_rgba(0,0,0,0.18),inset_0_1px_0_rgba(255,255,255,0.1)] backdrop-blur-sm">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-[11px] uppercase tracking-[0.28em] text-white/45">Legal</p>
-            <h2 className="mt-2 text-2xl font-semibold text-foreground">{title}</h2>
-            <p className="mt-3 max-w-xl text-sm leading-6 text-muted-foreground">{description}</p>
+            <p className="text-[11px] uppercase tracking-[0.28em] text-white/45">
+              Legal
+            </p>
+            <h2 className="mt-2 text-2xl font-semibold text-foreground">
+              {title}
+            </h2>
+            <p className="mt-3 max-w-xl text-sm leading-6 text-muted-foreground">
+              {description}
+            </p>
           </div>
           <button
             type="button"
@@ -106,8 +101,12 @@ export function LegalDialog({ open, variant, onClose }: LegalDialogProps) {
               key={section.title}
               className="rounded-2xl border border-white/8 bg-black/12 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
             >
-              <h3 className="text-sm font-medium text-foreground">{section.title}</h3>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">{section.body}</p>
+              <h3 className="text-sm font-medium text-foreground">
+                {section.title}
+              </h3>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                {section.body}
+              </p>
             </section>
           ))}
         </div>

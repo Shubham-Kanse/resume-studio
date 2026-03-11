@@ -4,11 +4,28 @@
   "private": true,
   "scripts": {
     "build": "next build",
+    "bundle:check": "node scripts/check-bundle-size.mjs",
     "dev": "next dev",
+    "db:migrations:list": "find supabase/migrations -maxdepth 1 -type f | sort",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
     "lint": "eslint . --max-warnings=0",
+    "lint:fix": "eslint . --fix",
+    "predev": "node scripts/clean-next.mjs",
+    "prepare": "husky",
     "start": "next start",
     "test": "pnpm test:eval",
-    "test:eval": "pnpm exec tsc --esModuleInterop --module commonjs --moduleResolution node --target es2020 --outDir /tmp/resume-studio-evals tests/evals/ats-core.test.ts lib/ats-feedback.ts lib/current-date.ts lib/ats-types.ts lib/local-ats-scorer.ts && node --test /tmp/resume-studio-evals/tests/evals/**/*.test.js"
+    "test:eval": "node --experimental-strip-types --import ./scripts/register-test-hooks.mjs --test tests/**/*.test.ts",
+    "typecheck": "tsc --project tsconfig.typecheck.json --noEmit --incremental false"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx}": [
+      "prettier --write",
+      "eslint --fix"
+    ],
+    "*.{json,md,css}": [
+      "prettier --write"
+    ]
   },
   "dependencies": {
     "@emotion/is-prop-valid": "latest",
@@ -88,7 +105,12 @@
     "@types/react-dom": "^18.3.0",
     "eslint": "^8.57.1",
     "eslint-config-next": "15.5.10",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-import": "^2.32.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.3.3",
     "postcss": "^8.5",
+    "prettier": "^3.8.1",
     "tailwindcss": "^4.1.9",
     "tw-animate-css": "1.3.3",
     "typescript": "^5"

@@ -27,7 +27,9 @@ export function ErrorFallback({
           <AlertTriangle className="h-5 w-5 text-red-300" />
         </div>
         <h3 className="mt-4 text-lg font-semibold text-foreground">{title}</h3>
-        <p className="mt-2 text-sm leading-6 text-muted-foreground">{message}</p>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+          {message}
+        </p>
         {onAction ? (
           <button
             type="button"

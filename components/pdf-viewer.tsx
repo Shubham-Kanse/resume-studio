@@ -1,9 +1,11 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
+
 import { Loader2 } from "lucide-react"
-import { getUserFacingMessage } from "@/lib/errors"
+
 import { reportClientError } from "@/lib/error-monitoring"
+import { getUserFacingMessage } from "@/lib/errors"
 
 interface PDFViewerProps {
   pdfData: ArrayBuffer | null
@@ -42,14 +44,62 @@ interface PDFPageCanvasProps {
   containerWidth: number
   renderScale: number
   pageNumber: number
-  pdfDocument: any
+  pdfDocument: PDFDocumentProxyLike
   onRenderError: (message: string) => void
+}
+
+interface PDFViewportLike {
+  width: number
+  height: number
+}
+
+interface PDFRenderTaskLike {
+  promise: Promise<void>
+  cancel?: () => void
+}
+
+interface PDFPageProxyLike {
+  getViewport: (params: { scale: number }) => PDFViewportLike
+  render: (params: {
+    canvasContext: CanvasRenderingContext2D
+    viewport: PDFViewportLike
+    transform?: [number, number, number, number, number, number]
+    background?: string
+  }) => PDFRenderTaskLike
+  cleanup?: () => void
+}
+
+interface PDFDocumentProxyLike {
+  numPages: number
+  getPage: (pageNumber: number) => Promise<PDFPageProxyLike>
+  destroy?: () => Promise<void> | void
+}
+
+interface PDFLoadingTaskLike {
+  promise: Promise<PDFDocumentProxyLike>
+  destroy: () => void
+}
+
+interface PDFJSLike {
+  GlobalWorkerOptions: {
+    workerSrc: string
+  }
+  getDocument: (params: {
+    data: Uint8Array
+    disableWorker: boolean
+    useWorkerFetch: boolean
+    isEvalSupported: boolean
+    isOffscreenCanvasSupported: boolean
+  }) => PDFLoadingTaskLike
 }
 
 function getPreferredPdfRenderScale() {
   if (typeof navigator === "undefined") return 1.25
 
-  const memory = "deviceMemory" in navigator ? (navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 0 : 0
+  const memory =
+    "deviceMemory" in navigator
+      ? ((navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 0)
+      : 0
   const cores = navigator.hardwareConcurrency || 4
 
   if ((memory > 0 && memory <= 4) || cores <= 4) return 1
@@ -72,8 +122,8 @@ function PDFPageCanvas({
     if (!canvas || !containerWidth) return
 
     let cancelled = false
-    let currentPage: any = null
-    let renderTask: { promise: Promise<void>; cancel?: () => void } | null = null
+    let currentPage: PDFPageProxyLike | null = null
+    let renderTask: PDFRenderTaskLike | null = null
 
     const renderPage = async () => {
       try {
@@ -109,7 +159,9 @@ function PDFPageCanvas({
           canvasContext: context,
           viewport,
           transform:
-            outputScale === 1 ? undefined : [outputScale, 0, 0, outputScale, 0, 0],
+            outputScale === 1
+              ? undefined
+              : [outputScale, 0, 0, outputScale, 0, 0],
           background: "rgb(255,255,255)",
         })
         renderTask = nextRenderTask
@@ -123,7 +175,9 @@ function PDFPageCanvas({
         setIsPageRendering(false)
         reportClientError(error, `pdf-render-page-${pageNumber}`)
         console.error(`PDF render error on page ${pageNumber}:`, error)
-        onRenderError(getUserFacingMessage(error, `Failed to render page ${pageNumber}.`))
+        onRenderError(
+          getUserFacingMessage(error, `Failed to render page ${pageNumber}.`)
+        )
       }
     }
 
@@ -150,13 +204,15 @@ function PDFPageCanvas({
 
 export function PDFViewer({ pdfData, isLoading }: PDFViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const pdfjsLibRef = useRef<any>(null)
-  const loadingTaskRef = useRef<{ destroy: () => void } | null>(null)
-  const pdfDocumentRef = useRef<any>(null)
+  const pdfjsLibRef = useRef<PDFJSLike | null>(null)
+  const loadingTaskRef = useRef<PDFLoadingTaskLike | null>(null)
+  const pdfDocumentRef = useRef<PDFDocumentProxyLike | null>(null)
 
   const [containerWidth, setContainerWidth] = useState(0)
   const [pageCount, setPageCount] = useState(0)
-  const [pdfDocument, setPdfDocument] = useState<any>(null)
+  const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxyLike | null>(
+    null
+  )
   const [renderError, setRenderError] = useState<string | null>(null)
   const [viewerReady, setViewerReady] = useState(false)
   const [isDocumentLoading, setIsDocumentLoading] = useState(false)
@@ -167,7 +223,8 @@ export function PDFViewer({ pdfData, isLoading }: PDFViewerProps) {
 
     const initializePdfJs = async () => {
       ensurePromiseWithResolvers()
-      const pdfjsLib = (await import("pdfjs-dist/legacy/build/pdf.mjs")) as unknown as any
+      const pdfjsLib =
+        (await import("pdfjs-dist/legacy/build/pdf.mjs")) as unknown as PDFJSLike
       if (cancelled) return
 
       pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -183,7 +240,9 @@ export function PDFViewer({ pdfData, isLoading }: PDFViewerProps) {
       if (cancelled) return
       reportClientError(error, "pdf-viewer-init")
       console.error("PDF viewer init error:", error)
-      setRenderError(getUserFacingMessage(error, "Failed to initialize PDF preview."))
+      setRenderError(
+        getUserFacingMessage(error, "Failed to initialize PDF preview.")
+      )
     })
 
     return () => {
@@ -254,7 +313,7 @@ export function PDFViewer({ pdfData, isLoading }: PDFViewerProps) {
     loadingTaskRef.current = loadingTask
 
     void loadingTask.promise
-      .then((nextPdfDocument: any) => {
+      .then((nextPdfDocument: PDFDocumentProxyLike) => {
         if (cancelled) {
           void nextPdfDocument.destroy?.()
           return
@@ -272,7 +331,9 @@ export function PDFViewer({ pdfData, isLoading }: PDFViewerProps) {
         setPdfDocument(null)
         setPageCount(0)
         setIsDocumentLoading(false)
-        setRenderError(getUserFacingMessage(error, "Failed to load PDF preview."))
+        setRenderError(
+          getUserFacingMessage(error, "Failed to load PDF preview.")
+        )
       })
 
     return () => {
@@ -305,7 +366,9 @@ export function PDFViewer({ pdfData, isLoading }: PDFViewerProps) {
   if (!pdfData || !pdfDocument || pageCount === 0) {
     return (
       <div className="flex h-full items-center justify-center p-4">
-        <p className="text-center text-sm text-muted-foreground">No PDF preview yet</p>
+        <p className="text-center text-sm text-muted-foreground">
+          No PDF preview yet
+        </p>
       </div>
     )
   }

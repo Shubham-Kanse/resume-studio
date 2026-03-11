@@ -1,15 +1,25 @@
-import test from "node:test"
 import assert from "node:assert/strict"
-import { filterUnsupportedFeedback, resumeHasFutureDate } from "../../lib/ats-feedback"
+import test from "node:test"
+
+import {
+  filterUnsupportedFeedback,
+  resumeHasFutureDate,
+} from "../../lib/ats-feedback"
 import { scoreResumeDeterministically } from "../../lib/local-ats-scorer"
 
 test("future-date detection uses the actual current year boundary", () => {
   assert.equal(
-    resumeHasFutureDate("Senior Engineer, Jan 2027 - Present", new Date("2026-03-09T00:00:00Z")),
+    resumeHasFutureDate(
+      "Senior Engineer, Jan 2027 - Present",
+      new Date("2026-03-09T00:00:00Z")
+    ),
     true
   )
   assert.equal(
-    resumeHasFutureDate("Senior Engineer, Jan 2026 - Present", new Date("2026-03-09T00:00:00Z")),
+    resumeHasFutureDate(
+      "Senior Engineer, Jan 2026 - Present",
+      new Date("2026-03-09T00:00:00Z")
+    ),
     false
   )
 })
@@ -94,12 +104,20 @@ test("deterministic ATS scorer exposes stable evidence for a strong aligned resu
   Requirements: product strategy, analytics, SQL, experimentation, stakeholder management, B2B SaaS.
   `
 
-  const result = scoreResumeDeterministically({ resumeContent: resume, jobDescription: jd })
+  const result = scoreResumeDeterministically({
+    resumeContent: resume,
+    jobDescription: jd,
+  })
 
   assert.equal(result.analysisMode, "resume-with-jd")
   assert.ok(result.overallScore >= 70)
-  assert.ok(result.evidence.requiredSectionsPresent.includes("Professional Summary"))
-  assert.ok((result.keywordAnalysis?.coverageBySection.professionalSummary.length || 0) > 0)
+  assert.ok(
+    result.evidence.requiredSectionsPresent.includes("Professional Summary")
+  )
+  assert.ok(
+    (result.keywordAnalysis?.coverageBySection.professionalSummary.length ||
+      0) > 0
+  )
 })
 
 test("section parsing recognizes non-exact ATS-safe heading variants", () => {
@@ -124,7 +142,9 @@ test("section parsing recognizes non-exact ATS-safe heading variants", () => {
 
   const result = scoreResumeDeterministically({ resumeContent: resume })
 
-  assert.ok(result.evidence.requiredSectionsPresent.includes("Professional Summary"))
+  assert.ok(
+    result.evidence.requiredSectionsPresent.includes("Professional Summary")
+  )
   assert.ok(result.evidence.requiredSectionsPresent.includes("Work Experience"))
   assert.ok(result.evidence.requiredSectionsPresent.includes("Skills"))
   assert.ok(result.evidence.requiredSectionsPresent.includes("Education"))
@@ -156,10 +176,21 @@ test("keyword matching recognizes semantic line-level evidence instead of exact 
   Requirements: stakeholder management, experimentation, SQL, analytics, product strategy.
   `
 
-  const result = scoreResumeDeterministically({ resumeContent: resume, jobDescription: jd })
+  const result = scoreResumeDeterministically({
+    resumeContent: resume,
+    jobDescription: jd,
+  })
 
-  assert.ok((result.keywordAnalysis?.matchedByCategory.required || []).includes("stakeholder management"))
-  assert.ok((result.keywordAnalysis?.matchedByCategory.required || []).includes("a/b testing"))
+  assert.ok(
+    (result.keywordAnalysis?.matchedByCategory.required || []).includes(
+      "stakeholder management"
+    )
+  )
+  assert.ok(
+    (result.keywordAnalysis?.matchedByCategory.required || []).includes(
+      "a/b testing"
+    )
+  )
 })
 
 test("parseability score drops when layout-risk markup suggests ATS extraction problems", () => {
@@ -187,6 +218,8 @@ test("parseability score drops when layout-risk markup suggests ATS extraction p
 
   assert.ok(result.atsCompatibility.parseability < 90)
   assert.ok(
-    result.atsCompatibility.issues.some((issue) => issue.includes("LaTeX layout commands suggest tables, columns"))
+    result.atsCompatibility.issues.some((issue) =>
+      issue.includes("LaTeX layout commands suggest tables, columns")
+    )
   )
 })

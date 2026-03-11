@@ -1,8 +1,10 @@
 import { NextRequest } from "next/server"
+
 import { Webhooks } from "@polar-sh/nextjs"
+
+import { syncSubscriptionFromPolarCustomerState } from "@/features/subscription/server/polar-service"
 import { reportServerError } from "@/lib/error-monitoring"
 import { getPolarWebhookSecret } from "@/lib/polar"
-import { syncSubscriptionFromPolarCustomerState } from "@/lib/services/polar-service"
 
 export const runtime = "nodejs"
 

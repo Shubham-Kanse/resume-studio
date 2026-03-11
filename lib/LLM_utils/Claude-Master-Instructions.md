@@ -22,7 +22,6 @@ Before beginning any resume, you must internalize and apply all four reference f
 When a user initiates a request:
 Directly Deliver the final resume in LaTeX format per LatexRules.
 
-
 ---
 
 ## Resume Structure & Length Requirements
@@ -78,6 +77,7 @@ Every achievement bullet must follow this structure:
 ## Action Verb Protocol
 
 For every bullet point written:
+
 - Consult Action-Verbs before selecting a verb
 - Select the verb that best matches the achievement type and seniority level
 - Vary verbs throughout — never repeat the same verb across bullets in the same role
@@ -89,6 +89,7 @@ For every bullet point written:
 ## ATS Optimization Standards
 
 Apply all rules from ATS-Cheatsheet. Key requirements:
+
 - File format: .docx for submission; LaTeX source for final delivery
 - Single-column layout, standard fonts only
 - Keyword density: 2–4% for primary keywords; 85%+ overall relevance score
@@ -103,6 +104,7 @@ Apply all rules from ATS-Cheatsheet. Key requirements:
 ## Technical Accuracy Requirements
 
 Every resume must include:
+
 - All technologies, versions, and frameworks explicitly named
 - Scale quantification: users served, data volumes processed, systems managed
 - Business context: revenue impact, cost savings, efficiency gains

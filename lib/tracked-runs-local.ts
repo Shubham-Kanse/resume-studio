@@ -1,6 +1,6 @@
-import type { ATSScoreResponse } from "@/lib/ats-types"
 import { shouldKeepCachedRecord } from "@/lib/local-storage-policy"
 import type { SaveTrackedRunInput, TrackedRunRecord } from "@/lib/tracked-runs"
+import type { ATSScoreResponse } from "@/types/ats"
 
 const STORAGE_PREFIX = "resume-studio-tracked-runs"
 
@@ -21,20 +21,27 @@ export function loadLocalTrackedRuns(userId: string): TrackedRunRecord[] {
 
     const parsed = JSON.parse(raw)
     return Array.isArray(parsed)
-      ? (parsed as TrackedRunRecord[]).filter((record) => shouldKeepCachedRecord(record.updated_at))
+      ? (parsed as TrackedRunRecord[]).filter((record) =>
+          shouldKeepCachedRecord(record.updated_at)
+        )
       : []
   } catch {
     return []
   }
 }
 
-export function persistLocalTrackedRuns(userId: string, records: TrackedRunRecord[]) {
+export function persistLocalTrackedRuns(
+  userId: string,
+  records: TrackedRunRecord[]
+) {
   if (!isBrowser()) return
 
   try {
     window.localStorage.setItem(
       storageKey(userId),
-      JSON.stringify(records.filter((record) => shouldKeepCachedRecord(record.updated_at)))
+      JSON.stringify(
+        records.filter((record) => shouldKeepCachedRecord(record.updated_at))
+      )
     )
   } catch {
     // Ignore localStorage write failures.
@@ -58,7 +65,11 @@ export function clearLocalTrackedRuns(userId: string) {
   }
 }
 
-export function mergeTrackedRuns(remote: TrackedRunRecord[], local: TrackedRunRecord[], limit: number) {
+export function mergeTrackedRuns(
+  remote: TrackedRunRecord[],
+  local: TrackedRunRecord[],
+  limit: number
+) {
   const byId = new Map<string, TrackedRunRecord>()
 
   ;[...remote, ...local].forEach((record) => {
@@ -75,7 +86,10 @@ export function mergeTrackedRuns(remote: TrackedRunRecord[], local: TrackedRunRe
   })
 
   return [...byId.values()]
-    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    )
     .slice(0, limit)
 }
 
@@ -87,7 +101,9 @@ export function createLocalTrackedRunRecord(
   const now = new Date().toISOString()
 
   return {
-    id: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    id:
+      globalThis.crypto?.randomUUID?.() ??
+      `${Date.now()}-${Math.random().toString(16).slice(2)}`,
     user_id: userId,
     mode: input.mode,
     label,
@@ -96,7 +112,9 @@ export function createLocalTrackedRunRecord(
     resume_file_name: input.sourceFileName?.trim() || null,
     resume_file_mime_type: input.sourceFileMimeType?.trim() || null,
     resume_file_data_url: input.sourceFileDataUrl?.trim() || null,
-    extra_instructions: input.extraInstructions?.trim() ? input.extraInstructions.trim() : null,
+    extra_instructions: input.extraInstructions?.trim()
+      ? input.extraInstructions.trim()
+      : null,
     latex_content: input.latexContent ?? null,
     ats_score: input.atsScore ?? null,
     created_at: now,

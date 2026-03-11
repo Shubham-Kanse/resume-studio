@@ -26,7 +26,10 @@ function loadInstructionFile(fileName: LlmUtilFile): string {
 }
 
 function normalizeWhitespace(value: string): string {
-  return value.replace(/\r\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim()
+  return value
+    .replace(/\r\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
 }
 
 function tokenize(value: string): string[] {
@@ -38,7 +41,11 @@ function unique<T>(items: T[]): T[] {
   return [...new Set(items)]
 }
 
-function inferPriority(fileName: LlmUtilFile, heading: string, content: string): number {
+function inferPriority(
+  fileName: LlmUtilFile,
+  heading: string,
+  content: string
+): number {
   const text = `${heading}\n${content}`.toLowerCase()
 
   if (fileName === "LatexRules.txt") {
@@ -65,7 +72,10 @@ function inferPriority(fileName: LlmUtilFile, heading: string, content: string):
   return 160
 }
 
-function splitIntoChunks(fileName: LlmUtilFile, content: string): KnowledgeChunk[] {
+function splitIntoChunks(
+  fileName: LlmUtilFile,
+  content: string
+): KnowledgeChunk[] {
   const normalized = normalizeWhitespace(content)
   const lines = normalized.split("\n")
   const chunks: KnowledgeChunk[] = []
@@ -106,7 +116,7 @@ function splitIntoChunks(fileName: LlmUtilFile, content: string): KnowledgeChunk
     const headingMatch = line.match(/^(#{1,6})\s+(.*)$/)
     if (headingMatch) {
       flush()
-      currentHeading = headingMatch[2].trim()
+      currentHeading = (headingMatch[2] || "").trim()
       buffer = []
       continue
     }
@@ -121,7 +131,9 @@ const KNOWLEDGE_BASE = LLM_UTIL_FILES.flatMap((fileName) =>
   splitIntoChunks(fileName, loadInstructionFile(fileName))
 )
 
-const MASTER_SYSTEM_INSTRUCTIONS = loadInstructionFile("Claude-Master-Instructions.md")
+const MASTER_SYSTEM_INSTRUCTIONS = loadInstructionFile(
+  "Claude-Master-Instructions.md"
+)
 
 const CORE_SYSTEM_PROMPT = `${MASTER_SYSTEM_INSTRUCTIONS}
 
@@ -146,7 +158,11 @@ Additional runtime rules:
 12. Reorder, rewrite, condense, and emphasize content based on job relevance while staying truthful to the source material.
 13. Prefer stronger, more specific, ATS-aligned phrasing over the candidate's original wording when both are supported by the same facts.`
 
-function buildQueryTerms(jd: string, resume: string, additionalInstructions?: string): string[] {
+function buildQueryTerms(
+  jd: string,
+  resume: string,
+  additionalInstructions?: string
+): string[] {
   const baseTerms = [
     "latex",
     "resume",
@@ -187,7 +203,10 @@ function trimChunkContent(content: string, maxChars: number): string {
   return `${content.slice(0, maxChars).trim()}\n...`
 }
 
-function renderKnowledgeChunks(chunks: KnowledgeChunk[], maxCharsByFile?: Partial<Record<LlmUtilFile, number>>): string {
+function renderKnowledgeChunks(
+  chunks: KnowledgeChunk[],
+  maxCharsByFile?: Partial<Record<LlmUtilFile, number>>
+): string {
   return chunks
     .map((chunk) => {
       const maxChars = maxCharsByFile?.[chunk.fileName] ?? 2800
@@ -204,11 +223,14 @@ export function buildSystemPrompt(): string {
   return CORE_SYSTEM_PROMPT
 }
 
-export function buildKnowledgePrompt(jd: string, resume: string, additionalInstructions?: string): string {
+export function buildKnowledgePrompt(
+  jd: string,
+  resume: string,
+  additionalInstructions?: string
+): string {
   const queryTerms = buildQueryTerms(jd, resume, additionalInstructions)
   const mandatoryChunks = KNOWLEDGE_BASE.filter((chunk) => chunk.alwaysInclude)
-  const optionalChunks = KNOWLEDGE_BASE
-    .filter((chunk) => !chunk.alwaysInclude)
+  const optionalChunks = KNOWLEDGE_BASE.filter((chunk) => !chunk.alwaysInclude)
     .map((chunk) => ({ chunk, score: scoreChunk(chunk, queryTerms) }))
     .sort((a, b) => b.score - a.score)
     .slice(0, 10)
@@ -227,7 +249,11 @@ Use these excerpts exactly like retrieved knowledge-base documents in a Custom G
 ${rendered}`
 }
 
-export function buildUserPrompt(jd: string, resume: string, additionalInstructions?: string): string {
+export function buildUserPrompt(
+  jd: string,
+  resume: string,
+  additionalInstructions?: string
+): string {
   let prompt = `Generate an ATS-optimized LaTeX resume from the provided job description and candidate background.
 
 Runtime contract:
@@ -439,8 +465,10 @@ function isATSEssentialChunk(chunk: KnowledgeChunk): boolean {
 export function buildATSKnowledgePrompt(jd: string, resume: string): string {
   const queryTerms = buildATSQueryTerms(jd, resume)
   const essentialChunks = KNOWLEDGE_BASE.filter(isATSEssentialChunk)
-  const optionalChunks = KNOWLEDGE_BASE
-    .filter((chunk) => !essentialChunks.includes(chunk) && chunk.fileName !== "LatexRules.txt")
+  const optionalChunks = KNOWLEDGE_BASE.filter(
+    (chunk) =>
+      !essentialChunks.includes(chunk) && chunk.fileName !== "LatexRules.txt"
+  )
     .map((chunk) => ({ chunk, score: scoreChunk(chunk, queryTerms) }))
     .sort((a, b) => b.score - a.score)
     .slice(0, 8)
@@ -464,7 +492,11 @@ export function buildATSSystemPrompt(): string {
   return ATS_SYSTEM_PROMPT
 }
 
-export function buildATSUserPrompt(jd: string, resume: string, deterministicAnalysisJson: string): string {
+export function buildATSUserPrompt(
+  jd: string,
+  resume: string,
+  deterministicAnalysisJson: string
+): string {
   const hasJD = jd.trim().length > 0
 
   return `Generate the narrative ATS review for the candidate's resume.

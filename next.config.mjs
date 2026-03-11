@@ -1,3 +1,12 @@
+const isProduction = process.env.NODE_ENV === "production"
+
+const scriptSrc = [
+  "'self'",
+  "'unsafe-inline'",
+  ...(isProduction ? [] : ["'unsafe-eval'"]),
+  "https://va.vercel-scripts.com",
+].join(" ")
+
 const cspHeader = [
   "default-src 'self'",
   "base-uri 'self'",
@@ -7,10 +16,12 @@ const cspHeader = [
   "img-src 'self' data: blob: https:",
   "font-src 'self' data:",
   "style-src 'self' 'unsafe-inline'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://va.vercel-scripts.com",
+  `script-src ${scriptSrc}`,
+  "script-src-attr 'none'",
   "connect-src 'self' https://*.supabase.co https://openrouter.ai https://latex.ytotech.com https://unpkg.com https://vitals.vercel-insights.com https://va.vercel-scripts.com",
   "worker-src 'self' blob: https://unpkg.com",
   "media-src 'self' blob:",
+  ...(isProduction ? ["upgrade-insecure-requests"] : []),
 ].join("; ")
 
 /** @type {import('next').NextConfig} */
@@ -18,9 +29,6 @@ const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   devIndicators: false,
-  images: {
-    unoptimized: true,
-  },
   async headers() {
     return [
       {
@@ -57,6 +65,42 @@ const nextConfig = {
           {
             key: "Strict-Transport-Security",
             value: "max-age=63072000; includeSubDomains; preload",
+          },
+        ],
+      },
+      {
+        source: "/privacy-policy",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, s-maxage=86400, stale-while-revalidate=604800",
+          },
+        ],
+      },
+      {
+        source: "/terms-of-service",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, s-maxage=86400, stale-while-revalidate=604800",
+          },
+        ],
+      },
+      {
+        source: "/icon",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, s-maxage=86400, stale-while-revalidate=604800",
+          },
+        ],
+      },
+      {
+        source: "/apple-icon",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, s-maxage=86400, stale-while-revalidate=604800",
           },
         ],
       },

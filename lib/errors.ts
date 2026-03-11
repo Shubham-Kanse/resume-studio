@@ -55,7 +55,10 @@ function inferCode(status?: number): AppErrorCode {
   return "UNKNOWN_ERROR"
 }
 
-export function getUserFacingMessage(error: unknown, fallback = "Something went wrong. Please try again.") {
+export function getUserFacingMessage(
+  error: unknown,
+  fallback = "Something went wrong. Please try again."
+) {
   if (error instanceof AppError) return error.userMessage
   if (error instanceof Error && error.message.trim()) return error.message
   return fallback
@@ -68,7 +71,10 @@ export function normalizeError(
   if (error instanceof AppError) return error
 
   const fallbackMessage = options.fallbackMessage || "Unexpected error"
-  const message = error instanceof Error && error.message.trim() ? error.message : fallbackMessage
+  const message =
+    error instanceof Error && error.message.trim()
+      ? error.message
+      : fallbackMessage
   const status = options.status ?? 500
 
   return new AppError(message, {
@@ -80,10 +86,23 @@ export function normalizeError(
 }
 
 export function isLikelyConfigurationError(error: unknown) {
-  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
-  return message.includes("not configured") || message.includes("missing") || message.includes("service role")
+  const message =
+    error instanceof Error
+      ? error.message.toLowerCase()
+      : String(error).toLowerCase()
+  return (
+    message.includes("not configured") ||
+    message.includes("missing") ||
+    message.includes("service role")
+  )
 }
 
 export function isRetryableStatus(status: number) {
-  return status === 408 || status === 409 || status === 425 || status === 429 || status >= 500
+  return (
+    status === 408 ||
+    status === 409 ||
+    status === 425 ||
+    status === 429 ||
+    status >= 500
+  )
 }

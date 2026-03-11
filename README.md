@@ -5,6 +5,7 @@
 ## 👤 What Can You Do With This App?
 
 ### The Problem It Solves
+
 Applying for jobs is tedious. You have one resume, but each job is different. Hiring managers use automated systems (ATS) that filter resumes before humans even see them. Your perfectly good resume might get rejected by a machine because it doesn't have the right keywords from the job description.
 
 ### What This App Does For You
@@ -33,7 +34,9 @@ Applying for jobs is tedious. You have one resume, but each job is different. Hi
    - No waiting, no fuss
 
 ### Real-World Example
+
 **Your situation:** You apply for 3 different jobs (marketing, product, engineering)
+
 - **Marketing Role**: Your resume emphasizes campaign management and analytics
 - **Product Role**: Your resume highlights cross-functional collaboration and feature ownership
 - **Engineering Role**: Your resume showcases technical skills and system architecture
@@ -41,6 +44,7 @@ Applying for jobs is tedious. You have one resume, but each job is different. Hi
 **Time saved**: Instead of manually rewriting your resume 3 times (30+ minutes), this app does it in 10 seconds per job.
 
 ### Why This Matters
+
 - ✅ **Get Past ATS Filters**: Resumes optimized specifically for each job's keywords
 - ✅ **Save Hours**: Stop manual resume tweaking before each application
 - ✅ **Competitive Edge**: Hiring managers see your most relevant experience first
@@ -73,25 +77,32 @@ An intelligent, modern web application that uses AI to generate ATS-optimized re
 ## � Quick Start (For Users)
 
 ### Step 1: Open the app
+
 Go to [http://localhost:3000](http://localhost:3000) (or the deployed URL)
 
 ### Step 2: Upload or paste your resume
+
 - Drag & drop a PDF/DOCX file, or
 - Paste your resume text directly
 
 ### Step 3: Paste the job description
+
 Copy-paste the job posting you're applying for
 
 ### Step 4: (Optional) Add custom notes
+
 Want to emphasize certain skills? Have specific keywords to include? Add them here.
 
 ### Step 5: Generate
+
 Click "Generate Resume" and wait 5-10 seconds
 
 ### Step 6: Download
+
 Your new resume appears in the preview pane. Download and apply!
 
 ### Step 7: Check ATS Score (Optional)
+
 1. Click "ATS Score" button at the top
 2. Click "Get ATS Score"
 3. Review your score and recommendations
@@ -130,20 +141,20 @@ This is a full-stack Next.js application with the following architecture:
 
 ### Tech Stack
 
-| Layer | Technology | Purpose |
-|-------|-----------|---------|
-| **Frontend** | React 19 + Next.js 14 | UI framework with server/client components |
-| **Language** | TypeScript | Type-safe development |
-| **Styling** | Tailwind CSS + Emotion | Utility-first CSS and emotion-based styling |
-| **UI Components** | Radix UI | Unstyled, accessible component primitives |
-| **Form** | React Hook Form + Zod | Form state & validation |
-| **PDF Input** | pdfjs-dist | Extract text from PDF files |
-| **Word Input** | mammoth | Extract text from .docx files |
-| **AI Provider** | OpenRouter API | Access to Claude, Deepseek, and other LLMs |
-| **LaTeX→PDF** | wkhtmltopdf | Convert LaTeX documents to PDF |
-| **Animations** | Framer Motion | Smooth UI animations |
-| **Icons** | Lucide React | Consistent icon library |
-| **Package Mgmt** | pnpm | Fast, efficient package management |
+| Layer             | Technology             | Purpose                                     |
+| ----------------- | ---------------------- | ------------------------------------------- |
+| **Frontend**      | React 19 + Next.js 14  | UI framework with server/client components  |
+| **Language**      | TypeScript             | Type-safe development                       |
+| **Styling**       | Tailwind CSS + Emotion | Utility-first CSS and emotion-based styling |
+| **UI Components** | Radix UI               | Unstyled, accessible component primitives   |
+| **Form**          | React Hook Form + Zod  | Form state & validation                     |
+| **PDF Input**     | pdfjs-dist             | Extract text from PDF files                 |
+| **Word Input**    | mammoth                | Extract text from .docx files               |
+| **AI Provider**   | OpenRouter API         | Access to Claude, Deepseek, and other LLMs  |
+| **LaTeX→PDF**     | wkhtmltopdf            | Convert LaTeX documents to PDF              |
+| **Animations**    | Framer Motion          | Smooth UI animations                        |
+| **Icons**         | Lucide React           | Consistent icon library                     |
+| **Package Mgmt**  | pnpm                   | Fast, efficient package management          |
 
 ### Data Flow
 
@@ -174,7 +185,8 @@ User Input (Resume + Job Description)
 ```
 
 ---
-```
+
+````
 
 ## 🚀 Getting Started
 
@@ -190,15 +202,17 @@ User Input (Resume + Job Description)
 ```bash
 git clone <repository-url>
 cd <repository-name>
-```
+````
 
 2. Install dependencies:
+
 ```bash
 pnpm install
 ```
 
 3. Set up environment variables:
-Create a `.env.local` file in the root directory:
+   Create a `.env.local` file in the root directory:
+
 ```
 OPENROUTER_API_KEY=your_openrouter_api_key_here
 NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
@@ -213,14 +227,16 @@ POLAR_SERVER=sandbox
 Get your API key at [https://openrouter.ai/keys](https://openrouter.ai/keys)
 
 If you want saved history:
+
 1. Create a free Supabase project
 2. Enable Google auth in Supabase
 3. Add `http://localhost:3000` and your deployed URL to the Supabase redirect allow list
 4. Add `SUPABASE_SERVICE_ROLE_KEY` to your environment
-5. Run the SQL in `supabase/tracked-runs.sql`, `supabase/job-applications.sql`, and `supabase/user-subscriptions.sql`
+5. Apply the SQL migrations in `supabase/migrations/` in timestamp order
 6. Add a Polar webhook endpoint pointing to `/api/webhooks/polar`
 
-4. Start the development server:
+7. Start the development server:
+
 ```bash
 pnpm dev
 ```
@@ -230,21 +246,25 @@ pnpm dev
 ### Build & Deploy
 
 Development:
+
 ```bash
 pnpm dev
 ```
 
 Production build:
+
 ```bash
 pnpm build
 ```
 
 Start production server:
+
 ```bash
 pnpm start
 ```
 
 Lint code:
+
 ```bash
 pnpm lint
 ```
@@ -260,18 +280,21 @@ pnpm lint
 ### Local Development Setup
 
 1. **Clone and navigate to project**
+
 ```bash
 git clone <repository-url>
 cd <repository-name>
 ```
 
 2. **Install dependencies**
+
 ```bash
 pnpm install
 ```
 
 3. **Configure environment variables**
-Create `.env.local` in the root directory:
+   Create `.env.local` in the root directory:
+
 ```bash
 # Required for AI resume generation
 OPENROUTER_API_KEY=your_openrouter_api_key_here
@@ -284,12 +307,15 @@ OPENROUTER_API_KEY=your_openrouter_api_key_here
 ```
 
 4. **Start development server**
+
 ```bash
 pnpm dev
 ```
+
 Open [http://localhost:3000](http://localhost:3000) in your browser
 
 5. **Check it's working**
+
 - You should see the animated WebGL shader background
 - Paste a job description and upload a resume file
 - Try generating a resume to verify API connection
@@ -393,12 +419,14 @@ ai-resume-generator/
 ### Key Components Explained
 
 **App Page (`app/page.tsx`)**
+
 - Entry point of the application
 - Manages overall workflow state
 - Orchestrates Resume Input Panel and Resume Preview Panel
 - Handles API calls to `/api/generate-resume`
 
 **Resume Input Panel (`components/resume-input-panel.tsx`)**
+
 - Multi-format file upload (PDF, DOCX, text)
 - PDF extraction using `pdfjs-dist`
 - Word document extraction using `mammoth`
@@ -406,11 +434,13 @@ ai-resume-generator/
 - Loading states during generation
 
 **Resume Preview Panel (`components/resume-preview-panel.tsx`)**
+
 - Displays generated PDF in real-time
 - Download functionality
 - Error handling and retry logic
 
 **API Route: Generate Resume (`app/api/generate-resume/route.ts`)**
+
 ```typescript
 // Request: FormData
 - jobDescription: string (target job posting)
@@ -428,6 +458,7 @@ ai-resume-generator/
 ```
 
 **API Route: LaTeX to PDF (`app/api/latex-to-pdf/route.ts`)**
+
 ```typescript
 // Request: JSON
 - latex: string (LaTeX document content)
@@ -450,6 +481,7 @@ ai-resume-generator/
 **Purpose:** Generate an ATS-optimized LaTeX resume by combining user's resume with target job description using AI.
 
 **Request Format:**
+
 ```
 Content-Type: multipart/form-data
 
@@ -459,13 +491,14 @@ Content-Type: multipart/form-data
 
 - resumeContent (string, required)
     The user's current resume (extracted from PDF/DOCX or pasted)
-    
+
 - extraInstructions (string, optional)
     Custom instructions for the AI
     Example: "Emphasize ML/AI experience, focus on startup background"
 ```
 
 **Response:**
+
 ```json
 {
   "latex": "\\documentclass{article}\n\\usepackage{...\n...\n\\end{document}"
@@ -473,6 +506,7 @@ Content-Type: multipart/form-data
 ```
 
 **Error Handling:**
+
 ```json
 {
   "error": "Job description and resume are required.",
@@ -481,6 +515,7 @@ Content-Type: multipart/form-data
 ```
 
 **Internal Flow:**
+
 1. Validate inputs (both resume and job description present)
 2. Load system prompt from `lib/llm-context.ts`
 3. Build structured prompt combining:
@@ -501,6 +536,7 @@ Content-Type: multipart/form-data
 **Purpose:** Convert LaTeX document to PDF for preview and download.
 
 **Request Format:**
+
 ```json
 {
   "latex": "\\documentclass{article}...\\end{document}"
@@ -508,6 +544,7 @@ Content-Type: multipart/form-data
 ```
 
 **Response:**
+
 ```
 Content-Type: application/pdf
 Content-Disposition: attachment; filename="resume.pdf"
@@ -516,6 +553,7 @@ Content-Disposition: attachment; filename="resume.pdf"
 ```
 
 **Error Handling:**
+
 - Invalid LaTeX syntax returns 400
 - Compilation errors return detailed error messages
 
@@ -539,20 +577,24 @@ NODE_ENV=development                         # development | production
 All LLM instructions are stored in `lib/LLM_utils/`:
 
 **File:** `Claude-Master-Instructions.md`
+
 - Core system prompt and role definition
 - Modify to change how Claude understands its task
 
 **File:** `Claude-ATS-Cheatsheet-Instructions.md`
+
 - ATS optimization strategies
 - Keywords and formatting best practices
 - Modify to prioritize different aspects
 
 **File:** `Action-Verbs-claude.txt`
+
 - Database of 200+ action verbs by skill category
 - Used to enrich resume language
 - Add or remove verbs to customize output
 
 **File:** `LatexRules.txt`
+
 - LaTeX formatting standards and rules
 - Controls resume appearance and ATS compatibility
 
@@ -561,26 +603,31 @@ All these files are loaded in `lib/llm-context.ts` and compiled into the system 
 ### Styling Customization
 
 **Tailwind CSS** (`tailwind.config.ts`)
+
 - Color scheme
 - Typography scales
 - Spacing and breakpoints
 
 **Global CSS** (`app/globals.css`)
+
 - Theme tokens, utilities, and shared layout styling
 - Default styles for UI components
 
 **Component Styles** (`components/ui/*.tsx`)
+
 - Individual component styling
 - Built with Radix UI for accessibility
 
 ### UI Component Customization
 
 All UI components in `components/ui/` are built on Radix UI primitives:
+
 - Fully accessible (WCAG compliant)
 - Styled with Tailwind CSS
 - Can be customized without breaking functionality
 
 Examples:
+
 - `button.tsx` - Customizable button with variants
 - `textarea.tsx` - Multi-line input with auto-resize
 - `label.tsx` - Form labels with proper accessibility
@@ -631,15 +678,15 @@ Output: LaTeX Resume → PDF Conversion
 
 The application implements these ATS best practices:
 
-| Strategy | Implementation |
-|----------|-----------------|
+| Strategy             | Implementation                                                              |
+| -------------------- | --------------------------------------------------------------------------- |
 | **Keyword Matching** | AI extracts keywords from job description and weaves them throughout resume |
-| **Section Headers** | Uses standard headers (Experience, Education, Skills) that ATS can parse |
-| **No Graphics** | LaTeX generates plain text PDF without images or visual elements |
-| **Formatting** | Avoids columns, text boxes, or decorative separators |
-| **Consistency** | Uniform date formats, bullet point structure |
-| **Power Verbs** | Uses action verbs from curated database to start achievements |
-| **Brevity** | Reformats to fit single page while maximizing content |
+| **Section Headers**  | Uses standard headers (Experience, Education, Skills) that ATS can parse    |
+| **No Graphics**      | LaTeX generates plain text PDF without images or visual elements            |
+| **Formatting**       | Avoids columns, text boxes, or decorative separators                        |
+| **Consistency**      | Uniform date formats, bullet point structure                                |
+| **Power Verbs**      | Uses action verbs from curated database to start achievements               |
+| **Brevity**          | Reformats to fit single page while maximizing content                       |
 
 ---
 
@@ -648,11 +695,13 @@ The application implements these ATS best practices:
 ### Code Architecture
 
 **Component Philosophy:**
+
 - **Server-side**: Next.js App Router for API and layout
 - **Client-side**: React components for interactivity
 - **Type Safety**: Full TypeScript throughout
 
 **File Organization:**
+
 - API routes in `app/api/` - isolated, single responsibility
 - Components in `components/` - reusable, focused, accessible
 - Utilities in `lib/` - pure functions, no side effects
@@ -661,6 +710,7 @@ The application implements these ATS best practices:
 ### Key Dependencies
 
 **Why each library:**
+
 - **React Hook Form**: Minimal re-renders, easy validation
 - **Zod**: Runtime type validation for API inputs
 - **pdfjs-dist**: Client-side PDF parsing without server overhead
@@ -690,6 +740,7 @@ The application implements these ATS best practices:
 ### Code Quality Standards
 
 **TypeScript:**
+
 ```bash
 # Check for type errors without building
 pnpm tsc --noEmit
@@ -699,12 +750,14 @@ pnpm build
 ```
 
 **Linting:**
+
 ```bash
 # Run ESLint on all files
 pnpm lint
 ```
 
 **Testing (if added):**
+
 ```bash
 # Future: Add Jest/Vitest for unit tests
 # Future: Add E2E tests with Playwright/Cypress
@@ -715,6 +768,7 @@ pnpm lint
 ## 🔐 Security & Privacy
 
 ### Data Handling
+
 - ✅ **No Data Storage**: Resumes are never saved to database
 - ✅ **In-Memory Processing**: All work happens in API request lifecycle
 - ✅ **No Logs**: Resume content not logged or retained
@@ -722,12 +776,14 @@ pnpm lint
 - ✅ **API Key Security**: Keys stored in environment variables only, never in code
 
 ### API Security
+
 - Input validation through Zod schemas
 - FormData validation on upload
 - Error messages don't expose internals
 - Rate limiting recommended for production
 
 ### User Privacy
+
 - Session-based, not user-account based
 - No tracking or analytics on resume content
 - User data doesn't persist between sessions
@@ -737,15 +793,17 @@ pnpm lint
 ## 📊 Performance Metrics
 
 ### Typical Workflow Timing
-| Step | Duration |
-|------|----------|
-| PDF upload & extraction | 1-2 seconds |
-| Job description input | User-dependent |
-| AI resume generation | 5-10 seconds |
-| LaTeX → PDF conversion | 1-2 seconds |
-| **Total** | **~10-15 seconds** |
+
+| Step                    | Duration           |
+| ----------------------- | ------------------ |
+| PDF upload & extraction | 1-2 seconds        |
+| Job description input   | User-dependent     |
+| AI resume generation    | 5-10 seconds       |
+| LaTeX → PDF conversion  | 1-2 seconds        |
+| **Total**               | **~10-15 seconds** |
 
 ### API Response Times (OpenRouter)
+
 - Claude models: 8-12 seconds
 - Deepseek: 4-8 seconds
 - Varies based on model selection and system load
@@ -757,6 +815,7 @@ pnpm lint
 ### Deploying to Vercel (Recommended)
 
 1. **Push to GitHub**
+
 ```bash
 git push origin main
 ```
@@ -772,11 +831,13 @@ git push origin main
 ### Self-Hosted Options
 
 **Requirements:**
+
 - Node.js 18+ runtime
 - Ability to set environment variables
 - Access to OpenRouter API
 
 **Platforms:**
+
 - Railway.app
 - Render.com
 - DigitalOcean App Platform
@@ -789,6 +850,7 @@ git push origin main
 ### Common Issues
 
 **Issue: "API key is missing"**
+
 ```bash
 # Check .env.local exists in root
 cat .env.local
@@ -798,16 +860,19 @@ cat .env.local
 ```
 
 **Issue: "PDF extraction fails"**
+
 - Check browser console for pdfjs worker errors
 - Ensure PDF is not corrupted
 - Try copying/pasting resume text instead
 
 **Issue: "Generated resume is blank"**
+
 - Check API response in browser DevTools
 - Verify job description is filled in
 - Try smaller, simpler job descriptions first
 
 **Issue: "LaTeX contains errors"**
+
 - Some special characters may need escaping
 - Check OpenRouter API response for errors
 - Review LLM output in browser network tab
@@ -816,9 +881,9 @@ cat .env.local
 
 ```typescript
 // In app/page.tsx, add logging:
-console.log('Resume Input:', resumeContent)
-console.log('Job Description:', jobDescription)
-console.log('API Response:', response)
+console.log("Resume Input:", resumeContent)
+console.log("Job Description:", jobDescription)
+console.log("API Response:", response)
 ```
 
 ### Useful Commands During Development
@@ -854,6 +919,7 @@ Contributions are welcome! Here's how:
 5. **Open** a pull request
 
 ### Contribution Areas
+
 - Additional LLM models support
 - Improved ATS optimization strategies
 - More action verb categories
@@ -884,12 +950,15 @@ This project is provided as-is for personal and educational use.
 ## 📞 Support & Contact
 
 **Found a bug?**
+
 - Open an issue on GitHub with details and reproduction steps
 
 **Have a feature idea?**
+
 - Create a GitHub issue with the `enhancement` label
 
 **General questions?**
+
 - Check existing issues and discussions
 - Join our community discussions
 
@@ -898,6 +967,7 @@ This project is provided as-is for personal and educational use.
 ## 🎯 Roadmap
 
 Potential future features:
+
 - [ ] Multiple resume versions management
 - [ ] Cover letter generation
 - [ ] Job application tracking dashboard
@@ -913,6 +983,7 @@ Potential future features:
 ## 📈 Success Stories
 
 Share your success! Let us know if you landed a job using this tool:
+
 - Open an issue with "Success Story" label
 - Tell us which position and company
 - Any tips or feedback appreciated!
@@ -921,5 +992,5 @@ Share your success! Let us know if you landed a job using this tool:
 
 **Made with ❤️ to help you land your dream job** 🚀
 
-*Last Updated: March 7, 2026*
-*Version: 0.1.0*
+_Last Updated: March 7, 2026_
+_Version: 0.1.0_

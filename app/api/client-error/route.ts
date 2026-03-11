@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
+
 import { z } from "zod"
+
 import { enforceRateLimit } from "@/lib/api-rate-limit"
+import { errorResponse, validationErrorResponse } from "@/lib/api-response"
 import { reportServerError } from "@/lib/error-monitoring"
 
 export const runtime = "nodejs"
@@ -26,7 +29,7 @@ export async function POST(request: NextRequest) {
   try {
     const parsed = clientErrorSchema.safeParse(await request.json())
     if (!parsed.success) {
-      return NextResponse.json({ error: "Invalid client error payload" }, { status: 400 })
+      return validationErrorResponse(parsed.error)
     }
 
     console.error("[client-report]", parsed.data)
@@ -51,6 +54,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true })
   } catch {
     reportServerError("Failed to report client error", "client-error")
-    return NextResponse.json({ error: "Failed to report client error" }, { status: 500 })
+    return errorResponse(
+      new Error("Failed to report client error"),
+      "Failed to report client error"
+    )
   }
 }

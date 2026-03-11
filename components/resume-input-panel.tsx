@@ -1,14 +1,16 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+
 import { Upload, FileText, X, Sparkles, Loader2 } from "lucide-react"
+
 import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { useDocumentActions } from "@/hooks/use-document-actions"
 import type { DocumentArtifacts } from "@/lib/document-artifacts"
-import { getUserFacingMessage } from "@/lib/errors"
 import { reportClientError } from "@/lib/error-monitoring"
-import { documentServiceClient } from "@/lib/services/gateway-client"
+import { getUserFacingMessage } from "@/lib/errors"
 import { TRACKED_RUN_MODE, type TrackedRunMode } from "@/lib/tracked-runs"
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
@@ -34,14 +36,11 @@ interface ResumeInputPanelProps {
   resetToken?: number
 }
 
-async function extractTextFromFile(file: File): Promise<{ text: string; artifacts?: DocumentArtifacts }> {
-  return documentServiceClient.extractResume(file)
-}
-
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
-    reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "")
+    reader.onload = () =>
+      resolve(typeof reader.result === "string" ? reader.result : "")
     reader.onerror = () => reject(new Error("Failed to read the uploaded file"))
     reader.readAsDataURL(file)
   })
@@ -55,7 +54,7 @@ export function ResumeInputPanel({
   jobDescription,
   resumeContent,
   resumeFileName,
-  resumeFileMimeType,
+  resumeFileMimeType: _resumeFileMimeType,
   extraInstructions,
   onJobDescriptionChange,
   onResumeContentChange,
@@ -67,6 +66,7 @@ export function ResumeInputPanel({
   onLockedGenerateAttempt,
   resetToken = 0,
 }: ResumeInputPanelProps) {
+  const { extractResume } = useDocumentActions()
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
   const [isExtracting, setIsExtracting] = useState(false)
   const [extractionError, setExtractionError] = useState<string | null>(null)
@@ -89,7 +89,9 @@ export function ResumeInputPanel({
       onResumeFileMimeTypeChange("")
       onResumeFileDataUrlChange("")
       onResumeArtifactsChange(null)
-      setExtractionError(`File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Max size is 10MB.`)
+      setExtractionError(
+        `File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Max size is 10MB.`
+      )
       if (fileInputRef.current) fileInputRef.current.value = ""
       return
     }
@@ -103,7 +105,7 @@ export function ResumeInputPanel({
     try {
       const [fileDataUrl, extractionResult] = await Promise.all([
         readFileAsDataUrl(file),
-        extractTextFromFile(file),
+        extractResume(file),
       ])
 
       onResumeFileDataUrlChange(fileDataUrl)
@@ -115,7 +117,9 @@ export function ResumeInputPanel({
       onResumeContentChange("")
       onResumeFileDataUrlChange("")
       onResumeArtifactsChange(null)
-      setExtractionError(`Failed to extract text: ${getUserFacingMessage(error, "Unknown error")}.`)
+      setExtractionError(
+        `Failed to extract text: ${getUserFacingMessage(error, "Unknown error")}.`
+      )
     } finally {
       setIsExtracting(false)
     }
@@ -144,8 +148,12 @@ export function ResumeInputPanel({
 
     // For generation mode, both JD and resume are required
     // For ATS score mode, only resume is required
-    const isValidForGenerate = mode === TRACKED_RUN_MODE.GENERATE && jobDescription.trim() && resumeContent.trim()
-    const isValidForATS = mode === TRACKED_RUN_MODE.ATS_SCORE && resumeContent.trim()
+    const isValidForGenerate =
+      mode === TRACKED_RUN_MODE.GENERATE &&
+      jobDescription.trim() &&
+      resumeContent.trim()
+    const isValidForATS =
+      mode === TRACKED_RUN_MODE.ATS_SCORE && resumeContent.trim()
 
     if (!isValidForGenerate && !isValidForATS) return
 
@@ -165,19 +173,21 @@ export function ResumeInputPanel({
     onGenerate(formData)
   }
 
-  const isValid = mode === TRACKED_RUN_MODE.GENERATE
-    ? (!!jobDescription.trim() && !!resumeContent.trim())
-    : !!resumeContent.trim()
+  const isValid =
+    mode === TRACKED_RUN_MODE.GENERATE
+      ? !!jobDescription.trim() && !!resumeContent.trim()
+      : !!resumeContent.trim()
   const displayFileName = uploadedFile?.name || resumeFileName
   return (
     <div className="flex flex-col h-full min-h-0">
       <div className="flex-shrink-0 mb-4">
-        <h2 className="text-xl font-bold text-foreground mb-1">Input Details</h2>
+        <h2 className="text-xl font-bold text-foreground mb-1">
+          Input Details
+        </h2>
         <p className="text-muted-foreground text-sm">
           {mode === TRACKED_RUN_MODE.ATS_SCORE
             ? "Attach a resume file and optionally add a job description for keyword analysis"
-            : "Paste the JD and attach a resume file"
-          }
+            : "Paste the JD and attach a resume file"}
         </p>
       </div>
 
@@ -189,8 +199,12 @@ export function ResumeInputPanel({
           >
             <FileText className="w-4 h-4 text-primary" />
             Job Description
-            {mode === TRACKED_RUN_MODE.GENERATE && <span className="text-primary">*</span>}
-            {mode === TRACKED_RUN_MODE.ATS_SCORE && <span className="text-muted-foreground text-xs">(Optional)</span>}
+            {mode === TRACKED_RUN_MODE.GENERATE && (
+              <span className="text-primary">*</span>
+            )}
+            {mode === TRACKED_RUN_MODE.ATS_SCORE && (
+              <span className="text-muted-foreground text-xs">(Optional)</span>
+            )}
           </Label>
           <Textarea
             id="job-description"
@@ -213,12 +227,13 @@ export function ResumeInputPanel({
           </Label>
 
           <div
-            className={`border-2 border-dashed rounded-xl p-3 text-center transition-all duration-300 cursor-pointer group ${isExtracting
-              ? "border-primary/50 bg-primary/10"
-              : extractionError
-                ? "border-red-500/50"
-                : "border-white/15 bg-black/8 hover:border-primary/40 hover:bg-black/12"
-              }`}
+            className={`border-2 border-dashed rounded-xl p-3 text-center transition-all duration-300 cursor-pointer group ${
+              isExtracting
+                ? "border-primary/50 bg-primary/10"
+                : extractionError
+                  ? "border-red-500/50"
+                  : "border-white/15 bg-black/8 hover:border-primary/40 hover:bg-black/12"
+            }`}
             onClick={() => !isExtracting && fileInputRef.current?.click()}
           >
             <input
@@ -270,7 +285,6 @@ export function ResumeInputPanel({
           {extractionError && (
             <p className="text-red-400 text-xs">{extractionError}</p>
           )}
-
         </div>
 
         {mode === TRACKED_RUN_MODE.GENERATE && (
@@ -281,7 +295,9 @@ export function ResumeInputPanel({
             >
               <Sparkles className="w-4 h-4 text-primary" />
               Additional Info
-              <span className="text-muted-foreground text-xs font-normal">(Optional)</span>
+              <span className="text-muted-foreground text-xs font-normal">
+                (Optional)
+              </span>
             </Label>
             <Textarea
               id="extra-instructions"
@@ -296,9 +312,12 @@ export function ResumeInputPanel({
 
         {mode === TRACKED_RUN_MODE.GENERATE && !canUseAiGenerator ? (
           <div className="rounded-2xl border border-sky-400/20 bg-sky-500/10 p-4">
-            <p className="text-sm font-medium text-sky-100">AI LaTeX Generator is a Pro feature.</p>
+            <p className="text-sm font-medium text-sky-100">
+              AI LaTeX Generator is a Pro feature.
+            </p>
             <p className="mt-1 text-xs leading-5 text-sky-100/75">
-              Free users can still use the LaTeX editor, ATS score, and dashboard.
+              Free users can still use the LaTeX editor, ATS score, and
+              dashboard.
             </p>
           </div>
         ) : null}
@@ -316,12 +335,16 @@ export function ResumeInputPanel({
           {isGenerating ? (
             <>
               <Loader2 className="w-5 h-5 animate-spin" />
-              {mode === TRACKED_RUN_MODE.ATS_SCORE ? "Analyzing Resume..." : "Generating Resume..."}
+              {mode === TRACKED_RUN_MODE.ATS_SCORE
+                ? "Analyzing Resume..."
+                : "Generating Resume..."}
             </>
           ) : (
             <>
               <Sparkles className="w-5 h-5" />
-              {mode === TRACKED_RUN_MODE.ATS_SCORE ? "Get ATS Score" : "Generate LaTeX Resume"}
+              {mode === TRACKED_RUN_MODE.ATS_SCORE
+                ? "Get ATS Score"
+                : "Generate LaTeX Resume"}
             </>
           )}
         </Button>

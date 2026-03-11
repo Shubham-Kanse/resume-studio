@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from "next/server"
+
+import { exportAccountData } from "@/features/subscription/server/account-service"
 import { enforceRateLimit } from "@/lib/api-rate-limit"
-import { unauthorized } from "@/lib/api-response"
+import { errorResponse, unauthorized } from "@/lib/api-response"
+import { APP_PERMISSION, authorizeRequest } from "@/lib/authorization"
+import { verifyCsrfRequest } from "@/lib/csrf"
 import { reportServerError } from "@/lib/error-monitoring"
-import { exportAccountData } from "@/lib/services/account-service"
 
 export const runtime = "nodejs"
 
 export async function GET(request: NextRequest) {
+  const csrfError = verifyCsrfRequest(request)
+  if (csrfError) return csrfError
+
   const rateLimitResponse = await enforceRateLimit(request, {
     key: "account-export",
     limit: 5,
@@ -15,7 +21,21 @@ export async function GET(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse
 
   try {
-    const payload = await exportAccountData(request.headers.get("authorization"))
+    const { context, response } = await authorizeRequest(request, {
+      permission: APP_PERMISSION.MANAGE_ACCOUNT,
+      unauthorizedMessage: "Sign in to export your account data.",
+    })
+    if (response) {
+      return response
+    }
+    if (!context.user) {
+      return unauthorized()
+    }
+
+    const payload = await exportAccountData(
+      request.headers.get("authorization"),
+      context.accessToken
+    )
     if (!payload) {
       return unauthorized()
     }
@@ -24,17 +44,13 @@ export async function GET(request: NextRequest) {
       status: 200,
       headers: {
         "Content-Type": "application/json; charset=utf-8",
-        "Content-Disposition": 'attachment; filename="resume-studio-export.json"',
+        "Content-Disposition":
+          'attachment; filename="resume-studio-export.json"',
         "Cache-Control": "no-store",
       },
     })
   } catch (error) {
     reportServerError(error, "account-export")
-    return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "Failed to export account data",
-      },
-      { status: 500 }
-    )
+    return errorResponse(error, "Failed to export account data")
   }
 }

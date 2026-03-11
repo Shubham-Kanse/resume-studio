@@ -1,7 +1,9 @@
 "use client"
 
 import { useEffect, useState } from "react"
+
 import { Download, Loader2, Trash2, X } from "lucide-react"
+
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
@@ -70,7 +72,9 @@ export function AuthDialog({
       <div className="w-full max-w-md rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,rgba(8,12,24,0.1),rgba(3,7,18,0.03))] p-6 shadow-[0_18px_56px_rgba(0,0,0,0.18),inset_0_1px_0_rgba(255,255,255,0.1)] backdrop-blur-sm">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-[11px] uppercase tracking-[0.28em] text-white/45">Account</p>
+            <p className="text-[11px] uppercase tracking-[0.28em] text-white/45">
+              Account
+            </p>
             <h2 className="mt-2 text-2xl font-semibold text-foreground">
               {userEmail ? "You are signed in" : "Continue with Google"}
             </h2>
@@ -118,13 +122,16 @@ export function AuthDialog({
                   Delete account
                 </div>
                 <p className="mt-2 text-sm leading-6 text-red-100/75">
-                  This permanently removes your account and deletes cloud-saved history and job tracker data.
+                  This permanently removes your account and deletes cloud-saved
+                  history and job tracker data.
                 </p>
                 <div className="mt-3">
                   <input
                     type="text"
                     value={deleteConfirmation}
-                    onChange={(event) => setDeleteConfirmation(event.target.value.toUpperCase())}
+                    onChange={(event) =>
+                      setDeleteConfirmation(event.target.value.toUpperCase())
+                    }
                     className="h-11 w-full rounded-xl border border-white/10 bg-black/20 px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground"
                     placeholder="Type DELETE to confirm"
                     autoComplete="off"
@@ -139,7 +146,11 @@ export function AuthDialog({
                     deleteConfirmation !== "DELETE" && "opacity-70"
                   )}
                   onClick={() => void onDeleteAccount(deleteConfirmation)}
-                  disabled={isDeletingAccount || isExportingData || deleteConfirmation !== "DELETE"}
+                  disabled={
+                    isDeletingAccount ||
+                    isExportingData ||
+                    deleteConfirmation !== "DELETE"
+                  }
                 >
                   {isDeletingAccount ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -159,12 +170,17 @@ export function AuthDialog({
             onClick={onGoogleAuth}
             disabled={authLoading}
           >
-            {authLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <GoogleMark />}
+            {authLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <GoogleMark />
+            )}
             Sign in with Google
           </Button>
         ) : (
           <div className="mt-6 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-200">
-            Add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` to enable Google login.
+            Add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+            to enable Google login.
           </div>
         )}
 

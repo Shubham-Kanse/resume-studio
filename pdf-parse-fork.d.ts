@@ -1,4 +1,4 @@
-declare module 'pdf-parse-fork' {
+declare module "pdf-parse-fork" {
   function parse(dataBuffer: Buffer): Promise<{
     text: string
     numpages: number

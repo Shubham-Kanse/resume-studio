@@ -3,7 +3,8 @@ interface JsonBodyOptions {
   headers?: Record<string, string>
 }
 
-interface FetchWithPolicyOptions extends Omit<RequestInit, "body" | "headers">, JsonBodyOptions {
+interface FetchWithPolicyOptions
+  extends Omit<RequestInit, "body" | "headers">, JsonBodyOptions {
   timeoutMs?: number
   retries?: number
   retryDelayMs?: number
@@ -47,7 +48,11 @@ export async function fetchWithPolicy(
 
       clearTimeout(timeoutId)
 
-      if (response.ok || !retryOnStatuses.includes(response.status) || attempt === retries) {
+      if (
+        response.ok ||
+        !retryOnStatuses.includes(response.status) ||
+        attempt === retries
+      ) {
         return response
       }
     } catch (error) {

@@ -1,11 +1,12 @@
-import type { ATSScoreResponse } from "@/lib/ats-types"
+import type { ATSScoreResponse } from "@/types/ats"
 
 export const TRACKED_RUN_MODE = {
   GENERATE: "generate",
   ATS_SCORE: "ats-score",
 } as const
 
-export type TrackedRunMode = (typeof TRACKED_RUN_MODE)[keyof typeof TRACKED_RUN_MODE]
+export type TrackedRunMode =
+  (typeof TRACKED_RUN_MODE)[keyof typeof TRACKED_RUN_MODE]
 
 export interface TrackedRunRecord {
   id: string
@@ -55,7 +56,8 @@ export function buildTrackedRunLabel(input: SaveTrackedRunInput) {
   const jobSummary = truncateLabel(input.jobDescription, "Target role", 42)
 
   if (input.mode === TRACKED_RUN_MODE.GENERATE) {
-    if (sourceFileName) return `Generated Resume • ${truncateLabel(sourceFileName, "resume", 52)}`
+    if (sourceFileName)
+      return `Generated Resume • ${truncateLabel(sourceFileName, "resume", 52)}`
     if (input.jobDescription.trim()) return `Generated Resume • ${jobSummary}`
     return "Generated Resume"
   }
@@ -72,7 +74,10 @@ export function buildTrackedRunLabel(input: SaveTrackedRunInput) {
 }
 
 export function extractTrackedRunFileName(label: string) {
-  const parts = label.split("•").map((part) => part.trim()).filter(Boolean)
+  const parts = label
+    .split("•")
+    .map((part) => part.trim())
+    .filter(Boolean)
 
   if (parts.length < 2) return null
 
@@ -86,7 +91,12 @@ export function extractTrackedRunFileName(label: string) {
   }
 
   const candidate = parts[1]
-  if (!candidate || candidate === "Resume Snapshot" || candidate === "Target role") return null
+  if (
+    !candidate ||
+    candidate === "Resume Snapshot" ||
+    candidate === "Target role"
+  )
+    return null
 
   return candidate
 }

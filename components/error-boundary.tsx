@@ -1,9 +1,10 @@
 "use client"
 
 import React from "react"
+
 import { ErrorFallback } from "@/components/error-fallback"
-import { getUserFacingMessage } from "@/lib/errors"
 import { reportClientError } from "@/lib/error-monitoring"
+import { getUserFacingMessage } from "@/lib/errors"
 
 interface ErrorBoundaryProps {
   children: React.ReactNode
@@ -17,7 +18,10 @@ interface ErrorBoundaryState {
   error: Error | null
 }
 
-export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+export class ErrorBoundary extends React.Component<
+  ErrorBoundaryProps,
+  ErrorBoundaryState
+> {
   state: ErrorBoundaryState = { error: null }
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
@@ -40,7 +44,9 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
     return (
       <ErrorFallback
         title={this.props.fallbackTitle}
-        message={this.props.fallbackMessage || getUserFacingMessage(this.state.error)}
+        message={
+          this.props.fallbackMessage || getUserFacingMessage(this.state.error)
+        }
         actionLabel="Reload section"
         onAction={this.reset}
         compact={this.props.compact}

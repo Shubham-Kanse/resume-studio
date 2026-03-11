@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
+
 import { enforceRateLimit } from "@/lib/api-rate-limit"
-import { validationErrorResponse } from "@/lib/api-response"
+import { errorResponse, validationErrorResponse } from "@/lib/api-response"
 import { reportServerError } from "@/lib/error-monitoring"
 import { atsScoreSchema, scoreResume } from "@/lib/services/ats-service"
 
@@ -26,9 +27,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(await scoreResume(parsed.data))
   } catch (error) {
     reportServerError(error, "ats-score")
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to score resume" },
-      { status: 500 }
-    )
+    return errorResponse(error, "Failed to score resume")
   }
 }

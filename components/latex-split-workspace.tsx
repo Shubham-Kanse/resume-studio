@@ -1,21 +1,40 @@
 "use client"
 
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
+
 import dynamic from "next/dynamic"
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
-import { AlertTriangle, CheckCircle, Download, Loader2, Minimize2 } from "lucide-react"
+
+import {
+  AlertTriangle,
+  CheckCircle,
+  Download,
+  Loader2,
+  Minimize2,
+} from "lucide-react"
+
 import { Button } from "@/components/ui/button"
-import { getUserFacingMessage } from "@/lib/errors"
+import { useDocumentActions } from "@/hooks/use-document-actions"
 import { reportClientError } from "@/lib/error-monitoring"
+import { getUserFacingMessage } from "@/lib/errors"
 import {
   AUTO_COMPILE_DELAY,
   MAX_LATEX_LENGTH,
   validateLaTeX,
 } from "@/lib/latex-editor"
-import { documentServiceClient } from "@/lib/services/gateway-client"
 
-const PDFViewer = dynamic(() => import("@/components/pdf-viewer").then((mod) => mod.PDFViewer), {
-  loading: () => null,
-})
+const PDFViewer = dynamic(
+  () => import("@/components/pdf-viewer").then((mod) => mod.PDFViewer),
+  {
+    loading: () => null,
+  }
+)
 
 interface LatexSplitWorkspaceProps {
   open: boolean
@@ -34,6 +53,7 @@ export function LatexSplitWorkspace({
   onLatexChange,
   onClose,
 }: LatexSplitWorkspaceProps) {
+  const { compilePdfDownload, compilePreviewPdf } = useDocumentActions()
   const [pdfData, setPdfData] = useState<ArrayBuffer | null>(null)
   const [isLoadingPreview, setIsLoadingPreview] = useState(false)
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false)
@@ -44,7 +64,10 @@ export function LatexSplitWorkspace({
   const autoCompileTimerRef = useRef<NodeJS.Timeout | null>(null)
   const deferredLatexContent = useDeferredValue(latexContent)
 
-  const latexErrors = useMemo(() => validateLaTeX(deferredLatexContent), [deferredLatexContent])
+  const latexErrors = useMemo(
+    () => validateLaTeX(deferredLatexContent),
+    [deferredLatexContent]
+  )
   const hasErrors = latexErrors.some((error) => error.type === "error")
   const hasWarnings = latexErrors.some((error) => error.type === "warning")
 
@@ -55,12 +78,15 @@ export function LatexSplitWorkspace({
   }, [deferredLatexContent])
 
   const errorLineNumbers = useMemo(() => {
-    return new Set(latexErrors.filter((error) => error.line).map((error) => error.line!))
+    return new Set(
+      latexErrors.filter((error) => error.line).map((error) => error.line!)
+    )
   }, [latexErrors])
 
   const handleEditorScroll = useCallback(() => {
     if (editorRef.current && lineNumbersRef.current) {
-      const child = lineNumbersRef.current.firstElementChild as HTMLElement | null
+      const child = lineNumbersRef.current
+        .firstElementChild as HTMLElement | null
       if (child) {
         child.style.transform = `translateY(-${editorRef.current.scrollTop}px)`
       }
@@ -87,37 +113,37 @@ export function LatexSplitWorkspace({
     }
   }, [onClose, open])
 
-  const compilePreview = useCallback(async (content: string) => {
-    if (!content.trim()) {
-      setPdfData(null)
-      setPreviewError("No LaTeX content to preview.")
-      return
-    }
-
-    setIsLoadingPreview(true)
-    setPreviewError(null)
-
-    try {
-      const response = await documentServiceClient.compileLatex({
-        latex: content,
-        preview: true,
-      })
-
-      const arrayBuffer = await response.arrayBuffer()
-
-      if (!arrayBuffer || arrayBuffer.byteLength === 0) {
-        throw new Error("Empty PDF returned.")
+  const compilePreview = useCallback(
+    async (content: string) => {
+      if (!content.trim()) {
+        setPdfData(null)
+        setPreviewError("No LaTeX content to preview.")
+        return
       }
 
-      setPdfData(arrayBuffer)
-    } catch (error) {
-      reportClientError(error, "latex-split-preview")
-      setPdfData(null)
-      setPreviewError(getUserFacingMessage(error, "Failed to generate preview."))
-    } finally {
-      setIsLoadingPreview(false)
-    }
-  }, [])
+      setIsLoadingPreview(true)
+      setPreviewError(null)
+
+      try {
+        const arrayBuffer = await compilePreviewPdf(content)
+
+        if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+          throw new Error("Empty PDF returned.")
+        }
+
+        setPdfData(arrayBuffer)
+      } catch (error) {
+        reportClientError(error, "latex-split-preview")
+        setPdfData(null)
+        setPreviewError(
+          getUserFacingMessage(error, "Failed to generate preview.")
+        )
+      } finally {
+        setIsLoadingPreview(false)
+      }
+    },
+    [compilePreviewPdf]
+  )
 
   const handleDownloadPdf = useCallback(async () => {
     if (!latexContent.trim()) return
@@ -125,12 +151,7 @@ export function LatexSplitWorkspace({
     setIsDownloadingPdf(true)
 
     try {
-      const response = await documentServiceClient.compileLatex({
-        latex: latexContent,
-        preview: false,
-      })
-
-      const blob = await response.blob()
+      const blob = await compilePdfDownload(latexContent)
       const url = URL.createObjectURL(blob)
       const anchor = document.createElement("a")
 
@@ -142,13 +163,11 @@ export function LatexSplitWorkspace({
       URL.revokeObjectURL(url)
     } catch (error) {
       reportClientError(error, "latex-split-download")
-      setPreviewError(
-        getUserFacingMessage(error, "Failed to download PDF.")
-      )
+      setPreviewError(getUserFacingMessage(error, "Failed to download PDF."))
     } finally {
       setIsDownloadingPdf(false)
     }
-  }, [latexContent])
+  }, [compilePdfDownload, latexContent])
 
   useEffect(() => {
     if (!open) return
@@ -187,7 +206,9 @@ export function LatexSplitWorkspace({
       <div className="mx-auto flex h-full w-full max-w-[1680px] flex-col px-4 pb-4 pt-4 sm:px-6 lg:px-10 xl:px-12">
         <div className="mb-4 flex items-center justify-between rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(8,12,24,0.16),rgba(3,7,18,0.06))] px-4 py-3 shadow-[0_18px_56px_rgba(0,0,0,0.18),inset_0_1px_0_rgba(255,255,255,0.1)] backdrop-blur-sm">
           <div>
-            <p className="text-sm font-semibold text-foreground">Side-by-Side Workspace</p>
+            <p className="text-sm font-semibold text-foreground">
+              Side-by-Side Workspace
+            </p>
             <p className="text-xs text-muted-foreground">
               Edit LaTeX and preview the PDF over the main panels
             </p>
@@ -219,18 +240,30 @@ export function LatexSplitWorkspace({
               <div className="flex h-full min-h-0 flex-col overflow-hidden">
                 <div className="flex-shrink-0 border-b border-white/8 bg-transparent px-4 py-2">
                   <div className="flex items-center justify-between gap-4">
-                    <p className="text-xs font-semibold text-muted-foreground">LATEX EDITOR</p>
+                    <p className="text-xs font-semibold text-muted-foreground">
+                      LATEX EDITOR
+                    </p>
                     {latexContent && (
                       <div className="flex items-center gap-2">
                         {hasErrors ? (
                           <span className="flex items-center gap-1 text-xs text-red-400">
                             <AlertTriangle className="h-3 w-3" />
-                            {latexErrors.filter((error) => error.type === "error").length} error(s)
+                            {
+                              latexErrors.filter(
+                                (error) => error.type === "error"
+                              ).length
+                            }{" "}
+                            error(s)
                           </span>
                         ) : hasWarnings ? (
                           <span className="flex items-center gap-1 text-xs text-yellow-400">
                             <AlertTriangle className="h-3 w-3" />
-                            {latexErrors.filter((error) => error.type === "warning").length} warning(s)
+                            {
+                              latexErrors.filter(
+                                (error) => error.type === "warning"
+                              ).length
+                            }{" "}
+                            warning(s)
                           </span>
                         ) : (
                           <span className="flex items-center gap-1 text-xs text-emerald-400">
@@ -253,23 +286,30 @@ export function LatexSplitWorkspace({
                             if (error.line && editorRef.current) {
                               const lines = deferredLatexContent.split("\n")
                               const lineStart =
-                                lines.slice(0, error.line - 1).join("\n").length +
-                                (error.line > 1 ? 1 : 0)
+                                lines.slice(0, error.line - 1).join("\n")
+                                  .length + (error.line > 1 ? 1 : 0)
                               editorRef.current.focus()
                               editorRef.current.setSelectionRange(
                                 lineStart,
-                                lineStart + lines[error.line - 1].length
+                                lineStart + (lines[error.line - 1]?.length || 0)
                               )
-                              editorRef.current.scrollTop = (error.line - 1) * 20 - 100
+                              editorRef.current.scrollTop =
+                                (error.line - 1) * 20 - 100
                             }
                           }}
                           className={`flex cursor-pointer items-start gap-2 rounded p-1 text-xs transition-colors hover:bg-white/8 ${
-                            error.type === "error" ? "text-red-400" : "text-yellow-400"
+                            error.type === "error"
+                              ? "text-red-400"
+                              : "text-yellow-400"
                           }`}
                         >
                           <AlertTriangle className="mt-0.5 h-3 w-3 flex-shrink-0" />
                           <span>
-                            {error.line ? <span className="font-semibold">Line {error.line}: </span> : null}
+                            {error.line ? (
+                              <span className="font-semibold">
+                                Line {error.line}:{" "}
+                              </span>
+                            ) : null}
                             {error.message}
                           </span>
                         </div>
@@ -284,7 +324,9 @@ export function LatexSplitWorkspace({
                     className="flex-shrink-0 overflow-hidden border-r border-white/8 bg-transparent text-right select-none"
                     style={{ width: "3.25rem" }}
                   >
-                    <div style={{ paddingTop: "0.5rem", paddingBottom: "0.5rem" }}>
+                    <div
+                      style={{ paddingTop: "0.5rem", paddingBottom: "0.5rem" }}
+                    >
                       {lineNumbers.map((lineNumber) => (
                         <div
                           key={lineNumber}
@@ -317,7 +359,11 @@ export function LatexSplitWorkspace({
                     wrap="off"
                     aria-label="Split workspace LaTeX editor"
                     className="scrollbar-dark h-full min-w-0 flex-1 resize-none border-0 bg-transparent font-mono text-[13px] text-foreground placeholder:text-muted-foreground focus:outline-none"
-                    style={{ lineHeight: "1.25rem", padding: "0.5rem", overflow: "auto" }}
+                    style={{
+                      lineHeight: "1.25rem",
+                      padding: "0.5rem",
+                      overflow: "auto",
+                    }}
                   />
                 </div>
               </div>
@@ -328,15 +374,21 @@ export function LatexSplitWorkspace({
             <div className="flex h-full min-h-0 flex-col overflow-hidden">
               <div className="flex-shrink-0 border-b border-white/8 bg-transparent px-4 py-2">
                 <div className="flex items-center justify-between gap-4">
-                  <p className="text-xs font-semibold text-muted-foreground">LIVE PDF PREVIEW</p>
+                  <p className="text-xs font-semibold text-muted-foreground">
+                    LIVE PDF PREVIEW
+                  </p>
                   <div className="flex items-center gap-2">
-                    <div className="text-xs text-muted-foreground">Live sync while you edit</div>
+                    <div className="text-xs text-muted-foreground">
+                      Live sync while you edit
+                    </div>
                     <Button
                       type="button"
                       size="icon"
                       variant="outline"
                       onClick={() => void handleDownloadPdf()}
-                      disabled={!latexContent.trim() || isGenerating || isDownloadingPdf}
+                      disabled={
+                        !latexContent.trim() || isGenerating || isDownloadingPdf
+                      }
                       aria-label="Download PDF"
                       title="Download PDF"
                       className="h-8 w-8 rounded-full border-white/8 bg-transparent text-muted-foreground hover:bg-white/8 hover:text-foreground"
@@ -355,7 +407,9 @@ export function LatexSplitWorkspace({
                 {previewError ? (
                   <div className="flex h-full flex-col items-center justify-center p-4 text-muted-foreground">
                     <AlertTriangle className="mb-2 h-8 w-8 text-red-400" />
-                    <p className="max-w-md text-center text-sm text-red-400">{previewError}</p>
+                    <p className="max-w-md text-center text-sm text-red-400">
+                      {previewError}
+                    </p>
                   </div>
                 ) : (
                   <PDFViewer pdfData={pdfData} isLoading={isLoadingPreview} />

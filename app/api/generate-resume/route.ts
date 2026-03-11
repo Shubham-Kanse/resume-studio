@@ -1,17 +1,33 @@
 import { NextRequest, NextResponse } from "next/server"
+
+import {
+  getFeatureUpgradeMessage,
+  PREMIUM_FEATURE,
+} from "@/features/subscription/types"
 import { enforceRateLimit } from "@/lib/api-rate-limit"
-import { errorResponse, forbidden, unauthorized, validationErrorResponse } from "@/lib/api-response"
-import { isLikelyConfigurationError } from "@/lib/errors"
+import {
+  customError,
+  errorResponse,
+  serverError,
+  validationErrorResponse,
+} from "@/lib/api-response"
+import { APP_PERMISSION, authorizeRequest } from "@/lib/authorization"
+import { verifyCsrfRequest } from "@/lib/csrf"
 import { reportServerError } from "@/lib/error-monitoring"
-import { generateResume, generateResumeSchema, GroqApiError } from "@/lib/services/resume-generation-service"
-import { resolvePlanSnapshotForUser } from "@/lib/services/subscription-service"
-import { getAuthenticatedUserFromRequest } from "@/lib/supabase-server"
-import { canAccessFeature, getFeatureUpgradeMessage, PREMIUM_FEATURE } from "@/lib/subscription"
+import { isLikelyConfigurationError } from "@/lib/errors"
+import {
+  generateResume,
+  generateResumeSchema,
+  GroqApiError,
+} from "@/lib/services/resume-generation-service"
 
 export const runtime = "nodejs"
 export const maxDuration = 60
 
 export async function POST(request: NextRequest) {
+  const csrfError = verifyCsrfRequest(request)
+  if (csrfError) return csrfError
+
   const rateLimitResponse = await enforceRateLimit(request, {
     key: "generate-resume",
     limit: 10,
@@ -20,14 +36,16 @@ export async function POST(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse
 
   try {
-    const auth = await getAuthenticatedUserFromRequest(request.headers.get("authorization"))
-    if (!auth) {
-      return unauthorized("Sign in to access Pro features.")
+    const { context, response } = await authorizeRequest(request, {
+      permission: APP_PERMISSION.USE_AI_GENERATOR,
+      unauthorizedMessage: "Sign in to access Pro features.",
+      forbiddenMessage: getFeatureUpgradeMessage(PREMIUM_FEATURE.AI_GENERATOR),
+    })
+    if (response) {
+      return response
     }
-
-    const planSnapshot = await resolvePlanSnapshotForUser(auth.user, auth.accessToken)
-    if (!canAccessFeature(planSnapshot, PREMIUM_FEATURE.AI_GENERATOR)) {
-      return forbidden(getFeatureUpgradeMessage(PREMIUM_FEATURE.AI_GENERATOR))
+    if (!context.user || !context.accessToken) {
+      return serverError("Authorization context was incomplete.")
     }
 
     const formData = await request.formData()
@@ -43,12 +61,14 @@ export async function POST(request: NextRequest) {
 
     const data = await generateResume(parsed.data)
     if (!data.validation.pass) {
-      return NextResponse.json(
+      return customError(
+        data.validation.summary || "Generated LaTeX did not pass validation.",
         {
-          error: data.validation.summary || "Generated LaTeX did not pass validation.",
-          validation: data.validation,
-        },
-        { status: 422 }
+          status: 422,
+          code: "VALIDATION_ERROR",
+          retryable: false,
+          details: data.validation.summary,
+        }
       )
     }
 
@@ -56,11 +76,15 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     if (error instanceof GroqApiError) {
       console.error("Groq error:", error.details)
-      return NextResponse.json({ error: error.message }, { status: error.status })
+      return customError(error.message, {
+        status: error.status,
+        code: error.status >= 500 ? "UPSTREAM_ERROR" : "BAD_REQUEST",
+        retryable: error.status >= 500,
+      })
     }
 
     if (isLikelyConfigurationError(error)) {
-      return NextResponse.json({ error: "Groq API key not configured." }, { status: 500 })
+      return serverError("Groq API key not configured.")
     }
 
     reportServerError(error, "generate-resume")

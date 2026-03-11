@@ -1,3 +1,5 @@
+import { AppError } from "@/lib/errors"
+
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 export const DEFAULT_GROQ_MODEL = "llama-3.1-8b-instant"
@@ -36,22 +38,43 @@ export interface GroqChatCompletionResponse {
   }>
 }
 
-export class GroqApiError extends Error {
+export class GroqApiError extends AppError {
   status: number
-  details: unknown
+  details: Record<string, unknown> | null
 
   constructor(message: string, status: number, details?: unknown) {
-    super(message)
+    const normalizedDetails =
+      details && typeof details === "object"
+        ? (details as Record<string, unknown>)
+        : null
+
+    super(message, {
+      status,
+      code:
+        status === 503
+          ? "SERVICE_UNAVAILABLE"
+          : status >= 500
+            ? "UPSTREAM_ERROR"
+            : "BAD_REQUEST",
+      userMessage: message,
+      retryable: status >= 500,
+      details: normalizedDetails,
+    })
     this.name = "GroqApiError"
     this.status = status
-    this.details = details
+    this.details = normalizedDetails
   }
 }
 
 export function getGroqApiKey(): string {
   const apiKey = process.env.GROQ_API_KEY
   if (!apiKey) {
-    throw new Error("Groq API key not configured.")
+    throw new AppError("Groq API key not configured.", {
+      code: "CONFIGURATION_ERROR",
+      status: 500,
+      userMessage: "Groq API key not configured.",
+      retryable: false,
+    })
   }
   return apiKey
 }
@@ -66,7 +89,9 @@ function redactGroqHeaders(headers: HeadersInit | undefined) {
 
   return Object.fromEntries(
     Object.entries(headers).map(([key, value]) =>
-      key.toLowerCase() === "authorization" ? [key, "Bearer [REDACTED]"] : [key, value]
+      key.toLowerCase() === "authorization"
+        ? [key, "Bearer [REDACTED]"]
+        : [key, value]
     )
   )
 }
@@ -75,7 +100,10 @@ export async function createGroqChatCompletion(
   options: CreateGroqChatCompletionOptions
 ): Promise<GroqChatCompletionResponse> {
   const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs ?? 20_000)
+  const timeoutId = setTimeout(
+    () => controller.abort(),
+    options.timeoutMs ?? 20_000
+  )
 
   let response: Response
   try {
@@ -111,8 +139,14 @@ export async function createGroqChatCompletion(
   clearTimeout(timeoutId)
 
   if (!response.ok) {
-    const errorData = (await response.json().catch(() => ({}))) as GroqErrorPayload
-    throw new GroqApiError(errorData.error?.message || "Groq API error", response.status, errorData)
+    const errorData = (await response
+      .json()
+      .catch(() => ({}))) as GroqErrorPayload
+    throw new GroqApiError(
+      errorData.error?.message || "Groq API error",
+      response.status,
+      errorData
+    )
   }
 
   return (await response.json()) as GroqChatCompletionResponse

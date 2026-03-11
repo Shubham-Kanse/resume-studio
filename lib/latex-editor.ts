@@ -40,23 +40,27 @@ export function validateLaTeX(content: string): LaTeXError[] {
 
   const envStack: Array<{ name: string; line: number }> = []
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]
+    const line = lines[i] || ""
     const lineNum = i + 1
     const escapedLine = line.replace(/\\%/g, "__ESCAPED_PERCENT__")
     const commentStart = escapedLine.indexOf("%")
     const codePortion =
-      commentStart >= 0 ? line.slice(0, commentStart).replace(/__ESCAPED_PERCENT__/g, "\\%") : line
+      commentStart >= 0
+        ? line.slice(0, commentStart).replace(/__ESCAPED_PERCENT__/g, "\\%")
+        : line
 
     const beginMatch = codePortion.match(/\\begin\{([^}]+)\}/)
-    if (beginMatch) envStack.push({ name: beginMatch[1], line: lineNum })
+    if (beginMatch?.[1]) envStack.push({ name: beginMatch[1], line: lineNum })
 
     const inAlignmentEnv = envStack.some((env) =>
-      ["tabular", "tabular*", "array", "align", "align*", "aligned"].includes(env.name)
+      ["tabular", "tabular*", "array", "align", "align*", "aligned"].includes(
+        env.name
+      )
     )
 
     const endMatch = codePortion.match(/\\end\{([^}]+)\}/)
     if (endMatch) {
-      const envName = endMatch[1]
+      const envName = endMatch[1] || "unknown"
       if (envStack.length === 0) {
         errors.push({
           type: "error",
@@ -75,7 +79,11 @@ export function validateLaTeX(content: string): LaTeXError[] {
       }
     }
 
-    if (codePortion.includes("_") && !codePortion.includes("\\_") && !codePortion.match(/\$.*_.*\$/)) {
+    if (
+      codePortion.includes("_") &&
+      !codePortion.includes("\\_") &&
+      !codePortion.match(/\$.*_.*\$/)
+    ) {
       errors.push({
         type: "warning",
         message: "Underscore outside math. Use \\_ or $ $",
@@ -87,7 +95,9 @@ export function validateLaTeX(content: string): LaTeXError[] {
       codePortion.includes("&") &&
       !codePortion.includes("\\&") &&
       !inAlignmentEnv &&
-      !codePortion.match(/\\(begin|end)\{(tabular|array|align|align\\*|aligned|tabular\*)/) &&
+      !codePortion.match(
+        /\\(begin|end)\{(tabular|array|align|align\\*|aligned|tabular\*)/
+      ) &&
       !codePortion.includes("\\extracolsep")
     ) {
       errors.push({

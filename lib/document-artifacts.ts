@@ -3,7 +3,14 @@ import { z } from "zod"
 export const documentBlockSchema = z.object({
   page: z.number().int().min(1),
   text: z.string().trim().min(1).max(5000),
-  kind: z.enum(["heading", "paragraph", "bullet", "tableish", "contact", "other"]),
+  kind: z.enum([
+    "heading",
+    "paragraph",
+    "bullet",
+    "tableish",
+    "contact",
+    "other",
+  ]),
   x: z.number().finite().optional(),
   y: z.number().finite().optional(),
   width: z.number().finite().optional(),

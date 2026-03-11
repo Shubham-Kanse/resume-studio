@@ -18,7 +18,9 @@ function getLatexCompilerProvider() {
   return process.env.LATEX_COMPILER_PROVIDER || "ytotech"
 }
 
-export async function compileLatexDocument(latex: string): Promise<LatexCompileResult> {
+export async function compileLatexDocument(
+  latex: string
+): Promise<LatexCompileResult> {
   const provider = getLatexCompilerProvider()
 
   if (provider !== "ytotech") {
@@ -29,24 +31,27 @@ export async function compileLatexDocument(latex: string): Promise<LatexCompileR
     }
   }
 
-  const response = await fetchWithPolicy("https://latex.ytotech.com/builds/sync", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: {
-      compiler: "pdflatex",
-      resources: [
-        {
-          main: true,
-          content: latex,
-        },
-      ],
-    },
-    cache: "no-store",
-    timeoutMs: 18_000,
-    retries: 1,
-  })
+  const response = await fetchWithPolicy(
+    "https://latex.ytotech.com/builds/sync",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: {
+        compiler: "pdflatex",
+        resources: [
+          {
+            main: true,
+            content: latex,
+          },
+        ],
+      },
+      cache: "no-store",
+      timeoutMs: 18_000,
+      retries: 1,
+    }
+  )
 
   const arrayBuffer = await response.arrayBuffer()
   if (!arrayBuffer || arrayBuffer.byteLength === 0) {

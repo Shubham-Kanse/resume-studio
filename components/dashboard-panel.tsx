@@ -1,6 +1,7 @@
 "use client"
 
 import { memo, useEffect, useMemo, useRef, useState } from "react"
+
 import { formatDistanceToNow } from "date-fns"
 import {
   BarChart3,
@@ -20,6 +21,7 @@ import {
   UserRound,
   X,
 } from "lucide-react"
+
 import { Button } from "@/components/ui/button"
 import { extractTrackedRunFileName } from "@/lib/tracked-runs"
 import type { TrackedRunRecord } from "@/lib/tracked-runs"
@@ -49,9 +51,9 @@ function initialsFromUser(name: string | null, email: string | null) {
   const parts = source.split(/[\s@._-]+/).filter(Boolean)
 
   if (parts.length === 0) return "RS"
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  if (parts.length === 1) return (parts[0] || "RS").slice(0, 2).toUpperCase()
 
-  return `${parts[0][0]}${parts[1][0]}`.toUpperCase()
+  return `${parts[0]?.[0] || "R"}${parts[1]?.[0] || "S"}`.toUpperCase()
 }
 
 function displayText(text: string | null | undefined) {
@@ -76,7 +78,9 @@ function DashboardPanelComponent({
 }: DashboardPanelProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>("all")
-  const [pendingDeleteRunId, setPendingDeleteRunId] = useState<string | null>(null)
+  const [pendingDeleteRunId, setPendingDeleteRunId] = useState<string | null>(
+    null
+  )
   const [copiedField, setCopiedField] = useState<CopiedField>(null)
   const copyFeedbackTimerRef = useRef<number | null>(null)
 
@@ -101,23 +105,32 @@ function DashboardPanelComponent({
     })
 
     nextItems.sort((left, right) => {
-      return new Date(right.created_at).getTime() - new Date(left.created_at).getTime()
+      return (
+        new Date(right.created_at).getTime() -
+        new Date(left.created_at).getTime()
+      )
     })
 
     return nextItems
   }, [historyFilter, historyItems, searchQuery])
 
   const selectedRun =
-    filteredHistoryItems.find((item) => item.id === selectedRunId) ?? filteredHistoryItems[0] ?? null
+    filteredHistoryItems.find((item) => item.id === selectedRunId) ??
+    filteredHistoryItems[0] ??
+    null
   const generatedRuns = historyItems.filter((item) => item.mode === "generate")
   const atsRuns = historyItems.filter((item) => item.mode === "ats-score")
   const selectedFileName = selectedRun
-    ? selectedRun.resume_file_name || extractTrackedRunFileName(selectedRun.label)
+    ? selectedRun.resume_file_name ||
+      extractTrackedRunFileName(selectedRun.label)
     : null
   const avgAtsScore =
     atsRuns.length > 0
       ? Math.round(
-          atsRuns.reduce((sum, item) => sum + (item.ats_score?.overallScore ?? 0), 0) / atsRuns.length
+          atsRuns.reduce(
+            (sum, item) => sum + (item.ats_score?.overallScore ?? 0),
+            0
+          ) / atsRuns.length
         )
       : null
 
@@ -136,7 +149,10 @@ function DashboardPanelComponent({
     }
   }, [])
 
-  const handleCopy = async (field: Exclude<CopiedField, null>, text: string | null | undefined) => {
+  const handleCopy = async (
+    field: Exclude<CopiedField, null>,
+    text: string | null | undefined
+  ) => {
     if (!text) return
 
     await navigator.clipboard.writeText(text)
@@ -169,7 +185,8 @@ function DashboardPanelComponent({
         <div className="mb-4">
           <h2 className="text-xl font-bold text-foreground">Dashboard</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            View your account details, saved resumes, LaTeX files, and ATS checks in one place.
+            View your account details, saved resumes, LaTeX files, and ATS
+            checks in one place.
           </p>
         </div>
 
@@ -178,9 +195,13 @@ function DashboardPanelComponent({
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-white/10 bg-white/5">
               <UserRound className="h-6 w-6 text-primary" />
             </div>
-            <h3 className="mt-5 text-2xl font-semibold text-foreground">Sign in to open your dashboard</h3>
+            <h3 className="mt-5 text-2xl font-semibold text-foreground">
+              Sign in to open your dashboard
+            </h3>
             <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-muted-foreground">
-              Your generator and ATS tools still work without an account. Sign in with Google to keep your resume history, saved LaTeX outputs, and ATS score checks attached to your account.
+              Your generator and ATS tools still work without an account. Sign
+              in with Google to keep your resume history, saved LaTeX outputs,
+              and ATS score checks attached to your account.
             </p>
             <Button
               type="button"
@@ -191,7 +212,9 @@ function DashboardPanelComponent({
               disabled={!authAvailable}
             >
               <Sparkles className="h-4 w-4" />
-              {authAvailable ? "Continue with Google" : "Supabase not configured"}
+              {authAvailable
+                ? "Continue with Google"
+                : "Supabase not configured"}
             </Button>
           </div>
         </div>
@@ -206,7 +229,8 @@ function DashboardPanelComponent({
           <div className="min-w-0">
             <h2 className="text-xl font-bold text-foreground">Dashboard</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Review account details, past resume generations, saved LaTeX outputs, and ATS score history.
+              Review account details, past resume generations, saved LaTeX
+              outputs, and ATS score history.
             </p>
           </div>
 
@@ -216,8 +240,12 @@ function DashboardPanelComponent({
                 {initialsFromUser(userName, userEmail)}
               </div>
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-foreground">{userName || "Resume Studio User"}</p>
-                <p className="truncate text-xs text-muted-foreground">{userEmail}</p>
+                <p className="truncate text-sm font-semibold text-foreground">
+                  {userName || "Resume Studio User"}
+                </p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {userEmail}
+                </p>
               </div>
             </div>
           </section>
@@ -238,28 +266,36 @@ function DashboardPanelComponent({
                 <FileCode2 className="h-3.5 w-3.5 text-primary" />
                 Resumes
               </div>
-              <p className="mt-2 text-[2rem] leading-none font-semibold text-foreground">{generatedRuns.length}</p>
+              <p className="mt-2 text-[2rem] leading-none font-semibold text-foreground">
+                {generatedRuns.length}
+              </p>
             </div>
             <div className="rounded-2xl border border-white/8 bg-black/12 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
               <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-white/40">
                 <Target className="h-3.5 w-3.5 text-primary" />
                 ATS Checks
               </div>
-              <p className="mt-2 text-[2rem] leading-none font-semibold text-foreground">{atsRuns.length}</p>
+              <p className="mt-2 text-[2rem] leading-none font-semibold text-foreground">
+                {atsRuns.length}
+              </p>
             </div>
             <div className="col-span-2 rounded-2xl border border-white/8 bg-black/12 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
               <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-white/40">
                 <BarChart3 className="h-3.5 w-3.5 text-primary" />
                 Average ATS
               </div>
-              <p className="mt-2 text-[2rem] leading-none font-semibold text-foreground">{avgAtsScore ?? "--"}</p>
+              <p className="mt-2 text-[2rem] leading-none font-semibold text-foreground">
+                {avgAtsScore ?? "--"}
+              </p>
             </div>
           </section>
 
           <section className="flex min-h-0 flex-1 flex-col rounded-2xl border border-white/8 bg-black/12 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
             <div className="mb-3 flex items-center gap-2">
               <History className="h-4 w-4 text-primary" />
-              <h3 className="text-sm font-semibold text-foreground">Saved history</h3>
+              <h3 className="text-sm font-semibold text-foreground">
+                Saved history
+              </h3>
             </div>
 
             <div className="mb-3 rounded-2xl border border-white/8 bg-white/[0.02] px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
@@ -274,11 +310,13 @@ function DashboardPanelComponent({
               </div>
 
               <div className="mb-2 flex flex-wrap items-center gap-1.5">
-                {([
-                  ["all", "All"],
-                  ["generate", "Resumes"],
-                  ["ats-score", "ATS"],
-                ] as const).map(([value, label]) => (
+                {(
+                  [
+                    ["all", "All"],
+                    ["generate", "Resumes"],
+                    ["ats-score", "ATS"],
+                  ] as const
+                ).map(([value, label]) => (
                   <button
                     key={value}
                     type="button"
@@ -309,15 +347,15 @@ function DashboardPanelComponent({
               </div>
 
               <div className="relative min-w-0 flex-1">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/30" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
-                    placeholder="Search saved runs..."
-                    aria-label="Search saved history"
-                    className="h-9 w-full rounded-full border border-white/12 bg-black/20 pl-9 pr-3 text-[13px] text-foreground outline-none transition-colors placeholder:text-white/30 focus:border-primary/35 focus:bg-white/[0.04]"
-                  />
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/30" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Search saved runs..."
+                  aria-label="Search saved history"
+                  className="h-9 w-full rounded-full border border-white/12 bg-black/20 pl-9 pr-3 text-[13px] text-foreground outline-none transition-colors placeholder:text-white/30 focus:border-primary/35 focus:bg-white/[0.04]"
+                />
               </div>
             </div>
 
@@ -328,7 +366,8 @@ function DashboardPanelComponent({
               </div>
             ) : historyItems.length === 0 ? (
               <div className="rounded-2xl border border-white/8 bg-black/10 p-4 text-sm text-muted-foreground">
-                Your saved runs will appear here after you generate a resume or run an ATS check.
+                Your saved runs will appear here after you generate a resume or
+                run an ATS check.
               </div>
             ) : filteredHistoryItems.length === 0 ? (
               <div className="rounded-2xl border border-white/8 bg-black/10 p-4 text-sm text-muted-foreground">
@@ -339,7 +378,9 @@ function DashboardPanelComponent({
                 {filteredHistoryItems.map((run) => {
                   const active = selectedRun?.id === run.id
                   const historyTitle =
-                    run.resume_file_name || extractTrackedRunFileName(run.label) || "Saved run"
+                    run.resume_file_name ||
+                    extractTrackedRunFileName(run.label) ||
+                    "Saved run"
                   const isPendingDelete = pendingDeleteRunId === run.id
                   return (
                     <div
@@ -362,11 +403,17 @@ function DashboardPanelComponent({
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-foreground">{historyTitle}</p>
+                          <p className="truncate text-sm font-medium text-foreground">
+                            {historyTitle}
+                          </p>
                           <div className="mt-0.5 flex items-center justify-between gap-3">
                             <p className="truncate text-[11px] text-muted-foreground">
-                              {formatDistanceToNow(new Date(run.created_at), { addSuffix: true })}
-                              {run.mode === "ats-score" && run.ats_score ? ` • ATS ${run.ats_score.overallScore}` : ""}
+                              {formatDistanceToNow(new Date(run.created_at), {
+                                addSuffix: true,
+                              })}
+                              {run.mode === "ats-score" && run.ats_score
+                                ? ` • ATS ${run.ats_score.overallScore}`
+                                : ""}
                             </p>
                           </div>
                         </div>
@@ -418,10 +465,14 @@ function DashboardPanelComponent({
                     ) : (
                       <Target className="h-3.5 w-3.5 text-primary" />
                     )}
-                    {selectedRun.mode === "generate" ? "Generated resume" : "ATS analysis"}
+                    {selectedRun.mode === "generate"
+                      ? "Generated resume"
+                      : "ATS analysis"}
                   </div>
                   <div className="mt-2 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                    <h3 className="min-w-0 text-xl font-semibold text-foreground">{selectedRun.label}</h3>
+                    <h3 className="min-w-0 text-xl font-semibold text-foreground">
+                      {selectedRun.label}
+                    </h3>
 
                     <div className="flex flex-wrap items-center gap-2 xl:justify-end">
                       <Button
@@ -471,7 +522,12 @@ function DashboardPanelComponent({
                       </div>
                       <button
                         type="button"
-                        onClick={() => void handleCopy("jobDescription", selectedRun.job_description)}
+                        onClick={() =>
+                          void handleCopy(
+                            "jobDescription",
+                            selectedRun.job_description
+                          )
+                        }
                         disabled={!selectedRun.job_description}
                         className={cn(
                           "rounded-full border p-2 transition-all duration-200 hover:border-white/20 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40",
@@ -479,8 +535,16 @@ function DashboardPanelComponent({
                             ? "border-primary/35 bg-primary/10 text-primary scale-105"
                             : "border-white/10 text-muted-foreground"
                         )}
-                        aria-label={copiedField === "jobDescription" ? "Job description copied" : "Copy job description"}
-                        title={copiedField === "jobDescription" ? "Copied" : "Copy job description"}
+                        aria-label={
+                          copiedField === "jobDescription"
+                            ? "Job description copied"
+                            : "Copy job description"
+                        }
+                        title={
+                          copiedField === "jobDescription"
+                            ? "Copied"
+                            : "Copy job description"
+                        }
                       >
                         {copiedField === "jobDescription" ? (
                           <Check className="h-3.5 w-3.5" />
@@ -518,7 +582,9 @@ function DashboardPanelComponent({
                       </div>
                       <button
                         type="button"
-                        onClick={() => void handleCopy("latex", selectedRun.latex_content)}
+                        onClick={() =>
+                          void handleCopy("latex", selectedRun.latex_content)
+                        }
                         disabled={!selectedRun.latex_content}
                         className={cn(
                           "rounded-full border p-2 transition-all duration-200 hover:border-white/20 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40",
@@ -526,8 +592,14 @@ function DashboardPanelComponent({
                             ? "border-primary/35 bg-primary/10 text-primary scale-105"
                             : "border-white/10 text-muted-foreground"
                         )}
-                        aria-label={copiedField === "latex" ? "LaTeX copied" : "Copy LaTeX"}
-                        title={copiedField === "latex" ? "Copied" : "Copy LaTeX"}
+                        aria-label={
+                          copiedField === "latex"
+                            ? "LaTeX copied"
+                            : "Copy LaTeX"
+                        }
+                        title={
+                          copiedField === "latex" ? "Copied" : "Copy LaTeX"
+                        }
                       >
                         {copiedField === "latex" ? (
                           <Check className="h-3.5 w-3.5" />
@@ -542,7 +614,8 @@ function DashboardPanelComponent({
                         : "No LaTeX file was saved for this run."}
                     </p>
                     <pre className="scrollbar-dark min-h-0 flex-1 overflow-auto rounded-xl border border-white/8 bg-black/20 p-4 text-xs text-muted-foreground">
-                      {selectedRun.latex_content || "No LaTeX content available."}
+                      {selectedRun.latex_content ||
+                        "No LaTeX content available."}
                     </pre>
                   </div>
                 </div>
@@ -577,51 +650,61 @@ function DashboardPanelComponent({
 
                   {selectedRun.ats_score ? (
                     <div className="space-y-4">
-                    <div className="grid gap-4 md:grid-cols-3">
-                      <div className="rounded-2xl border border-white/8 bg-black/10 p-4">
-                        <div className="text-xs uppercase tracking-[0.18em] text-white/40">Overall</div>
-                        <div className="mt-3 text-3xl font-semibold text-foreground">
-                          {selectedRun.ats_score.overallScore}
+                      <div className="grid gap-4 md:grid-cols-3">
+                        <div className="rounded-2xl border border-white/8 bg-black/10 p-4">
+                          <div className="text-xs uppercase tracking-[0.18em] text-white/40">
+                            Overall
+                          </div>
+                          <div className="mt-3 text-3xl font-semibold text-foreground">
+                            {selectedRun.ats_score.overallScore}
+                          </div>
+                        </div>
+                        <div className="rounded-2xl border border-white/8 bg-black/10 p-4">
+                          <div className="text-xs uppercase tracking-[0.18em] text-white/40">
+                            Resume ATS
+                          </div>
+                          <div className="mt-3 text-3xl font-semibold text-foreground">
+                            {selectedRun.ats_score.resumeQualityScore}
+                          </div>
+                        </div>
+                        <div className="rounded-2xl border border-white/8 bg-black/10 p-4">
+                          <div className="text-xs uppercase tracking-[0.18em] text-white/40">
+                            Target role
+                          </div>
+                          <div className="mt-3 text-3xl font-semibold text-foreground">
+                            {selectedRun.ats_score.targetRoleScore ?? "--"}
+                          </div>
                         </div>
                       </div>
-                      <div className="rounded-2xl border border-white/8 bg-black/10 p-4">
-                        <div className="text-xs uppercase tracking-[0.18em] text-white/40">Resume ATS</div>
-                        <div className="mt-3 text-3xl font-semibold text-foreground">
-                          {selectedRun.ats_score.resumeQualityScore}
-                        </div>
-                      </div>
-                      <div className="rounded-2xl border border-white/8 bg-black/10 p-4">
-                        <div className="text-xs uppercase tracking-[0.18em] text-white/40">Target role</div>
-                        <div className="mt-3 text-3xl font-semibold text-foreground">
-                          {selectedRun.ats_score.targetRoleScore ?? "--"}
-                        </div>
-                      </div>
-                    </div>
 
-                    <div className="grid gap-4 xl:grid-cols-2">
-                      <div className="rounded-2xl border border-white/8 bg-black/10 p-4">
-                        <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
-                          <Target className="h-4 w-4 text-primary" />
-                          Strengths
+                      <div className="grid gap-4 xl:grid-cols-2">
+                        <div className="rounded-2xl border border-white/8 bg-black/10 p-4">
+                          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
+                            <Target className="h-4 w-4 text-primary" />
+                            Strengths
+                          </div>
+                          <ul className="space-y-2 text-sm text-muted-foreground">
+                            {selectedRun.ats_score.keyFindings.strengths
+                              .slice(0, 5)
+                              .map((item, index) => (
+                                <li key={`${item}-${index}`}>• {item}</li>
+                              ))}
+                          </ul>
                         </div>
-                        <ul className="space-y-2 text-sm text-muted-foreground">
-                          {selectedRun.ats_score.keyFindings.strengths.slice(0, 5).map((item, index) => (
-                            <li key={`${item}-${index}`}>• {item}</li>
-                          ))}
-                        </ul>
-                      </div>
-                      <div className="rounded-2xl border border-white/8 bg-black/10 p-4">
-                        <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
-                          <BarChart3 className="h-4 w-4 text-primary" />
-                          Weaknesses
+                        <div className="rounded-2xl border border-white/8 bg-black/10 p-4">
+                          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
+                            <BarChart3 className="h-4 w-4 text-primary" />
+                            Weaknesses
+                          </div>
+                          <ul className="space-y-2 text-sm text-muted-foreground">
+                            {selectedRun.ats_score.keyFindings.weaknesses
+                              .slice(0, 5)
+                              .map((item, index) => (
+                                <li key={`${item}-${index}`}>• {item}</li>
+                              ))}
+                          </ul>
                         </div>
-                        <ul className="space-y-2 text-sm text-muted-foreground">
-                          {selectedRun.ats_score.keyFindings.weaknesses.slice(0, 5).map((item, index) => (
-                            <li key={`${item}-${index}`}>• {item}</li>
-                          ))}
-                        </ul>
                       </div>
-                    </div>
                     </div>
                   ) : (
                     <div className="rounded-2xl border border-white/8 bg-black/10 p-4 text-sm text-muted-foreground">

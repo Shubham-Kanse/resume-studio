@@ -3,6 +3,7 @@
 ## Purpose & Success Targets
 
 Use this reference to produce ATS-optimized resumes that achieve:
+
 - ATS parsing accuracy: 95%+
 - Keyword optimization score: 85%+
 - Human readability: High
@@ -17,6 +18,7 @@ Use this reference to produce ATS-optimized resumes that achieve:
 ### Job Description Analysis Checklist
 
 Before writing anything, extract from the job description:
+
 - All nouns: technologies, tools, concepts
 - All action verbs used
 - Required vs. preferred qualifications
@@ -62,6 +64,7 @@ Before writing anything, extract from the job description:
 ### Required Section Headers (use exact terms)
 
 Tier 1 — Required:
+
 - [FULL NAME] as document header
 - CONTACT INFORMATION
 - PROFESSIONAL SUMMARY
@@ -70,6 +73,7 @@ Tier 1 — Required:
 - SKILLS or TECHNICAL SKILLS
 
 Tier 2 — Optional (include when relevant):
+
 - CERTIFICATIONS
 - PROJECTS
 - ACHIEVEMENTS
@@ -80,6 +84,7 @@ Tier 2 — Optional (include when relevant):
 ### Forbidden Elements — Instant ATS Failure
 
 Never include:
+
 - Tables, columns, or text boxes
 - Content in headers or footers
 - Images, logos, photos, or graphics
@@ -126,6 +131,7 @@ Line 4: [Optional: company pedigree, certifications, or unique differentiator]
 ### Quantification Requirements
 
 Every bullet point must include at least one metric. Required types:
+
 - Percentages: "Increased efficiency by 35%"
 - Dollar amounts: "Generated $2.5M in additional revenue"
 - Time savings: "Reduced processing time from 4 hours to 45 minutes"
@@ -136,6 +142,7 @@ Every bullet point must include at least one metric. Required types:
 - Quality metrics: "Achieved 99.9% uptime and 4.8/5 customer satisfaction"
 
 **Quantification templates:**
+
 - Scale: "Managed/Led/Oversaw [number] of [people/projects/accounts]"
 - Growth: "Increased [metric] by [percentage] over [timeframe]"
 - Efficiency: "Reduced [process/cost/time] by [amount/percentage]"
@@ -202,6 +209,7 @@ Mandatory elements: programming languages (exact versions if specified), framewo
 Critical keywords: Scalable, High-availability, Microservices, Performance optimization, Load balancing, Test-driven development, Code review, Continuous integration, Deployment pipelines, Monitoring, Debugging, Troubleshooting
 
 Quantification focus:
+
 - "Built systems serving 1M+ daily active users"
 - "Achieved 99.99% uptime and <100ms response time"
 - "Processed 10TB+ data daily with 50% cost reduction"
@@ -214,6 +222,7 @@ Mandatory elements: regulatory compliance (SOX, PCI-DSS, GDPR), financial system
 Critical keywords: Regulatory compliance, Risk management, Audit, Financial modeling, Quantitative analysis, Trading systems, Payment processing, Fraud detection, Security protocols, Basel III, Dodd-Frank, MiFID II (if applicable)
 
 Quantification focus:
+
 - "Managed $50M+ investment portfolio"
 - "Reduced operational risk by 30%"
 - "Achieved 100% regulatory compliance rate"
@@ -226,6 +235,7 @@ Mandatory elements: security clearance level (if applicable), compliance standar
 Critical keywords: Security clearance, ITAR compliance, AS9100, Systems engineering, Requirements analysis, Configuration management, Quality assurance, Flight testing, Certification processes, Program management, Cost control
 
 Quantification focus:
+
 - "Managed $100M+ defense contract"
 - "Maintained 100% ITAR compliance rate"
 - "Delivered critical systems 3 months ahead of schedule"
@@ -246,6 +256,7 @@ Demonstrate Amazon's Leadership Principles through specific examples:
 5. Hire and Develop the Best: "Mentored 5 junior developers, 3 promoted within 18 months"
 
 Structure every bullet using STAR method:
+
 - Situation: Brief context
 - Task: What needed to be done
 - Action: What you specifically did
@@ -387,6 +398,7 @@ Priority keywords: Data-driven, Analytics, Metrics, A/B testing, Cross-functiona
 ### Dynamic Keyword Weighting
 
 When prioritizing keyword placement and frequency, apply this weighting:
+
 - Job title keywords: 5×
 - Required skills: 4×
 - Years of experience: 3×

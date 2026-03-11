@@ -1,3 +1,5 @@
+import { getCurrentUtcDateParts } from "./current-date"
+
 import type {
   ATSIssue,
   ATSRecommendation,
@@ -5,9 +7,9 @@ import type {
   ATSSectionReview,
 } from "./ats-types.ts"
 import type { DocumentArtifacts } from "./document-artifacts.ts"
-import { getCurrentUtcDateParts } from "./current-date"
 
-const { currentMonth: CURRENT_MONTH_INDEX, currentYear: CURRENT_YEAR } = getCurrentUtcDateParts()
+const { currentMonth: CURRENT_MONTH_INDEX, currentYear: CURRENT_YEAR } =
+  getCurrentUtcDateParts()
 
 const SECTION_ALIASES = {
   professionalSummary: [
@@ -238,7 +240,9 @@ interface ResumeLexicalCoverage {
   sectionTermCoverage: Partial<Record<SectionKey | "fullResume", string[]>>
 }
 
-interface KeywordAnalysis extends NonNullable<ATSScoreResponse["keywordAnalysis"]> {
+interface KeywordAnalysis extends NonNullable<
+  ATSScoreResponse["keywordAnalysis"]
+> {
   coverageBySection: {
     professionalSummary: string[]
     skills: string[]
@@ -308,7 +312,11 @@ export interface DeterministicATSResult extends ATSScoreResponse {
   evidence: DeterministicEvidence
 }
 
-function term(canonical: string, category: CanonicalTermCategory, variants: string[]): KeywordVariantGroup {
+function term(
+  canonical: string,
+  category: CanonicalTermCategory,
+  variants: string[]
+): KeywordVariantGroup {
   return { canonical, category, variants }
 }
 
@@ -512,27 +520,6 @@ const CERTIFICATION_TERMS = [
   "frm",
   "saFe",
   "comptia",
-]
-
-const DEGREE_TERMS = [
-  "doctorate",
-  "phd",
-  "doctoral",
-  "master",
-  "m.s",
-  "ms",
-  "mba",
-  "m.eng",
-  "m.eng.",
-  "bachelor",
-  "b.s",
-  "bs",
-  "b.a",
-  "ba",
-  "b.eng",
-  "associate",
-  "a.s",
-  "a.a",
 ]
 
 const GENERIC_SKILL_TERMS = new Set([
@@ -749,7 +736,14 @@ const MANAGEMENT_MARKERS = [
   "staffing",
 ]
 
-const REMOTE_TERMS = ["remote", "hybrid", "onsite", "on-site", "distributed", "in-office"]
+const REMOTE_TERMS = [
+  "remote",
+  "hybrid",
+  "onsite",
+  "on-site",
+  "distributed",
+  "in-office",
+]
 
 const BUSINESS_IMPACT_TERMS = [
   "adoption",
@@ -820,28 +814,119 @@ const TECHNICAL_CATEGORIES: CanonicalTermCategory[] = [
 ]
 
 const KEYWORD_VARIANT_GROUPS: KeywordVariantGroup[] = [
-  term("software engineer", "title", ["software engineer", "software developer", "application engineer"]),
-  term("frontend engineer", "title", ["frontend engineer", "front end engineer", "frontend developer", "front end developer"]),
-  term("backend engineer", "title", ["backend engineer", "back end engineer", "backend developer", "back end developer"]),
-  term("full stack engineer", "title", ["full stack engineer", "full-stack engineer", "full stack developer", "full-stack developer"]),
-  term("mobile engineer", "title", ["mobile engineer", "ios engineer", "android engineer", "mobile developer"]),
-  term("devops engineer", "title", ["devops engineer", "platform engineer", "site reliability engineer", "sre"]),
-  term("data engineer", "title", ["data engineer", "analytics engineer", "etl engineer"]),
-  term("data scientist", "title", ["data scientist", "applied scientist", "research scientist"]),
-  term("machine learning engineer", "title", ["machine learning engineer", "ml engineer", "ai engineer", "artificial intelligence engineer"]),
-  term("product manager", "title", ["product manager", "technical product manager", "group product manager"]),
+  term("software engineer", "title", [
+    "software engineer",
+    "software developer",
+    "application engineer",
+  ]),
+  term("frontend engineer", "title", [
+    "frontend engineer",
+    "front end engineer",
+    "frontend developer",
+    "front end developer",
+  ]),
+  term("backend engineer", "title", [
+    "backend engineer",
+    "back end engineer",
+    "backend developer",
+    "back end developer",
+  ]),
+  term("full stack engineer", "title", [
+    "full stack engineer",
+    "full-stack engineer",
+    "full stack developer",
+    "full-stack developer",
+  ]),
+  term("mobile engineer", "title", [
+    "mobile engineer",
+    "ios engineer",
+    "android engineer",
+    "mobile developer",
+  ]),
+  term("devops engineer", "title", [
+    "devops engineer",
+    "platform engineer",
+    "site reliability engineer",
+    "sre",
+  ]),
+  term("data engineer", "title", [
+    "data engineer",
+    "analytics engineer",
+    "etl engineer",
+  ]),
+  term("data scientist", "title", [
+    "data scientist",
+    "applied scientist",
+    "research scientist",
+  ]),
+  term("machine learning engineer", "title", [
+    "machine learning engineer",
+    "ml engineer",
+    "ai engineer",
+    "artificial intelligence engineer",
+  ]),
+  term("product manager", "title", [
+    "product manager",
+    "technical product manager",
+    "group product manager",
+  ]),
   term("project manager", "title", ["project manager", "project lead"]),
-  term("program manager", "title", ["program manager", "program lead", "technical program manager", "tpm"]),
+  term("program manager", "title", [
+    "program manager",
+    "program lead",
+    "technical program manager",
+    "tpm",
+  ]),
   term("business analyst", "title", ["business analyst", "systems analyst"]),
-  term("data analyst", "title", ["data analyst", "business intelligence analyst", "bi analyst"]),
-  term("ux designer", "title", ["ux designer", "product designer", "ui ux designer", "ui/ux designer", "user experience designer"]),
-  term("marketing manager", "title", ["marketing manager", "growth marketing manager", "digital marketing manager"]),
-  term("customer success manager", "title", ["customer success manager", "client success manager", "customer success lead"]),
-  term("account executive", "title", ["account executive", "sales executive", "enterprise account executive"]),
-  term("security engineer", "title", ["security engineer", "application security engineer", "cybersecurity engineer"]),
-  term("qa engineer", "title", ["qa engineer", "quality assurance engineer", "test engineer", "software development engineer in test", "sdet"]),
-  term("finance manager", "title", ["finance manager", "fp&a manager", "financial planning and analysis manager"]),
-  term("operations manager", "title", ["operations manager", "business operations manager", "program operations manager"]),
+  term("data analyst", "title", [
+    "data analyst",
+    "business intelligence analyst",
+    "bi analyst",
+  ]),
+  term("ux designer", "title", [
+    "ux designer",
+    "product designer",
+    "ui ux designer",
+    "ui/ux designer",
+    "user experience designer",
+  ]),
+  term("marketing manager", "title", [
+    "marketing manager",
+    "growth marketing manager",
+    "digital marketing manager",
+  ]),
+  term("customer success manager", "title", [
+    "customer success manager",
+    "client success manager",
+    "customer success lead",
+  ]),
+  term("account executive", "title", [
+    "account executive",
+    "sales executive",
+    "enterprise account executive",
+  ]),
+  term("security engineer", "title", [
+    "security engineer",
+    "application security engineer",
+    "cybersecurity engineer",
+  ]),
+  term("qa engineer", "title", [
+    "qa engineer",
+    "quality assurance engineer",
+    "test engineer",
+    "software development engineer in test",
+    "sdet",
+  ]),
+  term("finance manager", "title", [
+    "finance manager",
+    "fp&a manager",
+    "financial planning and analysis manager",
+  ]),
+  term("operations manager", "title", [
+    "operations manager",
+    "business operations manager",
+    "program operations manager",
+  ]),
 
   term("javascript", "language", ["javascript", "js"]),
   term("typescript", "language", ["typescript", "ts"]),
@@ -873,7 +958,13 @@ const KEYWORD_VARIANT_GROUPS: KeywordVariantGroup[] = [
   term("node.js", "framework", ["node", "node.js", "nodejs"]),
   term("express", "framework", ["express", "express.js", "expressjs"]),
   term("nestjs", "framework", ["nestjs", "nest.js", "nest js"]),
-  term(".net", "framework", [".net", "dotnet", ".net core", "asp.net", "asp net"]),
+  term(".net", "framework", [
+    ".net",
+    "dotnet",
+    ".net core",
+    "asp.net",
+    "asp net",
+  ]),
   term("spring boot", "framework", ["spring boot", "springboot", "spring"]),
   term("django", "framework", ["django"]),
   term("flask", "framework", ["flask"]),
@@ -881,8 +972,17 @@ const KEYWORD_VARIANT_GROUPS: KeywordVariantGroup[] = [
   term("laravel", "framework", ["laravel"]),
   term("ruby on rails", "framework", ["ruby on rails", "rails"]),
   term("graphql", "framework", ["graphql"]),
-  term("rest api", "framework", ["rest api", "restful api", "restful services", "api development"]),
-  term("microservices", "framework", ["microservices", "microservice architecture", "service oriented architecture"]),
+  term("rest api", "framework", [
+    "rest api",
+    "restful api",
+    "restful services",
+    "api development",
+  ]),
+  term("microservices", "framework", [
+    "microservices",
+    "microservice architecture",
+    "service oriented architecture",
+  ]),
   term("react native", "framework", ["react native"]),
   term("ios", "framework", ["ios", "iphone os"]),
   term("android", "framework", ["android"]),
@@ -905,8 +1005,16 @@ const KEYWORD_VARIANT_GROUPS: KeywordVariantGroup[] = [
   term("datadog", "devops", ["datadog"]),
   term("prometheus", "devops", ["prometheus"]),
   term("grafana", "devops", ["grafana"]),
-  term("incident management", "operations", ["incident management", "incident response", "on-call"]),
-  term("sre", "devops", ["site reliability engineering", "site reliability engineer", "sre"]),
+  term("incident management", "operations", [
+    "incident management",
+    "incident response",
+    "on-call",
+  ]),
+  term("sre", "devops", [
+    "site reliability engineering",
+    "site reliability engineer",
+    "sre",
+  ]),
 
   term("postgresql", "data", ["postgresql", "postgres", "postgre sql"]),
   term("mysql", "data", ["mysql"]),
@@ -928,7 +1036,12 @@ const KEYWORD_VARIANT_GROUPS: KeywordVariantGroup[] = [
   term("power bi", "analytics", ["power bi", "powerbi"]),
   term("looker", "analytics", ["looker", "looker studio"]),
   term("excel", "analytics", ["excel", "microsoft excel"]),
-  term("a/b testing", "analytics", ["a/b testing", "ab testing", "split testing", "experimentation"]),
+  term("a/b testing", "analytics", [
+    "a/b testing",
+    "ab testing",
+    "split testing",
+    "experimentation",
+  ]),
   term("forecasting", "analytics", ["forecasting", "predictive modeling"]),
 
   term("machine learning", "ai", ["machine learning", "ml"]),
@@ -943,13 +1056,28 @@ const KEYWORD_VARIANT_GROUPS: KeywordVariantGroup[] = [
   term("mlops", "ai", ["mlops", "machine learning operations"]),
   term("prompt engineering", "ai", ["prompt engineering", "prompt design"]),
 
-  term("cybersecurity", "security", ["cybersecurity", "cyber security", "information security"]),
+  term("cybersecurity", "security", [
+    "cybersecurity",
+    "cyber security",
+    "information security",
+  ]),
   term("iam", "security", ["iam", "identity and access management"]),
   term("oauth", "security", ["oauth", "oauth2", "oauth 2.0"]),
   term("sso", "security", ["sso", "single sign-on", "single sign on"]),
-  term("penetration testing", "security", ["penetration testing", "pen testing", "pentesting"]),
-  term("vulnerability management", "security", ["vulnerability management", "vulnerability assessment"]),
-  term("application security", "security", ["application security", "appsec", "app sec"]),
+  term("penetration testing", "security", [
+    "penetration testing",
+    "pen testing",
+    "pentesting",
+  ]),
+  term("vulnerability management", "security", [
+    "vulnerability management",
+    "vulnerability assessment",
+  ]),
+  term("application security", "security", [
+    "application security",
+    "appsec",
+    "app sec",
+  ]),
 
   term("quality assurance", "testing", ["quality assurance", "qa"]),
   term("test automation", "testing", ["test automation", "automated testing"]),
@@ -959,21 +1087,41 @@ const KEYWORD_VARIANT_GROUPS: KeywordVariantGroup[] = [
   term("jest", "testing", ["jest"]),
   term("pytest", "testing", ["pytest", "py test"]),
   term("junit", "testing", ["junit", "j unit"]),
-  term("tdd", "testing", ["tdd", "test driven development", "test-driven development"]),
+  term("tdd", "testing", [
+    "tdd",
+    "test driven development",
+    "test-driven development",
+  ]),
 
   term("agile", "methodology", ["agile"]),
   term("scrum", "methodology", ["scrum"]),
   term("kanban", "methodology", ["kanban"]),
   term("jira", "methodology", ["jira"]),
   term("confluence", "methodology", ["confluence"]),
-  term("ci/cd", "methodology", ["ci/cd", "continuous integration", "continuous delivery", "continuous deployment"]),
+  term("ci/cd", "methodology", [
+    "ci/cd",
+    "continuous integration",
+    "continuous delivery",
+    "continuous deployment",
+  ]),
   term("okr", "methodology", ["okr", "okrs", "objectives and key results"]),
-  term("kpi", "methodology", ["kpi", "kpis", "key performance indicator", "key performance indicators"]),
+  term("kpi", "methodology", [
+    "kpi",
+    "kpis",
+    "key performance indicator",
+    "key performance indicators",
+  ]),
 
-  term("product management", "product", ["product management", "product strategy"]),
+  term("product management", "product", [
+    "product management",
+    "product strategy",
+  ]),
   term("roadmap", "product", ["roadmap", "product roadmap"]),
   term("user research", "product", ["user research", "customer research"]),
-  term("stakeholder management", "product", ["stakeholder management", "executive communication"]),
+  term("stakeholder management", "product", [
+    "stakeholder management",
+    "executive communication",
+  ]),
   term("go to market", "product", ["go to market", "gtm"]),
   term("pricing", "product", ["pricing", "packaging"]),
 
@@ -984,28 +1132,51 @@ const KEYWORD_VARIANT_GROUPS: KeywordVariantGroup[] = [
   term("prototyping", "design", ["prototyping", "prototype"]),
   term("design systems", "design", ["design systems", "design system"]),
   term("accessibility", "design", ["accessibility", "a11y"]),
-  term("adobe creative suite", "design", ["adobe creative suite", "creative suite", "photoshop", "illustrator"]),
+  term("adobe creative suite", "design", [
+    "adobe creative suite",
+    "creative suite",
+    "photoshop",
+    "illustrator",
+  ]),
 
   term("seo", "marketing", ["seo", "search engine optimization"]),
   term("sem", "marketing", ["sem", "search engine marketing"]),
   term("google ads", "marketing", ["google ads", "adwords", "google adwords"]),
   term("meta ads", "marketing", ["meta ads", "facebook ads", "instagram ads"]),
-  term("content marketing", "marketing", ["content marketing", "content strategy"]),
+  term("content marketing", "marketing", [
+    "content marketing",
+    "content strategy",
+  ]),
   term("demand generation", "marketing", ["demand generation", "demand gen"]),
   term("marketing automation", "marketing", ["marketing automation"]),
-  term("conversion optimization", "marketing", ["conversion optimization", "cro"]),
-  term("email marketing", "marketing", ["email marketing", "lifecycle marketing"]),
+  term("conversion optimization", "marketing", [
+    "conversion optimization",
+    "cro",
+  ]),
+  term("email marketing", "marketing", [
+    "email marketing",
+    "lifecycle marketing",
+  ]),
   term("hubspot", "marketing", ["hubspot", "hub spot"]),
 
   term("salesforce", "sales", ["salesforce", "sfdc"]),
   term("crm", "sales", ["crm", "customer relationship management"]),
-  term("pipeline management", "sales", ["pipeline management", "sales pipeline"]),
-  term("account management", "sales", ["account management", "client management"]),
+  term("pipeline management", "sales", [
+    "pipeline management",
+    "sales pipeline",
+  ]),
+  term("account management", "sales", [
+    "account management",
+    "client management",
+  ]),
   term("quota attainment", "sales", ["quota attainment", "quota achievement"]),
   term("prospecting", "sales", ["prospecting", "lead generation"]),
   term("closing", "sales", ["closing", "deal closing"]),
 
-  term("financial modeling", "finance", ["financial modeling", "financial model"]),
+  term("financial modeling", "finance", [
+    "financial modeling",
+    "financial model",
+  ]),
   term("budgeting", "finance", ["budgeting", "budget management"]),
   term("forecasting", "finance", ["financial forecasting", "forecasting"]),
   term("fp&a", "finance", ["fp&a", "financial planning and analysis"]),
@@ -1015,7 +1186,10 @@ const KEYWORD_VARIANT_GROUPS: KeywordVariantGroup[] = [
   term("variance analysis", "finance", ["variance analysis"]),
 
   term("operations", "operations", ["operations", "operational excellence"]),
-  term("process improvement", "operations", ["process improvement", "continuous improvement"]),
+  term("process improvement", "operations", [
+    "process improvement",
+    "continuous improvement",
+  ]),
   term("vendor management", "operations", ["vendor management"]),
   term("change management", "operations", ["change management"]),
   term("compliance operations", "operations", ["compliance operations"]),
@@ -1025,11 +1199,21 @@ const KEYWORD_VARIANT_GROUPS: KeywordVariantGroup[] = [
   term("onboarding", "customer", ["onboarding", "implementation"]),
   term("retention", "customer", ["retention"]),
   term("churn", "customer", ["churn"]),
-  term("support", "customer", ["technical support", "customer support", "support operations"]),
+  term("support", "customer", [
+    "technical support",
+    "customer support",
+    "support operations",
+  ]),
 
   term("leadership", "soft-skill", ["leadership"]),
-  term("communication", "soft-skill", ["communication", "executive communication"]),
-  term("collaboration", "soft-skill", ["collaboration", "cross-functional collaboration"]),
+  term("communication", "soft-skill", [
+    "communication",
+    "executive communication",
+  ]),
+  term("collaboration", "soft-skill", [
+    "collaboration",
+    "cross-functional collaboration",
+  ]),
   term("problem solving", "soft-skill", ["problem solving", "problem-solving"]),
   term("ownership", "soft-skill", ["ownership"]),
   term("mentorship", "soft-skill", ["mentorship", "mentoring"]),
@@ -1044,26 +1228,55 @@ const KEYWORD_VARIANT_GROUPS: KeywordVariantGroup[] = [
   term("iso 27001", "compliance", ["iso 27001"]),
   term("risk management", "compliance", ["risk management", "risk assessment"]),
 
-  term("metrics", "business", ["metrics", "metric driven", "data driven", "data-driven"]),
+  term("metrics", "business", [
+    "metrics",
+    "metric driven",
+    "data driven",
+    "data-driven",
+  ]),
   term("optimization", "business", ["optimization", "optimize", "optimized"]),
   term("scalability", "business", ["scalability", "scalable", "at scale"]),
   term("performance", "business", ["performance", "performance optimization"]),
   term("efficiency", "business", ["efficiency", "productivity"]),
-  term("customer obsession", "business", ["customer obsession", "customer centric", "customer-centric"]),
+  term("customer obsession", "business", [
+    "customer obsession",
+    "customer centric",
+    "customer-centric",
+  ]),
   term("innovation", "business", ["innovation", "innovative"]),
 
-  term("aws certified", "certification", ["aws certified", "aws certification"]),
-  term("azure certification", "certification", ["azure certification", "microsoft certified azure"]),
-  term("google cloud certification", "certification", ["google cloud certification", "gcp certification"]),
+  term("aws certified", "certification", [
+    "aws certified",
+    "aws certification",
+  ]),
+  term("azure certification", "certification", [
+    "azure certification",
+    "microsoft certified azure",
+  ]),
+  term("google cloud certification", "certification", [
+    "google cloud certification",
+    "gcp certification",
+  ]),
   term("pmp", "certification", ["pmp", "project management professional"]),
-  term("scrum master certification", "certification", ["certified scrum master", "scrum master certification", "csm", "psm"]),
+  term("scrum master certification", "certification", [
+    "certified scrum master",
+    "scrum master certification",
+    "csm",
+    "psm",
+  ]),
   term("cissp", "certification", ["cissp"]),
   term("security+", "certification", ["security+", "comptia security+"]),
   term("cka", "certification", ["cka", "certified kubernetes administrator"]),
-  term("ckad", "certification", ["ckad", "certified kubernetes application developer"]),
+  term("ckad", "certification", [
+    "ckad",
+    "certified kubernetes application developer",
+  ]),
   term("ccna", "certification", ["ccna"]),
   term("ccnp", "certification", ["ccnp"]),
-  term("salesforce certified", "certification", ["salesforce certified", "salesforce certification"]),
+  term("salesforce certified", "certification", [
+    "salesforce certified",
+    "salesforce certification",
+  ]),
   term("itil", "certification", ["itil", "itil foundation"]),
   term("six sigma", "certification", ["six sigma", "lean six sigma"]),
   term("cfa", "certification", ["cfa", "chartered financial analyst"]),
@@ -1074,17 +1287,38 @@ const ROLE_FAMILY_DEFINITIONS: RoleFamilyDefinition[] = [
   {
     id: "software-engineering",
     titles: ["software engineer", "backend engineer", "full stack engineer"],
-    keywords: ["api", "microservices", "distributed systems", "ci/cd", "cloud", "testing"],
+    keywords: [
+      "api",
+      "microservices",
+      "distributed systems",
+      "ci/cd",
+      "cloud",
+      "testing",
+    ],
   },
   {
     id: "frontend-engineering",
     titles: ["frontend engineer", "frontend developer", "ui engineer"],
-    keywords: ["react", "next.js", "typescript", "javascript", "accessibility", "design systems"],
+    keywords: [
+      "react",
+      "next.js",
+      "typescript",
+      "javascript",
+      "accessibility",
+      "design systems",
+    ],
   },
   {
     id: "backend-engineering",
     titles: ["backend engineer", "backend developer"],
-    keywords: ["api", "node.js", "python", "java", "microservices", "postgresql"],
+    keywords: [
+      "api",
+      "node.js",
+      "python",
+      "java",
+      "microservices",
+      "postgresql",
+    ],
   },
   {
     id: "mobile-engineering",
@@ -1093,8 +1327,20 @@ const ROLE_FAMILY_DEFINITIONS: RoleFamilyDefinition[] = [
   },
   {
     id: "devops-platform",
-    titles: ["devops engineer", "platform engineer", "site reliability engineer", "sre"],
-    keywords: ["aws", "kubernetes", "docker", "terraform", "incident management", "linux"],
+    titles: [
+      "devops engineer",
+      "platform engineer",
+      "site reliability engineer",
+      "sre",
+    ],
+    keywords: [
+      "aws",
+      "kubernetes",
+      "docker",
+      "terraform",
+      "incident management",
+      "linux",
+    ],
   },
   {
     id: "data-engineering",
@@ -1104,56 +1350,140 @@ const ROLE_FAMILY_DEFINITIONS: RoleFamilyDefinition[] = [
   {
     id: "data-science-analytics",
     titles: ["data scientist", "data analyst", "business intelligence analyst"],
-    keywords: ["python", "sql", "machine learning", "tableau", "power bi", "a/b testing"],
+    keywords: [
+      "python",
+      "sql",
+      "machine learning",
+      "tableau",
+      "power bi",
+      "a/b testing",
+    ],
   },
   {
     id: "machine-learning-ai",
     titles: ["machine learning engineer", "ai engineer", "applied scientist"],
-    keywords: ["machine learning", "llm", "generative ai", "pytorch", "tensorflow", "mlops"],
+    keywords: [
+      "machine learning",
+      "llm",
+      "generative ai",
+      "pytorch",
+      "tensorflow",
+      "mlops",
+    ],
   },
   {
     id: "product-management",
     titles: ["product manager", "technical product manager"],
-    keywords: ["roadmap", "product management", "stakeholder management", "user research", "go to market", "metrics"],
+    keywords: [
+      "roadmap",
+      "product management",
+      "stakeholder management",
+      "user research",
+      "go to market",
+      "metrics",
+    ],
   },
   {
     id: "program-project-management",
     titles: ["program manager", "project manager", "technical program manager"],
-    keywords: ["agile", "scrum", "jira", "risk management", "stakeholder management", "delivery"],
+    keywords: [
+      "agile",
+      "scrum",
+      "jira",
+      "risk management",
+      "stakeholder management",
+      "delivery",
+    ],
   },
   {
     id: "design-ux",
     titles: ["ux designer", "product designer", "ui ux designer"],
-    keywords: ["ux", "ui", "figma", "wireframing", "prototyping", "accessibility"],
+    keywords: [
+      "ux",
+      "ui",
+      "figma",
+      "wireframing",
+      "prototyping",
+      "accessibility",
+    ],
   },
   {
     id: "marketing-growth",
-    titles: ["marketing manager", "growth marketing manager", "digital marketing manager"],
-    keywords: ["seo", "sem", "google ads", "meta ads", "content marketing", "conversion optimization"],
+    titles: [
+      "marketing manager",
+      "growth marketing manager",
+      "digital marketing manager",
+    ],
+    keywords: [
+      "seo",
+      "sem",
+      "google ads",
+      "meta ads",
+      "content marketing",
+      "conversion optimization",
+    ],
   },
   {
     id: "sales-customer",
     titles: ["account executive", "customer success manager", "sales manager"],
-    keywords: ["crm", "salesforce", "pipeline management", "quota attainment", "retention", "onboarding"],
+    keywords: [
+      "crm",
+      "salesforce",
+      "pipeline management",
+      "quota attainment",
+      "retention",
+      "onboarding",
+    ],
   },
   {
     id: "finance-operations",
-    titles: ["finance manager", "operations manager", "business operations manager"],
-    keywords: ["fp&a", "budgeting", "forecasting", "variance analysis", "process improvement", "operations"],
+    titles: [
+      "finance manager",
+      "operations manager",
+      "business operations manager",
+    ],
+    keywords: [
+      "fp&a",
+      "budgeting",
+      "forecasting",
+      "variance analysis",
+      "process improvement",
+      "operations",
+    ],
   },
   {
     id: "security",
-    titles: ["security engineer", "application security engineer", "cybersecurity engineer"],
-    keywords: ["cybersecurity", "iam", "oauth", "sso", "vulnerability management", "cissp"],
+    titles: [
+      "security engineer",
+      "application security engineer",
+      "cybersecurity engineer",
+    ],
+    keywords: [
+      "cybersecurity",
+      "iam",
+      "oauth",
+      "sso",
+      "vulnerability management",
+      "cissp",
+    ],
   },
   {
     id: "quality-engineering",
     titles: ["qa engineer", "test engineer", "sdet"],
-    keywords: ["quality assurance", "test automation", "selenium", "cypress", "playwright", "tdd"],
+    keywords: [
+      "quality assurance",
+      "test automation",
+      "selenium",
+      "cypress",
+      "playwright",
+      "tdd",
+    ],
   },
 ]
 
-const KEYWORD_GROUP_MAP = new Map(KEYWORD_VARIANT_GROUPS.map((group) => [group.canonical, group]))
+const KEYWORD_GROUP_MAP = new Map(
+  KEYWORD_VARIANT_GROUPS.map((group) => [group.canonical, group])
+)
 const KEYWORD_ALIAS_MAP = new Map<string, string>()
 
 for (const group of KEYWORD_VARIANT_GROUPS) {
@@ -1185,7 +1515,12 @@ function splitLines(value: string): string[] {
     .replace(/\r\n/g, "\n")
     .replace(/\u00a0/g, " ")
     .split("\n")
-    .map((line) => line.replace(/\t/g, " ").replace(/[ ]{2,}/g, " ").trim())
+    .map((line) =>
+      line
+        .replace(/\t/g, " ")
+        .replace(/[ ]{2,}/g, " ")
+        .trim()
+    )
     .filter(Boolean)
 }
 
@@ -1200,17 +1535,25 @@ function normalizeHeadingCandidate(value: string): string {
 }
 
 function tokenize(value: string): string[] {
-  return (value.toLowerCase().match(/[a-z0-9][a-z0-9+#./-]{1,}/g) || []).filter(Boolean)
+  return (value.toLowerCase().match(/[a-z0-9][a-z0-9+#./-]{1,}/g) || []).filter(
+    Boolean
+  )
 }
 
 function normalizeSimilarityToken(token: string): string {
   let normalized = token.toLowerCase()
-  if (normalized.endsWith("ies") && normalized.length > 4) normalized = `${normalized.slice(0, -3)}y`
-  else if (normalized.endsWith("ing") && normalized.length > 5) normalized = normalized.slice(0, -3)
-  else if (normalized.endsWith("ed") && normalized.length > 4) normalized = normalized.slice(0, -2)
-  else if (normalized.endsWith("es") && normalized.length > 4) normalized = normalized.slice(0, -2)
-  else if (normalized.endsWith("s") && normalized.length > 3) normalized = normalized.slice(0, -1)
-  if (normalized.endsWith("ment") && normalized.length > 6) normalized = normalized.slice(0, -4)
+  if (normalized.endsWith("ies") && normalized.length > 4)
+    normalized = `${normalized.slice(0, -3)}y`
+  else if (normalized.endsWith("ing") && normalized.length > 5)
+    normalized = normalized.slice(0, -3)
+  else if (normalized.endsWith("ed") && normalized.length > 4)
+    normalized = normalized.slice(0, -2)
+  else if (normalized.endsWith("es") && normalized.length > 4)
+    normalized = normalized.slice(0, -2)
+  else if (normalized.endsWith("s") && normalized.length > 3)
+    normalized = normalized.slice(0, -1)
+  if (normalized.endsWith("ment") && normalized.length > 6)
+    normalized = normalized.slice(0, -4)
   if (normalized.endsWith("manage")) normalized = normalized.slice(0, -1)
   return normalized
 }
@@ -1248,7 +1591,10 @@ function buildTermPattern(termValue: string): RegExp {
 }
 
 function countRegexMatches(text: string, pattern: RegExp): number {
-  const globalPattern = new RegExp(pattern.source, `${pattern.flags.includes("i") ? "i" : ""}g`)
+  const globalPattern = new RegExp(
+    pattern.source,
+    `${pattern.flags.includes("i") ? "i" : ""}g`
+  )
   return (text.match(globalPattern) || []).length
 }
 
@@ -1261,17 +1607,27 @@ function getTermVariants(termValue: string): string[] {
   const canonical = resolveCanonicalTerm(termValue)
   const group = KEYWORD_GROUP_MAP.get(canonical)
   if (!group) return [termValue.toLowerCase().trim()]
-  return unique([group.canonical, ...group.variants].map((value) => value.toLowerCase().trim()))
+  return unique(
+    [group.canonical, ...group.variants].map((value) =>
+      value.toLowerCase().trim()
+    )
+  )
 }
 
 function containsTerm(text: string, termValue: string): boolean {
   const normalizedText = text.toLowerCase()
-  return getTermVariants(termValue).some((variant) => buildTermPattern(variant).test(normalizedText))
+  return getTermVariants(termValue).some((variant) =>
+    buildTermPattern(variant).test(normalizedText)
+  )
 }
 
 function countOccurrences(haystack: string, needle: string): number {
   const normalizedText = haystack.toLowerCase()
-  return getTermVariants(needle).reduce((sum, variant) => sum + countRegexMatches(normalizedText, buildTermPattern(variant)), 0)
+  return getTermVariants(needle).reduce(
+    (sum, variant) =>
+      sum + countRegexMatches(normalizedText, buildTermPattern(variant)),
+    0
+  )
 }
 
 function textIncludesAny(text: string, candidates: string[]): boolean {
@@ -1292,7 +1648,11 @@ function rankMapKeys(map: Map<string, number>, limit: number): string[] {
     .slice(0, limit)
 }
 
-function addTermsToMap(target: Map<string, number>, values: string[], weight = 1) {
+function addTermsToMap(
+  target: Map<string, number>,
+  values: string[],
+  weight = 1
+) {
   for (const rawValue of values) {
     const value = resolveCanonicalTerm(rawValue)
     if (!value) continue
@@ -1311,7 +1671,8 @@ function extractCanonicalTermCounts(
   for (const group of KEYWORD_VARIANT_GROUPS) {
     if (categories && !categories.includes(group.category)) continue
     const count = group.variants.reduce(
-      (sum, variant) => sum + countRegexMatches(normalizedText, buildTermPattern(variant)),
+      (sum, variant) =>
+        sum + countRegexMatches(normalizedText, buildTermPattern(variant)),
       0
     )
     if (count > 0) counts.set(group.canonical, count)
@@ -1319,7 +1680,10 @@ function extractCanonicalTermCounts(
   return counts
 }
 
-function extractCanonicalTerms(text: string, categories?: CanonicalTermCategory[]): string[] {
+function extractCanonicalTerms(
+  text: string,
+  categories?: CanonicalTermCategory[]
+): string[] {
   return rankMapKeys(extractCanonicalTermCounts(text, categories), 200)
 }
 
@@ -1339,48 +1703,87 @@ function isLikelyHeadingLine(line: string): boolean {
   if (words.length === 0 || words.length > 8) return false
   const letters = trimmed.replace(/[^A-Za-z]/g, "")
   const uppercaseLetters = trimmed.replace(/[^A-Z]/g, "").length
-  const uppercaseRatio = letters.length > 0 ? uppercaseLetters / letters.length : 0
-  return /:$/.test(trimmed) || uppercaseRatio >= 0.6 || words.every((word) => /^[A-Z][A-Za-z&/+-]*$/.test(word))
+  const uppercaseRatio =
+    letters.length > 0 ? uppercaseLetters / letters.length : 0
+  return (
+    /:$/.test(trimmed) ||
+    uppercaseRatio >= 0.6 ||
+    words.every((word) => /^[A-Z][A-Za-z&/+-]*$/.test(word))
+  )
 }
 
 function detectSectionKeyFromHeading(line: string): SectionKey | null {
   const normalized = normalizeHeadingCandidate(line)
   const headingTokens = new Set(tokenizeForSimilarity(normalized))
 
-  for (const [key, aliases] of Object.entries(SECTION_ALIASES) as Array<[SectionKey, readonly string[]]>) {
+  for (const [key, aliases] of Object.entries(SECTION_ALIASES) as Array<
+    [SectionKey, readonly string[]]
+  >) {
     for (const alias of aliases) {
       const normalizedAlias = normalizeHeadingCandidate(alias)
       if (normalized === normalizedAlias) return key
       if (!isLikelyHeadingLine(line)) continue
 
       const aliasTokens = tokenizeForSimilarity(normalizedAlias)
-      const matchedTokens = aliasTokens.filter((token) => headingTokens.has(token)).length
-      if (aliasTokens.length > 0 && matchedTokens === aliasTokens.length) return key
-      if (aliasTokens.length >= 2 && matchedTokens / aliasTokens.length >= 0.75) return key
-      if (normalized.startsWith(`${normalizedAlias} `) || normalized.includes(` ${normalizedAlias}`)) return key
+      const matchedTokens = aliasTokens.filter((token) =>
+        headingTokens.has(token)
+      ).length
+      if (aliasTokens.length > 0 && matchedTokens === aliasTokens.length)
+        return key
+      if (aliasTokens.length >= 2 && matchedTokens / aliasTokens.length >= 0.75)
+        return key
+      if (
+        normalized.startsWith(`${normalizedAlias} `) ||
+        normalized.includes(` ${normalizedAlias}`)
+      )
+        return key
     }
   }
 
   if (isLikelyHeadingLine(line)) {
-    if (/\b(summary|profile|overview|qualifications?|highlights?)\b/i.test(normalized)) return "professionalSummary"
-    if (/\b(experience|employment|background|career history)\b/i.test(normalized)) return "workExperience"
-    if (/\b(skills?|tools?|technologies|competencies|proficiencies|stack)\b/i.test(normalized)) return "skills"
-    if (/\b(education|academics?|training)\b/i.test(normalized)) return "education"
-    if (/\b(certifications?|licenses?|licences?|certificates?)\b/i.test(normalized)) return "certifications"
+    if (
+      /\b(summary|profile|overview|qualifications?|highlights?)\b/i.test(
+        normalized
+      )
+    )
+      return "professionalSummary"
+    if (
+      /\b(experience|employment|background|career history)\b/i.test(normalized)
+    )
+      return "workExperience"
+    if (
+      /\b(skills?|tools?|technologies|competencies|proficiencies|stack)\b/i.test(
+        normalized
+      )
+    )
+      return "skills"
+    if (/\b(education|academics?|training)\b/i.test(normalized))
+      return "education"
+    if (
+      /\b(certifications?|licenses?|licences?|certificates?)\b/i.test(
+        normalized
+      )
+    )
+      return "certifications"
     if (/\b(projects?|portfolio)\b/i.test(normalized)) return "projects"
-    if (/\b(publications?|research|patents?)\b/i.test(normalized)) return "publications"
+    if (/\b(publications?|research|patents?)\b/i.test(normalized))
+      return "publications"
   }
 
   return null
 }
 
-function findTermEvidenceInLines(lines: string[], termValue: string): { exact: boolean; semantic: boolean } {
+function findTermEvidenceInLines(
+  lines: string[],
+  termValue: string
+): { exact: boolean; semantic: boolean } {
   const normalizedTerm = termValue.toLowerCase().trim()
   const termTokens = tokenizeForSimilarity(normalizedTerm)
   if (termTokens.length === 0) return { exact: false, semantic: false }
 
   for (const line of lines) {
-    if (containsTerm(line, normalizedTerm)) return { exact: true, semantic: false }
+    if (containsTerm(line, normalizedTerm))
+      return { exact: true, semantic: false }
   }
 
   if (termTokens.length < 2) return { exact: false, semantic: false }
@@ -1388,7 +1791,8 @@ function findTermEvidenceInLines(lines: string[], termValue: string): { exact: b
   for (const line of lines) {
     const lineTokens = new Set(tokenizeForSimilarity(line))
     const overlap = termTokens.filter((token) => lineTokens.has(token)).length
-    if (overlap / termTokens.length >= 0.75) return { exact: false, semantic: true }
+    if (overlap / termTokens.length >= 0.75)
+      return { exact: false, semantic: true }
   }
 
   return { exact: false, semantic: false }
@@ -1403,18 +1807,28 @@ function computeDocumentParseRisk(text: string): {
   const warnings: string[] = []
   let riskPenalty = 0
 
-  if (/\\begin\{(?:tabular|table|multicols|minipage)\}|\\multicolumn|\\multirow|\\fancyhead|\\fancyfoot/i.test(text)) {
-    issues.push("LaTeX layout commands suggest tables, columns, or header/footer content that ATS parsers often skip.")
+  if (
+    /\\begin\{(?:tabular|table|multicols|minipage)\}|\\multicolumn|\\multirow|\\fancyhead|\\fancyfoot/i.test(
+      text
+    )
+  ) {
+    issues.push(
+      "LaTeX layout commands suggest tables, columns, or header/footer content that ATS parsers often skip."
+    )
     riskPenalty += 12
   }
 
   if (/\|[^\n|]+\|[^\n|]+\|/.test(text) || /^\s*\|.+\|\s*$/m.test(text)) {
-    warnings.push("Detected table-like separators that may indicate columnar content or markdown tables.")
+    warnings.push(
+      "Detected table-like separators that may indicate columnar content or markdown tables."
+    )
     riskPenalty += 6
   }
 
   if (/<table|<tr|<td|<div|<span/i.test(text)) {
-    warnings.push("HTML-style markup appears in the resume text and may not survive ATS extraction cleanly.")
+    warnings.push(
+      "HTML-style markup appears in the resume text and may not survive ATS extraction cleanly."
+    )
     riskPenalty += 5
   }
 
@@ -1428,13 +1842,19 @@ function computeDocumentParseRisk(text: string): {
       !/^[-*•]/.test(line)
   ).length
   if (shortStructuredLines >= 6) {
-    warnings.push("Many short separator-heavy lines suggest visual layout formatting rather than plain linear text.")
+    warnings.push(
+      "Many short separator-heavy lines suggest visual layout formatting rather than plain linear text."
+    )
     riskPenalty += 5
   }
 
-  const fragmentedLines = lines.filter((line) => line.split(/\s+/).length <= 3 && line.length >= 8).length
+  const fragmentedLines = lines.filter(
+    (line) => line.split(/\s+/).length <= 3 && line.length >= 8
+  ).length
   if (lines.length > 0 && fragmentedLines / lines.length >= 0.22) {
-    warnings.push("The text contains many fragmented short lines, which can indicate reading-order or column extraction issues.")
+    warnings.push(
+      "The text contains many fragmented short lines, which can indicate reading-order or column extraction issues."
+    )
     riskPenalty += 4
   }
 
@@ -1484,7 +1904,9 @@ function extractSections(text: string): {
   return { sections, order }
 }
 
-function extractSectionsFromArtifacts(artifacts: DocumentArtifacts | null | undefined): {
+function extractSectionsFromArtifacts(
+  artifacts: DocumentArtifacts | null | undefined
+): {
   sections: Partial<Record<SectionKey, SectionBlock>>
   order: string[]
 } {
@@ -1508,7 +1930,8 @@ function extractSectionsFromArtifacts(artifacts: DocumentArtifacts | null | unde
   }
 
   for (const block of artifacts.blocks) {
-    const detected = block.kind === "heading" ? detectSectionKey(block.text) : null
+    const detected =
+      block.kind === "heading" ? detectSectionKey(block.text) : null
     if (detected) {
       flush()
       currentKey = detected
@@ -1532,11 +1955,21 @@ function extractSectionsFromArtifacts(artifacts: DocumentArtifacts | null | unde
 }
 
 function mergeSectionResults(
-  primary: { sections: Partial<Record<SectionKey, SectionBlock>>; order: string[] },
-  fallback: { sections: Partial<Record<SectionKey, SectionBlock>>; order: string[] }
+  primary: {
+    sections: Partial<Record<SectionKey, SectionBlock>>
+    order: string[]
+  },
+  fallback: {
+    sections: Partial<Record<SectionKey, SectionBlock>>
+    order: string[]
+  }
 ): { sections: Partial<Record<SectionKey, SectionBlock>>; order: string[] } {
-  const sections: Partial<Record<SectionKey, SectionBlock>> = { ...primary.sections }
-  for (const [key, section] of Object.entries(fallback.sections) as Array<[SectionKey, SectionBlock | undefined]>) {
+  const sections: Partial<Record<SectionKey, SectionBlock>> = {
+    ...primary.sections,
+  }
+  for (const [key, section] of Object.entries(fallback.sections) as Array<
+    [SectionKey, SectionBlock | undefined]
+  >) {
     if (!sections[key] && section) sections[key] = section
   }
 
@@ -1544,7 +1977,9 @@ function mergeSectionResults(
   return { sections, order }
 }
 
-function deriveDocumentStructureSignals(artifacts: DocumentArtifacts | null | undefined): DocumentStructureSignals {
+function deriveDocumentStructureSignals(
+  artifacts: DocumentArtifacts | null | undefined
+): DocumentStructureSignals {
   if (!artifacts) {
     return {
       detectedSections: [],
@@ -1581,12 +2016,17 @@ function detectContactInfo(text: string): ContactInfo {
 
   return {
     email: Boolean(emailMatch),
-    phone: /(?:\+?\d{1,3}[\s.-]?)?(?:\(?\d{2,4}\)?[\s.-]?)\d{3}[\s.-]?\d{4}/.test(topText),
+    phone:
+      /(?:\+?\d{1,3}[\s.-]?)?(?:\(?\d{2,4}\)?[\s.-]?)\d{3}[\s.-]?\d{4}/.test(
+        topText
+      ),
     location:
       /\b[A-Z][a-z]+,\s*[A-Z]{2}\b/.test(topText) ||
       /\b[A-Z][a-z]+,\s*[A-Z][a-z]+(?:\s[A-Z][a-z]+)?\b/.test(topText) ||
       /\bremote\b/i.test(topText),
-    url: /(linkedin\.com|github\.com|portfolio|http:\/\/|https:\/\/)/i.test(topText),
+    url: /(linkedin\.com|github\.com|portfolio|http:\/\/|https:\/\/)/i.test(
+      topText
+    ),
     linkedin: /linkedin\.com\/in\//i.test(topText),
     github: /github\.com\//i.test(topText),
     professionalEmail:
@@ -1629,7 +2069,12 @@ function extractDateInfo(text: string): DateInfo {
   }
 
   const toMonthIndex = (year: number, month: number) => year * 12 + month
-  const pushInterval = (startYear: number, startMonth: number, endYear: number, endMonth: number) => {
+  const pushInterval = (
+    startYear: number,
+    startMonth: number,
+    endYear: number,
+    endMonth: number
+  ) => {
     const start = toMonthIndex(startYear, startMonth)
     const end = toMonthIndex(endYear, endMonth)
     if (Number.isFinite(start) && Number.isFinite(end) && end >= start) {
@@ -1642,70 +2087,92 @@ function extractDateInfo(text: string): DateInfo {
   const monthYearPattern =
     /\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?\s+((?:19|20)\d{2})\b/gi
   while ((match = monthYearPattern.exec(text)) !== null) {
-    const raw = match[0]
-    const month = monthMap[match[1].toLowerCase()]
-    const year = Number(match[2])
+    const raw = match[0] || ""
+    const month = monthMap[match[1]?.toLowerCase() || ""] ?? -1
+    const year = Number(match[2] || 0)
     formats.add("month-year")
-    if (year > CURRENT_YEAR || (year === CURRENT_YEAR && month > CURRENT_MONTH_INDEX)) {
+    if (
+      year > CURRENT_YEAR ||
+      (year === CURRENT_YEAR && month > CURRENT_MONTH_INDEX)
+    ) {
       futureDates.push(raw)
     }
   }
 
   const numericPattern = /\b(0?[1-9]|1[0-2])\/((?:19|20)\d{2})\b/g
   while ((match = numericPattern.exec(text)) !== null) {
-    const raw = match[0]
-    const month = Number(match[1]) - 1
-    const year = Number(match[2])
+    const raw = match[0] || ""
+    const month = Number(match[1] || 0) - 1
+    const year = Number(match[2] || 0)
     formats.add("numeric-month-year")
-    if (year > CURRENT_YEAR || (year === CURRENT_YEAR && month > CURRENT_MONTH_INDEX)) {
+    if (
+      year > CURRENT_YEAR ||
+      (year === CURRENT_YEAR && month > CURRENT_MONTH_INDEX)
+    ) {
       futureDates.push(raw)
     }
   }
 
   const yearPattern = /\b((?:19|20)\d{2})\b/g
   while ((match = yearPattern.exec(text)) !== null) {
-    const year = Number(match[1])
+    const year = Number(match[1] || 0)
     formats.add("year-only")
-    if (year > CURRENT_YEAR) futureDates.push(match[1])
+    if (year > CURRENT_YEAR) futureDates.push(match[1] || "")
   }
 
   const numericRangePattern =
     /\b(0?[1-9]|1[0-2])\/((?:19|20)\d{2})\s*(?:-|–|to)\s*(present|current|now|(0?[1-9]|1[0-2])\/((?:19|20)\d{2}))\b/gi
   while ((match = numericRangePattern.exec(text)) !== null) {
-    const startMonth = Number(match[1]) - 1
-    const startYear = Number(match[2])
-    const isPresent = /present|current|now/i.test(match[3])
-    const endMonth = isPresent ? CURRENT_MONTH_INDEX : Number(match[4]) - 1
-    const endYear = isPresent ? CURRENT_YEAR : Number(match[5])
+    const startMonth = Number(match[1] || 0) - 1
+    const startYear = Number(match[2] || 0)
+    const presentToken = match[3] || ""
+    const isPresent = /present|current|now/i.test(presentToken)
+    const endMonth = isPresent ? CURRENT_MONTH_INDEX : Number(match[4] || 0) - 1
+    const endYear = isPresent ? CURRENT_YEAR : Number(match[5] || 0)
     pushInterval(startYear, startMonth, endYear, endMonth)
   }
 
   const monthRangePattern =
     /\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?\s+((?:19|20)\d{2})\s*(?:-|–|to)\s*(present|current|now|jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?\s*(((?:19|20)\d{2}))?\b/gi
   while ((match = monthRangePattern.exec(text)) !== null) {
-    const startMonth = monthMap[match[1].toLowerCase()]
-    const startYear = Number(match[2])
-    const isPresent = /present|current|now/i.test(match[3])
-    const endMonth = isPresent ? CURRENT_MONTH_INDEX : monthMap[match[3].toLowerCase()]
-    const endYear = isPresent ? CURRENT_YEAR : Number(match[4])
+    const startMonth = monthMap[match[1]?.toLowerCase() || ""] ?? 0
+    const startYear = Number(match[2] || 0)
+    const endToken = match[3] || ""
+    const isPresent = /present|current|now/i.test(endToken)
+    const endMonth = isPresent
+      ? CURRENT_MONTH_INDEX
+      : (monthMap[endToken.toLowerCase()] ?? 0)
+    const endYear = isPresent ? CURRENT_YEAR : Number(match[4] || 0)
     pushInterval(startYear, startMonth, endYear, endMonth)
   }
 
   const yearRangePattern =
     /\b((?:19|20)\d{2})\s*(?:-|–|to)\s*(present|current|now|(?:19|20)\d{2})\b/gi
   while ((match = yearRangePattern.exec(text)) !== null) {
-    const startYear = Number(match[1])
-    const isPresent = /present|current|now/i.test(match[2])
-    const endYear = isPresent ? CURRENT_YEAR : Number(match[2])
+    const startYear = Number(match[1] || 0)
+    const endToken = match[2] || ""
+    const isPresent = /present|current|now/i.test(endToken)
+    const endYear = isPresent ? CURRENT_YEAR : Number(endToken)
     pushInterval(startYear, 0, endYear, isPresent ? CURRENT_MONTH_INDEX : 11)
   }
 
   const merged = [...intervals].sort((a, b) => a.start - b.start)
   let totalMonths = 0
   if (merged.length > 0) {
-    let current = { ...merged[0] }
+    const first = merged[0]
+    if (!first) {
+      return {
+        formats: [...formats],
+        consistent: formats.size <= 1,
+        futureDates,
+        yearsEstimated: null,
+        datedRoleCount: intervals.length,
+      }
+    }
+    let current = { ...first }
     for (let index = 1; index < merged.length; index += 1) {
       const next = merged[index]
+      if (!next) continue
       if (next.start <= current.end + 1) {
         current.end = Math.max(current.end, next.end)
       } else {
@@ -1720,7 +2187,8 @@ function extractDateInfo(text: string): DateInfo {
     formats: [...formats],
     consistent: formats.size <= 1,
     futureDates: unique(futureDates),
-    yearsEstimated: totalMonths > 0 ? Number((totalMonths / 12).toFixed(1)) : null,
+    yearsEstimated:
+      totalMonths > 0 ? Number((totalMonths / 12).toFixed(1)) : null,
     datedRoleCount: intervals.length,
   }
 }
@@ -1730,9 +2198,22 @@ function extractExperienceLines(sectionContent: string): string[] {
     const cleaned = line.replace(/^[-*•]\s*/, "").trim()
     if (cleaned.length < 18) return false
     if (detectSectionKey(cleaned)) return false
-    if (/^[A-Z][A-Za-z&/.,' -]{1,45}\s+\|\s+[A-Z]/.test(cleaned) && !/[.]/.test(cleaned)) return false
-    if (/^(?:[A-Z][A-Za-z&/.,' -]{1,40})\s*(?:-|–|\|)\s*(?:[A-Z][A-Za-z&/.,' -]{1,40})$/.test(cleaned)) return false
-    if (/((?:19|20)\d{2}|present|current|now)/i.test(cleaned) && cleaned.split(/\s+/).length <= 10) return false
+    if (
+      /^[A-Z][A-Za-z&/.,' -]{1,45}\s+\|\s+[A-Z]/.test(cleaned) &&
+      !/[.]/.test(cleaned)
+    )
+      return false
+    if (
+      /^(?:[A-Z][A-Za-z&/.,' -]{1,40})\s*(?:-|–|\|)\s*(?:[A-Z][A-Za-z&/.,' -]{1,40})$/.test(
+        cleaned
+      )
+    )
+      return false
+    if (
+      /((?:19|20)\d{2}|present|current|now)/i.test(cleaned) &&
+      cleaned.split(/\s+/).length <= 10
+    )
+      return false
     return true
   })
 }
@@ -1742,7 +2223,10 @@ function extractBulletStats(
   projectText: string,
   criticalTerms: string[]
 ): BulletStats {
-  const lines = [...extractExperienceLines(experienceText), ...extractExperienceLines(projectText)]
+  const lines = [
+    ...extractExperienceLines(experienceText),
+    ...extractExperienceLines(projectText),
+  ]
   const total = lines.length
   let quantified = 0
   let strongVerb = 0
@@ -1772,8 +2256,15 @@ function extractBulletStats(
     if (words.length < 9) tooShort += 1
     if (words.length > 34) tooLong += 1
 
-    const normalizedKey = words.filter((word) => !STOPWORDS.has(word) && word.length > 2).slice(0, 12).join(" ")
-    if (normalizedKey) normalizedLines.set(normalizedKey, (normalizedLines.get(normalizedKey) || 0) + 1)
+    const normalizedKey = words
+      .filter((word) => !STOPWORDS.has(word) && word.length > 2)
+      .slice(0, 12)
+      .join(" ")
+    if (normalizedKey)
+      normalizedLines.set(
+        normalizedKey,
+        (normalizedLines.get(normalizedKey) || 0) + 1
+      )
 
     const hasMetric =
       /(\d+%|\$\s?\d|€\s?\d|£\s?\d|\b\d+(?:\.\d+)?\s?(?:k|m|b)\+?\b|\b\d+\+?\s?(?:users|customers|clients|engineers|people|projects|services|hours|days|weeks|months|years|pipelines|applications|transactions|tickets|stores|regions)\b|\b99\.9+\b|\b\d+\s?(?:ms|seconds|minutes|hours)\b)/i.test(
@@ -1787,7 +2278,8 @@ function extractBulletStats(
     if (firstWord && WEAK_VERBS.has(firstWord)) weakVerb += 1
     if (/responsible for/i.test(normalized)) weakVerb += 1
 
-    if (/\b(was|were|is|are|been|being)\s+\w+ed\b/i.test(normalized)) passiveVoice += 1
+    if (/\b(was|were|is|are|been|being)\s+\w+ed\b/i.test(normalized))
+      passiveVoice += 1
     if (/\b(i|my|me|our|we)\b/i.test(normalized)) firstPerson += 1
 
     const hasTimeframe =
@@ -1796,14 +2288,20 @@ function extractBulletStats(
       )
     if (hasTimeframe) timeframeMentioned += 1
 
-    const canonicalTechnicalTerms = extractCanonicalTerms(line, TECHNICAL_CATEGORIES)
+    const canonicalTechnicalTerms = extractCanonicalTerms(
+      line,
+      TECHNICAL_CATEGORIES
+    )
     const hasToolEvidence =
       canonicalTechnicalTerms.length > 0 ||
       /[A-Z]{2,}|[A-Za-z0-9]+(?:\.js|\.ts|\.py|\.net)|\b(api|sdk|aws|azure|gcp|kubernetes|docker|terraform|react|node|python|java|sql|typescript|graphql|microservices|ci\/cd)\b/i.test(
         line
       )
     if (hasToolEvidence) toolMentioned += 1
-    if (canonicalTechnicalTerms.length >= 1 || criticalTerms.some((term) => containsTerm(normalized, term))) {
+    if (
+      canonicalTechnicalTerms.length >= 1 ||
+      criticalTerms.some((term) => containsTerm(normalized, term))
+    ) {
       technicalSpecificity += 1
     }
 
@@ -1816,13 +2314,22 @@ function extractBulletStats(
       )
     if (hasScope) scopeMentioned += 1
 
-    const hasContext = /\b(using|via|through|by|for|while|to|across)\b/i.test(normalized)
-    if (firstWord && STRONG_VERBS.has(firstWord) && hasMetric && (hasTimeframe || hasContext || hasBusinessImpact)) {
+    const hasContext = /\b(using|via|through|by|for|while|to|across)\b/i.test(
+      normalized
+    )
+    if (
+      firstWord &&
+      STRONG_VERBS.has(firstWord) &&
+      hasMetric &&
+      (hasTimeframe || hasContext || hasBusinessImpact)
+    ) {
       starLike += 1
     }
   }
 
-  const duplicateBullets = [...normalizedLines.values()].filter((count) => count >= 2).length
+  const duplicateBullets = [...normalizedLines.values()].filter(
+    (count) => count >= 2
+  ).length
   const repeatedLeadVerbs = [...leadVerbs.entries()]
     .filter(([verb, count]) => STRONG_VERBS.has(verb) && count >= 3)
     .sort((a, b) => b[1] - a[1])
@@ -1851,7 +2358,10 @@ function extractBulletStats(
   }
 }
 
-function analyzeSummary(summaryText: string, jd: JDAnalysis | null): SummaryStats {
+function analyzeSummary(
+  summaryText: string,
+  jd: JDAnalysis | null
+): SummaryStats {
   const lines = splitLines(summaryText)
   const words = tokenize(summaryText)
   const first50Words = words.slice(0, 50).join(" ")
@@ -1860,8 +2370,12 @@ function analyzeSummary(summaryText: string, jd: JDAnalysis | null): SummaryStat
     ...(jd?.requiredTerms || []).slice(0, 16),
     ...(jd?.responsibilityTerms || []).slice(0, 10),
   ])
-  const first50KeywordMatches = criticalTerms.filter((term) => containsTerm(first50Words, term)).length
-  const matchedCriticalTerms = criticalTerms.filter((term) => containsTerm(summaryText, term)).length
+  const first50KeywordMatches = criticalTerms.filter((term) =>
+    containsTerm(first50Words, term)
+  ).length
+  const matchedCriticalTerms = criticalTerms.filter((term) =>
+    containsTerm(summaryText, term)
+  ).length
 
   return {
     lineCount: lines.length,
@@ -1877,16 +2391,21 @@ function analyzeSummary(summaryText: string, jd: JDAnalysis | null): SummaryStat
       ),
     first50KeywordMatches,
     hasSeniority: textIncludesAny(summaryText, [...SENIORITY_LEVELS]),
-    hasObjectiveLanguage: /\b(seeking|looking for|to obtain|objective|seeking a position|seeking an opportunity)\b/i.test(
-      summaryText
-    ),
+    hasObjectiveLanguage:
+      /\b(seeking|looking for|to obtain|objective|seeking a position|seeking an opportunity)\b/i.test(
+        summaryText
+      ),
     firstPerson: /\b(i|my|me|our|we)\b/i.test(summaryText),
-    hasCoreSkills: extractCanonicalTerms(summaryText, TECHNICAL_CATEGORIES).length >= 3,
+    hasCoreSkills:
+      extractCanonicalTerms(summaryText, TECHNICAL_CATEGORIES).length >= 3,
     matchedCriticalTerms,
   }
 }
 
-function analyzeRepetition(text: string, jd: JDAnalysis | null): RepetitionStats {
+function analyzeRepetition(
+  text: string,
+  jd: JDAnalysis | null
+): RepetitionStats {
   const excluded = new Set(
     unique([
       ...(jd?.titleTerms || []),
@@ -1902,6 +2421,7 @@ function analyzeRepetition(text: string, jd: JDAnalysis | null): RepetitionStats
   const words = tokenize(text)
   for (let index = 0; index < words.length; index += 1) {
     const word = words[index]
+    if (!word) continue
     if (word.length < 4) continue
     if (STOPWORDS.has(word)) continue
     if (excluded.has(word)) continue
@@ -1926,7 +2446,8 @@ function analyzeRepetition(text: string, jd: JDAnalysis | null): RepetitionStats
       .filter((token) => token.length > 2 && !STOPWORDS.has(token))
       .slice(0, 8)
       .join(" ")
-    if (fragment) bulletFragments.set(fragment, (bulletFragments.get(fragment) || 0) + 1)
+    if (fragment)
+      bulletFragments.set(fragment, (bulletFragments.get(fragment) || 0) + 1)
   }
 
   return {
@@ -1961,7 +2482,10 @@ function extractHighestDegreeRequirement(text: string): string | null {
   return null
 }
 
-function hasDegree(text: string, degreeRequirement: string | null): boolean | null {
+function hasDegree(
+  text: string,
+  degreeRequirement: string | null
+): boolean | null {
   if (!degreeRequirement) return null
   const lower = text.toLowerCase()
   if (degreeRequirement === "phd") {
@@ -1971,7 +2495,9 @@ function hasDegree(text: string, degreeRequirement: string | null): boolean | nu
     return /\b(master|m\.s|ms|mba|m\.eng|phd|doctorate)\b/i.test(lower)
   }
   if (degreeRequirement === "bachelor") {
-    return /\b(bachelor|b\.s|bs|b\.a|ba|b\.eng|master|m\.s|ms|mba|phd|doctorate)\b/i.test(lower)
+    return /\b(bachelor|b\.s|bs|b\.a|ba|b\.eng|master|m\.s|ms|mba|phd|doctorate)\b/i.test(
+      lower
+    )
   }
   if (degreeRequirement === "associate") {
     return /\b(associate|a\.s|a\.a|bachelor|master|phd)\b/i.test(lower)
@@ -1981,8 +2507,12 @@ function hasDegree(text: string, degreeRequirement: string | null): boolean | nu
 
 function extractRoleFamilies(text: string): string[] {
   return ROLE_FAMILY_DEFINITIONS.filter((definition) => {
-    const titleMatches = definition.titles.filter((title) => containsTerm(text, title)).length
-    const keywordMatches = definition.keywords.filter((keyword) => containsTerm(text, keyword)).length
+    const titleMatches = definition.titles.filter((title) =>
+      containsTerm(text, title)
+    ).length
+    const keywordMatches = definition.keywords.filter((keyword) =>
+      containsTerm(text, keyword)
+    ).length
     return titleMatches >= 1 || keywordMatches >= 2
   }).map((definition) => definition.id)
 }
@@ -1991,16 +2521,24 @@ function inferSeniority(text: string): string | null {
   const lower = text.toLowerCase()
   for (let index = SENIORITY_LEVELS.length - 1; index >= 0; index -= 1) {
     const level = SENIORITY_LEVELS[index]
+    if (!level) continue
     if (containsTerm(lower, level)) return level
   }
   if (/\bmid[-\s]?level\b/i.test(lower)) return "mid"
   return null
 }
 
-function compareSeniority(observed: string | null, expected: string | null): boolean | null {
+function compareSeniority(
+  observed: string | null,
+  expected: string | null
+): boolean | null {
   if (!observed || !expected) return null
-  const observedIndex = SENIORITY_LEVELS.indexOf(observed as (typeof SENIORITY_LEVELS)[number])
-  const expectedIndex = SENIORITY_LEVELS.indexOf(expected as (typeof SENIORITY_LEVELS)[number])
+  const observedIndex = SENIORITY_LEVELS.indexOf(
+    observed as (typeof SENIORITY_LEVELS)[number]
+  )
+  const expectedIndex = SENIORITY_LEVELS.indexOf(
+    expected as (typeof SENIORITY_LEVELS)[number]
+  )
   if (observedIndex === -1 || expectedIndex === -1) return null
   return observedIndex >= expectedIndex
 }
@@ -2015,10 +2553,20 @@ function analyzeJobDescription(jd: string): JDAnalysis | null {
       /(engineer|developer|manager|analyst|scientist|architect|designer|consultant|specialist|administrator|director)/i.test(
         line
       )
-    ) || lines[0] || null
+    ) ||
+    lines[0] ||
+    null
 
-  const title = firstMeaningfulLine && firstMeaningfulLine.length <= 140 ? firstMeaningfulLine : null
-  const titleTerms = title ? unique([...extractCanonicalTerms(title), ...extractTermsFromLine(title)]).slice(0, 16) : []
+  const title =
+    firstMeaningfulLine && firstMeaningfulLine.length <= 140
+      ? firstMeaningfulLine
+      : null
+  const titleTerms = title
+    ? unique([
+        ...extractCanonicalTerms(title),
+        ...extractTermsFromLine(title),
+      ]).slice(0, 16)
+    : []
 
   const requiredCounts = new Map<string, number>()
   const preferredCounts = new Map<string, number>()
@@ -2032,9 +2580,15 @@ function analyzeJobDescription(jd: string): JDAnalysis | null {
     const lower = line.toLowerCase()
     const extractedTerms = extractTermsFromLine(line)
     const canonicalTerms = extractCanonicalTerms(line)
-    const isPreferredLine = PREFERRED_LINE_MARKERS.some((marker) => lower.includes(marker))
-    const isRequiredLine = REQUIRED_LINE_MARKERS.some((marker) => lower.includes(marker))
-    const isResponsibilityLine = RESPONSIBILITY_LINE_MARKERS.some((marker) => lower.includes(marker))
+    const isPreferredLine = PREFERRED_LINE_MARKERS.some((marker) =>
+      lower.includes(marker)
+    )
+    const isRequiredLine = REQUIRED_LINE_MARKERS.some((marker) =>
+      lower.includes(marker)
+    )
+    const isResponsibilityLine = RESPONSIBILITY_LINE_MARKERS.some((marker) =>
+      lower.includes(marker)
+    )
     const isCultureLine =
       CULTURE_TERMS.some((termValue) => lower.includes(termValue)) ||
       SOFT_SKILL_TERMS.some((termValue) => containsTerm(lower, termValue))
@@ -2058,48 +2612,80 @@ function analyzeJobDescription(jd: string): JDAnalysis | null {
       "customer",
       "compliance",
     ])
-    addTermsToMap(domainCounts, domainTerms, isRequiredLine ? 3 : isPreferredLine ? 2 : 1)
+    addTermsToMap(
+      domainCounts,
+      domainTerms,
+      isRequiredLine ? 3 : isPreferredLine ? 2 : 1
+    )
 
-    if (isRequiredLine) addTermsToMap(requiredCounts, [...canonicalTerms, ...extractedTerms], 3)
-    if (isPreferredLine) addTermsToMap(preferredCounts, [...canonicalTerms, ...extractedTerms], 2)
-    if (isResponsibilityLine) addTermsToMap(responsibilityCounts, [...canonicalTerms, ...extractedTerms], 2)
-    if (isCultureLine) addTermsToMap(cultureCounts, [...canonicalTerms, ...extractedTerms], 1)
+    if (isRequiredLine)
+      addTermsToMap(requiredCounts, [...canonicalTerms, ...extractedTerms], 3)
+    if (isPreferredLine)
+      addTermsToMap(preferredCounts, [...canonicalTerms, ...extractedTerms], 2)
+    if (isResponsibilityLine)
+      addTermsToMap(
+        responsibilityCounts,
+        [...canonicalTerms, ...extractedTerms],
+        2
+      )
+    if (isCultureLine)
+      addTermsToMap(cultureCounts, [...canonicalTerms, ...extractedTerms], 1)
 
     if (/(certif|certified|license|licence)/i.test(lower)) {
       addTermsToMap(
         certificationCounts,
         [
           ...extractCanonicalTerms(line, ["certification"]),
-          ...CERTIFICATION_TERMS.filter((termValue) => lower.includes(termValue.toLowerCase())),
+          ...CERTIFICATION_TERMS.filter((termValue) =>
+            lower.includes(termValue.toLowerCase())
+          ),
         ],
         isRequiredLine ? 3 : 2
       )
     }
 
     if (textIncludesAny(lower, [...SENIORITY_LEVELS])) {
-      seniorityTerms.push(...SENIORITY_LEVELS.filter((termValue) => containsTerm(lower, termValue)))
+      seniorityTerms.push(
+        ...SENIORITY_LEVELS.filter((termValue) =>
+          containsTerm(lower, termValue)
+        )
+      )
     }
   }
 
   addTermsToMap(requiredCounts, titleTerms, 4)
   addTermsToMap(responsibilityCounts, titleTerms, 2)
 
-  const yearsMatches = [...trimmed.matchAll(/(\d{1,2})\+?\s+years?/gi)].map((match) => Number(match[1]))
+  const yearsMatches = [...trimmed.matchAll(/(\d{1,2})\+?\s+years?/gi)].map(
+    (match) => Number(match[1])
+  )
   const yearsRequired = yearsMatches.length ? Math.max(...yearsMatches) : null
   const degreeRequirement = extractHighestDegreeRequirement(trimmed)
   const roleFamilies = unique(extractRoleFamilies(trimmed))
-  const remoteTerms = REMOTE_TERMS.filter((termValue) => containsTerm(trimmed, termValue))
-  const requiresManagement = MANAGEMENT_MARKERS.some((marker) => containsTerm(trimmed, marker))
+  const remoteTerms = REMOTE_TERMS.filter((termValue) =>
+    containsTerm(trimmed, termValue)
+  )
+  const requiresManagement = MANAGEMENT_MARKERS.some((marker) =>
+    containsTerm(trimmed, marker)
+  )
 
   const requiredCertifications = unique([
     ...rankMapKeys(certificationCounts, 20),
-    ...CERTIFICATION_TERMS.filter((termValue) => containsTerm(trimmed, termValue)),
+    ...CERTIFICATION_TERMS.filter((termValue) =>
+      containsTerm(trimmed, termValue)
+    ),
   ]).slice(0, 20)
 
   const optionalSections: SectionKey[] = []
-  if (requiredCertifications.length > 0 || /(certif|license|licence)/i.test(trimmed)) optionalSections.push("certifications")
-  if (/(project|portfolio|github|case study|sample work)/i.test(trimmed)) optionalSections.push("projects")
-  if (/(publication|research|paper|patent)/i.test(trimmed)) optionalSections.push("publications")
+  if (
+    requiredCertifications.length > 0 ||
+    /(certif|license|licence)/i.test(trimmed)
+  )
+    optionalSections.push("certifications")
+  if (/(project|portfolio|github|case study|sample work)/i.test(trimmed))
+    optionalSections.push("projects")
+  if (/(publication|research|paper|patent)/i.test(trimmed))
+    optionalSections.push("publications")
 
   return {
     title,
@@ -2138,9 +2724,9 @@ function analyzeSkillsSection(skillsText: string): SkillsAnalysis {
       /^(languages?|frameworks?|libraries|tools?|cloud|platforms?|databases?|devops|methodologies|analytics|product|design|marketing|sales|certifications?)\s*:\s*(.+)$/i
     )
     if (categoryMatch) {
-      categoryLabels.push(categoryMatch[1].toLowerCase())
+      categoryLabels.push((categoryMatch[1] || "").toLowerCase())
       rawItems.push(
-        ...categoryMatch[2]
+        ...(categoryMatch[2] || "")
           .split(/[|,;]+/)
           .map((item) => item.trim())
           .filter(Boolean)
@@ -2168,7 +2754,9 @@ function analyzeSkillsSection(skillsText: string): SkillsAnalysis {
       /[A-Z]{2,}|[+#.]|\d/.test(item) ||
       item.split(" ").length >= 2
   ).length
-  const genericTerms = items.filter((item) => GENERIC_SKILL_TERMS.has(item.toLowerCase())).length
+  const genericTerms = items.filter((item) =>
+    GENERIC_SKILL_TERMS.has(item.toLowerCase())
+  ).length
 
   return {
     items,
@@ -2187,7 +2775,9 @@ function buildResumeLexicalCoverage(
     fullResume: extractCanonicalTerms(resumeContent),
   }
 
-  for (const [key, section] of Object.entries(sections) as Array<[SectionKey, SectionBlock | undefined]>) {
+  for (const [key, section] of Object.entries(sections) as Array<
+    [SectionKey, SectionBlock | undefined]
+  >) {
     if (!section) continue
     sectionTermCoverage[key] = extractCanonicalTerms(section.content)
   }
@@ -2197,9 +2787,12 @@ function buildResumeLexicalCoverage(
     const category = KEYWORD_GROUP_MAP.get(termValue)?.category
     return Boolean(category && TECHNICAL_CATEGORIES.includes(category))
   })
-  const softSkills = allCanonicalTerms.filter((termValue) => KEYWORD_GROUP_MAP.get(termValue)?.category === "soft-skill")
+  const softSkills = allCanonicalTerms.filter(
+    (termValue) => KEYWORD_GROUP_MAP.get(termValue)?.category === "soft-skill"
+  )
   const certifications = allCanonicalTerms.filter(
-    (termValue) => KEYWORD_GROUP_MAP.get(termValue)?.category === "certification"
+    (termValue) =>
+      KEYWORD_GROUP_MAP.get(termValue)?.category === "certification"
   )
 
   return {
@@ -2209,11 +2802,19 @@ function buildResumeLexicalCoverage(
     softSkills,
     certifications,
     leadershipSignals: unique(
-      ["leadership", "mentorship", "stakeholder management", "program management", "people management"].filter((termValue) =>
+      [
+        "leadership",
+        "mentorship",
+        "stakeholder management",
+        "program management",
+        "people management",
+      ].filter((termValue) => containsTerm(resumeContent, termValue))
+    ),
+    businessSignals: unique(
+      BUSINESS_IMPACT_TERMS.filter((termValue) =>
         containsTerm(resumeContent, termValue)
       )
     ),
-    businessSignals: unique(BUSINESS_IMPACT_TERMS.filter((termValue) => containsTerm(resumeContent, termValue))),
     sectionTermCoverage,
   }
 }
@@ -2232,7 +2833,8 @@ function buildKeywordAnalysis(
     const missing: string[] = []
     for (const termValue of terms) {
       const evidence = findTermEvidenceInLines(resumeLines, termValue)
-      if (evidence.exact || evidence.semantic) matched.push(resolveCanonicalTerm(termValue))
+      if (evidence.exact || evidence.semantic)
+        matched.push(resolveCanonicalTerm(termValue))
       else missing.push(resolveCanonicalTerm(termValue))
     }
     return { matched: unique(matched), missing: unique(missing) }
@@ -2278,7 +2880,9 @@ function buildKeywordAnalysis(
     (sum, termValue) => sum + countOccurrences(resumeLower, termValue),
     0
   )
-  const keywordDensity = Number(((matchedTokenOccurrences / totalTokens) * 100).toFixed(1))
+  const keywordDensity = Number(
+    ((matchedTokenOccurrences / totalTokens) * 100).toFixed(1)
+  )
 
   const overusedKeywords = matchedUniqueTerms
     .filter((termValue) => countOccurrences(resumeLower, termValue) >= 7)
@@ -2301,7 +2905,9 @@ function buildKeywordAnalysis(
     .slice(0, 15)
 
   const sectionText = {
-    professionalSummary: getSectionText(sections.professionalSummary).toLowerCase(),
+    professionalSummary: getSectionText(
+      sections.professionalSummary
+    ).toLowerCase(),
     skills: getSectionText(sections.skills).toLowerCase(),
     workExperience: getSectionText(sections.workExperience).toLowerCase(),
     education: getSectionText(sections.education).toLowerCase(),
@@ -2312,7 +2918,9 @@ function buildKeywordAnalysis(
   return {
     totalKeywordsInJD: uniqueTerms.length,
     matchedKeywords: matchedUniqueTerms.length,
-    matchPercentage: clamp(weightedTotal > 0 ? (weightedMatched / weightedTotal) * 100 : 0),
+    matchPercentage: clamp(
+      weightedTotal > 0 ? (weightedMatched / weightedTotal) * 100 : 0
+    ),
     keywordDensity,
     overusedKeywords,
     underusedKeywords,
@@ -2329,37 +2937,55 @@ function buildKeywordAnalysis(
     coverageBySection: {
       professionalSummary: criticalTerms
         .filter((termValue) => {
-          const evidence = findTermEvidenceInLines(splitLines(sectionText.professionalSummary), termValue)
+          const evidence = findTermEvidenceInLines(
+            splitLines(sectionText.professionalSummary),
+            termValue
+          )
           return evidence.exact || evidence.semantic
         })
         .slice(0, 15),
       skills: criticalTerms
         .filter((termValue) => {
-          const evidence = findTermEvidenceInLines(splitLines(sectionText.skills), termValue)
+          const evidence = findTermEvidenceInLines(
+            splitLines(sectionText.skills),
+            termValue
+          )
           return evidence.exact || evidence.semantic
         })
         .slice(0, 20),
       workExperience: criticalTerms
         .filter((termValue) => {
-          const evidence = findTermEvidenceInLines(splitLines(sectionText.workExperience), termValue)
+          const evidence = findTermEvidenceInLines(
+            splitLines(sectionText.workExperience),
+            termValue
+          )
           return evidence.exact || evidence.semantic
         })
         .slice(0, 20),
       education: criticalTerms
         .filter((termValue) => {
-          const evidence = findTermEvidenceInLines(splitLines(sectionText.education), termValue)
+          const evidence = findTermEvidenceInLines(
+            splitLines(sectionText.education),
+            termValue
+          )
           return evidence.exact || evidence.semantic
         })
         .slice(0, 12),
       projects: criticalTerms
         .filter((termValue) => {
-          const evidence = findTermEvidenceInLines(splitLines(sectionText.projects), termValue)
+          const evidence = findTermEvidenceInLines(
+            splitLines(sectionText.projects),
+            termValue
+          )
           return evidence.exact || evidence.semantic
         })
         .slice(0, 15),
       certifications: criticalTerms
         .filter((termValue) => {
-          const evidence = findTermEvidenceInLines(splitLines(sectionText.certifications), termValue)
+          const evidence = findTermEvidenceInLines(
+            splitLines(sectionText.certifications),
+            termValue
+          )
           return evidence.exact || evidence.semantic
         })
         .slice(0, 12),
@@ -2369,7 +2995,11 @@ function buildKeywordAnalysis(
   }
 }
 
-function scoreProfessionalSummary(summaryText: string, jd: JDAnalysis | null, summaryStats: SummaryStats): number {
+function scoreProfessionalSummary(
+  summaryText: string,
+  jd: JDAnalysis | null,
+  summaryStats: SummaryStats
+): number {
   if (!summaryText) return 15
 
   let score = 25
@@ -2377,7 +3007,8 @@ function scoreProfessionalSummary(summaryText: string, jd: JDAnalysis | null, su
   else if (summaryStats.wordCount >= 15) score += 5
 
   if (summaryStats.lineCount >= 3 && summaryStats.lineCount <= 4) score += 12
-  else if (summaryStats.lineCount >= 2 && summaryStats.lineCount <= 5) score += 6
+  else if (summaryStats.lineCount >= 2 && summaryStats.lineCount <= 5)
+    score += 6
 
   if (summaryStats.hasYears) score += 8
   if (summaryStats.hasMetric) score += 8
@@ -2388,25 +3019,34 @@ function scoreProfessionalSummary(summaryText: string, jd: JDAnalysis | null, su
   else if (summaryStats.first50KeywordMatches >= 1) score += 5
   if (summaryStats.matchedCriticalTerms >= 4) score += 10
   else if (summaryStats.matchedCriticalTerms >= 2) score += 5
-  if (jd?.titleTerms.some((termValue) => containsTerm(summaryText, termValue))) score += 6
+  if (jd?.titleTerms.some((termValue) => containsTerm(summaryText, termValue)))
+    score += 6
   if (summaryStats.hasObjectiveLanguage) score -= 8
   if (summaryStats.firstPerson) score -= 10
 
   return clamp(score)
 }
 
-function scoreSkills(skillsText: string, jd: JDAnalysis | null, skillsAnalysis: SkillsAnalysis): number {
+function scoreSkills(
+  skillsText: string,
+  jd: JDAnalysis | null,
+  skillsAnalysis: SkillsAnalysis
+): number {
   if (!skillsText) return 15
 
   let score = 25
-  if (skillsAnalysis.items.length >= 15 && skillsAnalysis.items.length <= 25) score += 15
+  if (skillsAnalysis.items.length >= 15 && skillsAnalysis.items.length <= 25)
+    score += 15
   else if (skillsAnalysis.items.length >= 10) score += 10
   else if (skillsAnalysis.items.length >= 5) score += 5
 
   if (skillsAnalysis.categoryLabels.length >= 3) score += 15
   else if (skillsAnalysis.categoryLabels.length >= 2) score += 8
 
-  const specificityRatio = skillsAnalysis.items.length > 0 ? skillsAnalysis.specificTerms / skillsAnalysis.items.length : 0
+  const specificityRatio =
+    skillsAnalysis.items.length > 0
+      ? skillsAnalysis.specificTerms / skillsAnalysis.items.length
+      : 0
   if (specificityRatio >= 0.6) score += 15
   else if (specificityRatio >= 0.4) score += 8
 
@@ -2414,11 +3054,18 @@ function scoreSkills(skillsText: string, jd: JDAnalysis | null, skillsAnalysis: 
   else if (skillsAnalysis.canonicalTerms.length >= 6) score += 5
 
   if (jd?.requiredTerms.length) {
-    const matched = jd.requiredTerms.filter((termValue) => containsTerm(skillsText, termValue)).length
+    const matched = jd.requiredTerms.filter((termValue) =>
+      containsTerm(skillsText, termValue)
+    ).length
     score += Math.min(20, matched * 2)
   }
-  if (jd?.titleTerms.some((termValue) => containsTerm(skillsText, termValue))) score += 5
-  if (skillsAnalysis.genericTerms > Math.max(2, Math.floor(skillsAnalysis.items.length * 0.35))) score -= 6
+  if (jd?.titleTerms.some((termValue) => containsTerm(skillsText, termValue)))
+    score += 5
+  if (
+    skillsAnalysis.genericTerms >
+    Math.max(2, Math.floor(skillsAnalysis.items.length * 0.35))
+  )
+    score -= 6
 
   return clamp(score)
 }
@@ -2441,11 +3088,23 @@ function scoreContentQuality(
   const businessRatio = bulletStats.businessImpact / bulletStats.total
   const scopeRatio = bulletStats.scopeMentioned / bulletStats.total
   const toolRatio = bulletStats.toolMentioned / bulletStats.total
-  const shortPenalty = Math.min(1, bulletStats.tooShort / Math.max(1, bulletStats.total))
-  const longPenalty = Math.min(1, bulletStats.tooLong / Math.max(1, bulletStats.total))
-  const repetitionPenalty = Math.min(1, repetition.repeatedContentWords.length / 8)
+  const shortPenalty = Math.min(
+    1,
+    bulletStats.tooShort / Math.max(1, bulletStats.total)
+  )
+  const longPenalty = Math.min(
+    1,
+    bulletStats.tooLong / Math.max(1, bulletStats.total)
+  )
+  const repetitionPenalty = Math.min(
+    1,
+    repetition.repeatedContentWords.length / 8
+  )
   const phrasePenalty = Math.min(1, repetition.repeatedPhrases.length / 6)
-  const duplicatePenalty = Math.min(1, bulletStats.duplicateBullets / Math.max(1, bulletStats.total))
+  const duplicatePenalty = Math.min(
+    1,
+    bulletStats.duplicateBullets / Math.max(1, bulletStats.total)
+  )
   const lengthScore =
     bulletStats.averageWordCount >= 12 && bulletStats.averageWordCount <= 28
       ? 1
@@ -2484,7 +3143,12 @@ function scoreFormatting(
   text: string,
   bulletStats: BulletStats,
   structureSignals?: DocumentStructureSignals
-): { score: number; parseability: number; issues: string[]; warnings: string[] } {
+): {
+  score: number
+  parseability: number
+  issues: string[]
+  warnings: string[]
+} {
   const issues: string[] = []
   const warnings: string[] = []
   let score = 100
@@ -2513,7 +3177,9 @@ function scoreFormatting(
   for (const sectionKey of REQUIRED_SECTION_KEYS) {
     if (!sections[sectionKey]) {
       score -= 8
-      warnings.push(`Missing standard ATS section header for ${titleCase(sectionKey)}.`)
+      warnings.push(
+        `Missing standard ATS section header for ${titleCase(sectionKey)}.`
+      )
     }
   }
 
@@ -2524,7 +3190,9 @@ function scoreFormatting(
 
   if (dates.futureDates.length > 0) {
     score -= 8
-    issues.push(`Detected date(s) after March 8, 2026: ${dates.futureDates.join(", ")}.`)
+    issues.push(
+      `Detected date(s) after March 8, 2026: ${dates.futureDates.join(", ")}.`
+    )
   }
 
   if (/[★♦►■▪◇◆]/.test(text)) {
@@ -2534,32 +3202,44 @@ function scoreFormatting(
 
   if ((text.match(/\|/g) || []).length >= 12) {
     score -= 4
-    warnings.push("Heavy use of inline separators may indicate formatting that parses inconsistently.")
+    warnings.push(
+      "Heavy use of inline separators may indicate formatting that parses inconsistently."
+    )
   }
 
   if (!bulletStats.consistentMarkers && bulletStats.total > 2) {
     score -= 4
-    warnings.push("Bullet formatting appears inconsistent across achievement lines.")
+    warnings.push(
+      "Bullet formatting appears inconsistent across achievement lines."
+    )
   }
 
   if (!sections.workExperience) {
     score -= 12
-    issues.push("Work experience section was not detected with a standard ATS-safe header.")
+    issues.push(
+      "Work experience section was not detected with a standard ATS-safe header."
+    )
   }
 
   if (structureSignals?.hasTableEvidence) {
     score -= 8
-    issues.push("Structured extraction found table-like layout evidence that can reduce ATS field parsing reliability.")
+    issues.push(
+      "Structured extraction found table-like layout evidence that can reduce ATS field parsing reliability."
+    )
   }
 
   if (structureSignals?.hasMultiColumnEvidence) {
     score -= 10
-    issues.push("Structured extraction found likely multi-column layout, which often breaks ATS reading order.")
+    issues.push(
+      "Structured extraction found likely multi-column layout, which often breaks ATS reading order."
+    )
   }
 
   if ((structureSignals?.readingOrderRisk || 0) >= 0.2) {
     score -= 8
-    warnings.push("Structured extraction suggests unstable reading order across parts of the document.")
+    warnings.push(
+      "Structured extraction suggests unstable reading order across parts of the document."
+    )
   } else if ((structureSignals?.readingOrderRisk || 0) >= 0.1) {
     score -= 4
     warnings.push("Structured extraction suggests mild reading-order risk.")
@@ -2567,12 +3247,16 @@ function scoreFormatting(
 
   if (structureSignals?.contactInHeaderFooter) {
     score -= 6
-    warnings.push("Contact details appear to rely on header or footer regions, which some ATS parsers ignore.")
+    warnings.push(
+      "Contact details appear to rely on header or footer regions, which some ATS parsers ignore."
+    )
   }
 
   if (contact.url && !contact.linkedin && !contact.github) {
     score -= 2
-    warnings.push("A URL was detected but it does not clearly identify LinkedIn, GitHub, or a portfolio.")
+    warnings.push(
+      "A URL was detected but it does not clearly identify LinkedIn, GitHub, or a portfolio."
+    )
   }
 
   if (parseRisk.riskPenalty > 0) {
@@ -2600,7 +3284,9 @@ function scoreStructure(
   structureSignals?: DocumentStructureSignals
 ): number {
   let score = 25
-  const requiredPresent = REQUIRED_SECTION_KEYS.filter((key) => sections[key]).length
+  const requiredPresent = REQUIRED_SECTION_KEYS.filter(
+    (key) => sections[key]
+  ).length
   score += (requiredPresent / REQUIRED_SECTION_KEYS.length) * 35
   const artifactDetected = structureSignals?.detectedSections.length || 0
   if (artifactDetected > requiredPresent) {
@@ -2610,14 +3296,25 @@ function scoreStructure(
   if (contact.email && contact.phone && contact.location) score += 10
   else if (contact.email && contact.phone) score += 7
 
-  if (sections.professionalSummary && summaryStats.lineCount >= 3 && summaryStats.lineCount <= 4) score += 6
+  if (
+    sections.professionalSummary &&
+    summaryStats.lineCount >= 3 &&
+    summaryStats.lineCount <= 4
+  )
+    score += 6
   else if (sections.professionalSummary) score += 3
 
   if (sections.skills) score += 5
   if (sections.workExperience && sections.education) score += 6
-  if (skillsAnalysis.items.length >= 15 && skillsAnalysis.items.length <= 25) score += 5
+  if (skillsAnalysis.items.length >= 15 && skillsAnalysis.items.length <= 25)
+    score += 5
 
-  const preferredOrder = ["professionalSummary", "skills", "workExperience", "education"]
+  const preferredOrder = [
+    "professionalSummary",
+    "skills",
+    "workExperience",
+    "education",
+  ]
   const orderScore = preferredOrder.every((key, index) => {
     const actualIndex = order.indexOf(key)
     return actualIndex === -1 || actualIndex >= index
@@ -2641,12 +3338,25 @@ function scoreEducation(educationText: string, jd: JDAnalysis | null): number {
   if (!educationText) return jd?.degreeRequirement ? 20 : 40
 
   let score = 45
-  if (/\b(university|college|institute|school|academy)\b/i.test(educationText)) score += 15
-  if (/\b(bachelor|master|mba|phd|doctorate|bs|ba|ms|b\.s|m\.s|associate)\b/i.test(educationText)) score += 15
-  if (/(\b(19|20)\d{2}\b|\b(0?[1-9]|1[0-2])\/(19|20)\d{2}\b)/.test(educationText)) score += 10
-  if (/\b(gpa|honors|dean's list|distinction|cum laude)\b/i.test(educationText)) score += 5
+  if (/\b(university|college|institute|school|academy)\b/i.test(educationText))
+    score += 15
+  if (
+    /\b(bachelor|master|mba|phd|doctorate|bs|ba|ms|b\.s|m\.s|associate)\b/i.test(
+      educationText
+    )
+  )
+    score += 15
+  if (
+    /(\b(19|20)\d{2}\b|\b(0?[1-9]|1[0-2])\/(19|20)\d{2}\b)/.test(educationText)
+  )
+    score += 10
+  if (/\b(gpa|honors|dean's list|distinction|cum laude)\b/i.test(educationText))
+    score += 5
 
-  const degreeRequirementMet = hasDegree(educationText, jd?.degreeRequirement || null)
+  const degreeRequirementMet = hasDegree(
+    educationText,
+    jd?.degreeRequirement || null
+  )
   if (degreeRequirementMet === true) score += 8
   if (degreeRequirementMet === false) score -= 18
 
@@ -2661,7 +3371,8 @@ function scoreKeywordMatch(
   if (!keywordAnalysis || !jd) return 0
 
   const densityScore =
-    keywordAnalysis.keywordDensity >= 1.5 && keywordAnalysis.keywordDensity <= 4.5
+    keywordAnalysis.keywordDensity >= 1.5 &&
+    keywordAnalysis.keywordDensity <= 4.5
       ? 12
       : keywordAnalysis.keywordDensity > 0.75
         ? 6
@@ -2674,12 +3385,28 @@ function scoreKeywordMatch(
       keywordAnalysis.coverageBySection.projects.length * 1 +
       keywordAnalysis.coverageBySection.certifications.length * 0.8
   )
-  const titleScore = Math.min(8, keywordAnalysis.matchedByCategory.title.length * 2)
-  const roleFamilyOverlap = jd.roleFamilies.filter((family) => lexicalCoverage.roleFamilies.includes(family)).length
-  const roleFamilyScore = jd.roleFamilies.length > 0 ? Math.min(10, roleFamilyOverlap * 4) : 5
-  const criticalPenalty = Math.min(10, keywordAnalysis.criticalMissingTerms.length * 0.7)
+  const titleScore = Math.min(
+    8,
+    keywordAnalysis.matchedByCategory.title.length * 2
+  )
+  const roleFamilyOverlap = jd.roleFamilies.filter((family) =>
+    lexicalCoverage.roleFamilies.includes(family)
+  ).length
+  const roleFamilyScore =
+    jd.roleFamilies.length > 0 ? Math.min(10, roleFamilyOverlap * 4) : 5
+  const criticalPenalty = Math.min(
+    10,
+    keywordAnalysis.criticalMissingTerms.length * 0.7
+  )
 
-  return clamp(keywordAnalysis.matchPercentage * 0.62 + densityScore + placementScore + titleScore + roleFamilyScore - criticalPenalty)
+  return clamp(
+    keywordAnalysis.matchPercentage * 0.62 +
+      densityScore +
+      placementScore +
+      titleScore +
+      roleFamilyScore -
+      criticalPenalty
+  )
 }
 
 function inferQualificationAlignment(
@@ -2694,23 +3421,34 @@ function inferQualificationAlignment(
   const yearsRequired = jd?.yearsRequired ?? null
   const yearsEstimated = dates.yearsEstimated
   const meetsYearsRequirement =
-    yearsRequired !== null && yearsEstimated !== null ? yearsEstimated >= yearsRequired : null
+    yearsRequired !== null && yearsEstimated !== null
+      ? yearsEstimated >= yearsRequired
+      : null
   const degreeRequirement = jd?.degreeRequirement ?? null
   const meetsDegreeRequirement = hasDegree(educationText, degreeRequirement)
   const missingCertifications = (jd?.requiredCertifications || []).filter(
     (certification) => !containsTerm(resumeContent, certification)
   )
 
-  const expectedSeniority = inferSeniority([...(jd?.seniorityTerms || []), jd?.title || ""].join(" "))
-  const observedSeniority = inferSeniority(`${summaryText}\n${experienceText}\n${resumeContent}`)
-  const seniorityAligned = compareSeniority(observedSeniority, expectedSeniority)
+  const expectedSeniority = inferSeniority(
+    [...(jd?.seniorityTerms || []), jd?.title || ""].join(" ")
+  )
+  const observedSeniority = inferSeniority(
+    `${summaryText}\n${experienceText}\n${resumeContent}`
+  )
+  const seniorityAligned = compareSeniority(
+    observedSeniority,
+    expectedSeniority
+  )
 
   const managementRequired = jd?.requiresManagement ?? false
   const managementObserved =
     MANAGEMENT_MARKERS.some((marker) => containsTerm(resumeContent, marker)) ||
     /\bmanaged\s+(?:a|an|the)?\s*\d+/i.test(resumeContent) ||
     /\bmentored\b/i.test(resumeContent) ||
-    /\b(?:direct reports?|managed|led)\s+(?:a\s+)?team of\s+\d+/i.test(resumeContent)
+    /\b(?:direct reports?|managed|led)\s+(?:a\s+)?team of\s+\d+/i.test(
+      resumeContent
+    )
 
   const matchedRoleFamilies = (jd?.roleFamilies || []).filter((family) =>
     lexicalCoverage.roleFamilies.includes(family)
@@ -2719,13 +3457,22 @@ function inferQualificationAlignment(
   const summarySignals = splitLines(summaryText)
   const experienceSignals = splitLines(experienceText)
   const seniorityEvidenceBoost =
-    (summarySignals.some((line) => /\b(lead|staff|principal|head|director)\b/i.test(line)) ? 1 : 0) +
-    (experienceSignals.some((line) => /\b(lead|managed|mentored|owned|drove)\b/i.test(line)) ? 1 : 0)
+    (summarySignals.some((line) =>
+      /\b(lead|staff|principal|head|director)\b/i.test(line)
+    )
+      ? 1
+      : 0) +
+    (experienceSignals.some((line) =>
+      /\b(lead|managed|mentored|owned|drove)\b/i.test(line)
+    )
+      ? 1
+      : 0)
 
   let score = 68
   if (yearsRequired !== null) {
     if (meetsYearsRequirement === true) score += 14
-    else if (meetsYearsRequirement === false) score -= yearsRequired >= 8 ? 24 : 20
+    else if (meetsYearsRequirement === false)
+      score -= yearsRequired >= 8 ? 24 : 20
   }
 
   if (degreeRequirement) {
@@ -2733,11 +3480,14 @@ function inferQualificationAlignment(
     else if (meetsDegreeRequirement === false) score -= 14
   }
 
-  if (missingCertifications.length > 0) score -= Math.min(15, missingCertifications.length * 7)
-  if (seniorityAligned === true) score += 8 + Math.min(3, seniorityEvidenceBoost)
+  if (missingCertifications.length > 0)
+    score -= Math.min(15, missingCertifications.length * 7)
+  if (seniorityAligned === true)
+    score += 8 + Math.min(3, seniorityEvidenceBoost)
   else if (seniorityAligned === false) score -= 10
   if (managementRequired) score += managementObserved ? 6 : -8
-  if (jd?.roleFamilies.length) score += Math.min(10, matchedRoleFamilies.length * 4)
+  if (jd?.roleFamilies.length)
+    score += Math.min(10, matchedRoleFamilies.length * 4)
 
   return {
     score: clamp(score),
@@ -2771,7 +3521,11 @@ function calibrateScores(params: {
   missingRequiredSectionCount: number
   contact: ContactInfo
   qualification: QualificationAlignment
-}): { resumeQualityScore: number; targetRoleScore: number | null; overallScore: number } {
+}): {
+  resumeQualityScore: number
+  targetRoleScore: number | null
+  overallScore: number
+} {
   const {
     hasJD,
     jdAnalysis,
@@ -2794,16 +3548,22 @@ function calibrateScores(params: {
       summaryScore * 0.13 +
       skillsScore * 0.14 +
       structureScore * 0.12 +
-      educationScore * 0.10 -
+      educationScore * 0.1 -
       missingRequiredSectionCount * 2
   )
 
   const jdSignalStrength = Math.min(
     1,
-    ((jdAnalysis?.requiredTerms.length || 0) + (jdAnalysis?.titleTerms.length || 0) * 1.5) / 18
+    ((jdAnalysis?.requiredTerms.length || 0) +
+      (jdAnalysis?.titleTerms.length || 0) * 1.5) /
+      18
   )
-  const keywordWeight = 0.26 + jdSignalStrength * 0.10
-  const qualificationWeight = 0.20 + (qualification.yearsRequired !== null || qualification.degreeRequirement ? 0.06 : 0)
+  const keywordWeight = 0.26 + jdSignalStrength * 0.1
+  const qualificationWeight =
+    0.2 +
+    (qualification.yearsRequired !== null || qualification.degreeRequirement
+      ? 0.06
+      : 0)
   const contentWeight = 0.12
   const skillsWeight = 0.11
   const summaryWeight = 0.12
@@ -2822,17 +3582,22 @@ function calibrateScores(params: {
       )
     : null
 
-  let overallScore = hasJD ? clamp(resumeQualityScore * 0.35 + (targetRoleScore || 0) * 0.65) : resumeQualityScore
+  let overallScore = hasJD
+    ? clamp(resumeQualityScore * 0.35 + (targetRoleScore || 0) * 0.65)
+    : resumeQualityScore
 
   const severeParseability = formattingScore < 55
   const missingCoreContact = !contact.email || !contact.phone
-  const failedYearsGate = qualification.meetsYearsRequirement === false && (keywordScore || 0) < 55
+  const failedYearsGate =
+    qualification.meetsYearsRequirement === false && (keywordScore || 0) < 55
   const missingCriticalEvidence = missingRequiredSectionCount >= 2
 
   if (severeParseability) overallScore = Math.min(overallScore, 58)
-  if (missingCoreContact && missingCriticalEvidence) overallScore = Math.min(overallScore, 50)
+  if (missingCoreContact && missingCriticalEvidence)
+    overallScore = Math.min(overallScore, 50)
   if (failedYearsGate) overallScore = Math.min(overallScore, 57)
-  if (qualification.missingCertifications.length >= 2) overallScore = Math.min(overallScore, 62)
+  if (qualification.missingCertifications.length >= 2)
+    overallScore = Math.min(overallScore, 62)
 
   return {
     resumeQualityScore,
@@ -2873,38 +3638,63 @@ function buildIssuesAndRecommendations(params: {
   const weaknesses: string[] = []
 
   const pushIssue = (issue: ATSIssue) => issues.push(issue)
-  const pushRecommendation = (recommendation: ATSRecommendation) => recommendations.push(recommendation)
+  const pushRecommendation = (recommendation: ATSRecommendation) =>
+    recommendations.push(recommendation)
   const pushStrength = (value: string) => strengths.push(value)
   const pushWeakness = (value: string) => weaknesses.push(value)
 
   if (params.contact.email && params.contact.phone) {
-    pushStrength("Core contact information is present in the resume body, which supports ATS parsing.")
+    pushStrength(
+      "Core contact information is present in the resume body, which supports ATS parsing."
+    )
   } else {
     pushWeakness("Contact information is incomplete in the main resume body.")
   }
 
-  if (params.bulletStats.total > 0 && params.bulletStats.quantified / params.bulletStats.total >= 0.6) {
-    pushStrength("Experience bullets include measurable outcomes in a majority of cases.")
+  if (
+    params.bulletStats.total > 0 &&
+    params.bulletStats.quantified / params.bulletStats.total >= 0.6
+  ) {
+    pushStrength(
+      "Experience bullets include measurable outcomes in a majority of cases."
+    )
   }
 
-  if (params.bulletStats.businessImpact / Math.max(1, params.bulletStats.total) >= 0.4) {
-    pushStrength("Experience bullets connect work to business or customer impact often enough to strengthen credibility.")
+  if (
+    params.bulletStats.businessImpact / Math.max(1, params.bulletStats.total) >=
+    0.4
+  ) {
+    pushStrength(
+      "Experience bullets connect work to business or customer impact often enough to strengthen credibility."
+    )
   }
 
   if (params.skillsScore >= 75) {
-    pushStrength("The skills section is specific enough to support ATS keyword retrieval.")
+    pushStrength(
+      "The skills section is specific enough to support ATS keyword retrieval."
+    )
   }
 
   if (params.summaryScore >= 75) {
-    pushStrength("The professional summary provides a strong ATS entry point near the top of the resume.")
+    pushStrength(
+      "The professional summary provides a strong ATS entry point near the top of the resume."
+    )
   }
 
-  if (params.hasJD && params.keywordScore !== null && params.keywordScore >= 75) {
-    pushStrength("Job-description keyword coverage is strong across core resume sections.")
+  if (
+    params.hasJD &&
+    params.keywordScore !== null &&
+    params.keywordScore >= 75
+  ) {
+    pushStrength(
+      "Job-description keyword coverage is strong across core resume sections."
+    )
   }
 
   if (params.hasJD && params.qualification.matchedRoleFamilies.length > 0) {
-    pushStrength("The resume language aligns with the role family implied by the target job description.")
+    pushStrength(
+      "The resume language aligns with the role family implied by the target job description."
+    )
   }
 
   if (params.missingSections.length > 0) {
@@ -2912,17 +3702,24 @@ function buildIssuesAndRecommendations(params: {
       severity: "high",
       category: "Structure",
       issue: `Missing ATS-critical section(s): ${params.missingSections.join(", ")}`,
-      impact: "Missing standard sections weakens parsing confidence and recruiter scanability.",
-      howToFix: "Add standard headers for Professional Summary, Work Experience, Education, and Skills using ATS-safe naming.",
-      example: "PROFESSIONAL SUMMARY\nTECHNICAL SKILLS\nWORK EXPERIENCE\nEDUCATION",
+      impact:
+        "Missing standard sections weakens parsing confidence and recruiter scanability.",
+      howToFix:
+        "Add standard headers for Professional Summary, Work Experience, Education, and Skills using ATS-safe naming.",
+      example:
+        "PROFESSIONAL SUMMARY\nTECHNICAL SKILLS\nWORK EXPERIENCE\nEDUCATION",
     })
     pushRecommendation({
       priority: "high",
       action: "Restore standard ATS section headers",
-      benefit: "Improves parse reliability and makes the resume easier to screen quickly.",
-      implementation: "Use exact section labels such as PROFESSIONAL SUMMARY, WORK EXPERIENCE, EDUCATION, and TECHNICAL SKILLS.",
+      benefit:
+        "Improves parse reliability and makes the resume easier to screen quickly.",
+      implementation:
+        "Use exact section labels such as PROFESSIONAL SUMMARY, WORK EXPERIENCE, EDUCATION, and TECHNICAL SKILLS.",
     })
-    pushWeakness("One or more ATS-standard sections are missing or not clearly labeled.")
+    pushWeakness(
+      "One or more ATS-standard sections are missing or not clearly labeled."
+    )
   }
 
   if (!params.contact.email || !params.contact.phone) {
@@ -2930,30 +3727,45 @@ function buildIssuesAndRecommendations(params: {
       severity: "critical",
       category: "Parseability",
       issue: "Essential contact information is incomplete",
-      impact: "ATS platforms and recruiters may not be able to identify or contact the candidate reliably.",
-      howToFix: "Place email and phone number in plain text near the top of the resume body.",
-      example: "name@email.com | +1 555-555-5555 | City, ST | linkedin.com/in/name",
+      impact:
+        "ATS platforms and recruiters may not be able to identify or contact the candidate reliably.",
+      howToFix:
+        "Place email and phone number in plain text near the top of the resume body.",
+      example:
+        "name@email.com | +1 555-555-5555 | City, ST | linkedin.com/in/name",
     })
     pushRecommendation({
       priority: "high",
       action: "Add missing contact details to the top of the resume",
-      benefit: "Prevents ATS parsing failures and removes a basic screening blocker.",
-      implementation: "Use plain-text email and phone on the first lines of the resume, not inside design elements.",
+      benefit:
+        "Prevents ATS parsing failures and removes a basic screening blocker.",
+      implementation:
+        "Use plain-text email and phone on the first lines of the resume, not inside design elements.",
     })
   }
 
   if (params.formattingScore < 70) {
-    pushWeakness("Parseability signals are weaker than they should be for an ATS-safe resume.")
+    pushWeakness(
+      "Parseability signals are weaker than they should be for an ATS-safe resume."
+    )
   }
 
-  if (params.hasJD && params.keywordScore !== null && params.keywordScore < 65) {
-    const missing = params.keywordAnalysis?.criticalMissingTerms.slice(0, 6) || []
+  if (
+    params.hasJD &&
+    params.keywordScore !== null &&
+    params.keywordScore < 65
+  ) {
+    const missing =
+      params.keywordAnalysis?.criticalMissingTerms.slice(0, 6) || []
     pushIssue({
       severity: "high",
       category: "Keyword Match",
-      issue: "The resume misses a material portion of the job's critical terminology",
-      impact: "Lower keyword coverage reduces ranking in ATS search, filters, and recruiter review.",
-      howToFix: "Add missing required terms where they are truthfully supported, especially in the summary, skills section, and most recent role.",
+      issue:
+        "The resume misses a material portion of the job's critical terminology",
+      impact:
+        "Lower keyword coverage reduces ranking in ATS search, filters, and recruiter review.",
+      howToFix:
+        "Add missing required terms where they are truthfully supported, especially in the summary, skills section, and most recent role.",
       example: missing.length
         ? `Add supported keywords such as: ${missing.join(", ")}`
         : "Mirror the job's top required skills using exact supported wording.",
@@ -2961,10 +3773,14 @@ function buildIssuesAndRecommendations(params: {
     pushRecommendation({
       priority: "high",
       action: "Increase exact keyword alignment with the job description",
-      benefit: "Raises role-fit score and improves visibility in recruiter searches.",
-      implementation: "Place supported required terms in the summary, skills section, and first bullet of the most recent role.",
+      benefit:
+        "Raises role-fit score and improves visibility in recruiter searches.",
+      implementation:
+        "Place supported required terms in the summary, skills section, and first bullet of the most recent role.",
     })
-    pushWeakness("Required keyword coverage is below the level expected for a strong role match.")
+    pushWeakness(
+      "Required keyword coverage is below the level expected for a strong role match."
+    )
   }
 
   if (
@@ -2977,73 +3793,109 @@ function buildIssuesAndRecommendations(params: {
       severity: "high",
       category: "Role Alignment",
       issue: "The resume reads like a weak match for the target role family",
-      impact: "ATS and recruiter review may rank the document lower when core role signals are thin or misplaced.",
-      howToFix: "Reposition the resume around the target role's core tools, responsibilities, and title language where accurate.",
-      example: "For a backend role, surface API, distributed systems, cloud, databases, and performance work in the summary, skills, and recent bullets.",
+      impact:
+        "ATS and recruiter review may rank the document lower when core role signals are thin or misplaced.",
+      howToFix:
+        "Reposition the resume around the target role's core tools, responsibilities, and title language where accurate.",
+      example:
+        "For a backend role, surface API, distributed systems, cloud, databases, and performance work in the summary, skills, and recent bullets.",
     })
     pushRecommendation({
       priority: "high",
       action: "Reframe the resume around the target role family",
-      benefit: "Improves title alignment and increases the share of relevant evidence that ATS systems can detect.",
-      implementation: "Use role-specific title language in the summary and prioritize the most relevant experience bullets first.",
+      benefit:
+        "Improves title alignment and increases the share of relevant evidence that ATS systems can detect.",
+      implementation:
+        "Use role-specific title language in the summary and prioritize the most relevant experience bullets first.",
     })
-    pushWeakness("The resume does not yet project a clear role-family match for the target job.")
+    pushWeakness(
+      "The resume does not yet project a clear role-family match for the target job."
+    )
   }
 
   if (params.bulletStats.total === 0 || params.contentScore < 65) {
     pushIssue({
       severity: "high",
       category: "Achievement Quality",
-      issue: "Experience bullets are not consistently quantified or action-driven",
-      impact: "Vague bullets weaken ATS scoring and reduce recruiter confidence in impact.",
-      howToFix: "Rewrite bullets using action + how + quantified result + timeframe.",
-      example: "Optimized deployment pipeline using GitHub Actions and Docker, reducing release time by 42% and cutting rollback incidents by 60% over 2 quarters.",
+      issue:
+        "Experience bullets are not consistently quantified or action-driven",
+      impact:
+        "Vague bullets weaken ATS scoring and reduce recruiter confidence in impact.",
+      howToFix:
+        "Rewrite bullets using action + how + quantified result + timeframe.",
+      example:
+        "Optimized deployment pipeline using GitHub Actions and Docker, reducing release time by 42% and cutting rollback incidents by 60% over 2 quarters.",
     })
     pushRecommendation({
       priority: "high",
       action: "Rewrite weak bullets with metrics and stronger verbs",
-      benefit: "Improves achievement quality, recruiter trust, and ATS evidence strength.",
-      implementation: "Target at least one concrete metric in every major experience bullet and start with a strong accomplishment verb.",
+      benefit:
+        "Improves achievement quality, recruiter trust, and ATS evidence strength.",
+      implementation:
+        "Target at least one concrete metric in every major experience bullet and start with a strong accomplishment verb.",
     })
-    pushWeakness("Achievement bullets do not consistently show quantified impact.")
+    pushWeakness(
+      "Achievement bullets do not consistently show quantified impact."
+    )
   }
 
-  if (params.bulletStats.passiveVoice / Math.max(1, params.bulletStats.total) >= 0.25) {
+  if (
+    params.bulletStats.passiveVoice / Math.max(1, params.bulletStats.total) >=
+    0.25
+  ) {
     pushIssue({
       severity: "medium",
       category: "Bullet Wording",
       issue: "Too many bullets read in passive or indirect language",
-      impact: "Passive phrasing weakens ownership signals and makes accomplishments harder to scan quickly.",
-      howToFix: "Start bullets with direct accomplishment verbs and remove passive constructions where accurate.",
-      example: "Built customer-facing reporting workflow that reduced weekly manual analysis time by 11 hours.",
+      impact:
+        "Passive phrasing weakens ownership signals and makes accomplishments harder to scan quickly.",
+      howToFix:
+        "Start bullets with direct accomplishment verbs and remove passive constructions where accurate.",
+      example:
+        "Built customer-facing reporting workflow that reduced weekly manual analysis time by 11 hours.",
     })
   }
 
-  if (params.bulletStats.duplicateBullets > 0 || params.repetition.duplicateBulletFragments.length > 0) {
+  if (
+    params.bulletStats.duplicateBullets > 0 ||
+    params.repetition.duplicateBulletFragments.length > 0
+  ) {
     pushIssue({
       severity: "medium",
       category: "Repetition",
       issue: "Several bullets reuse near-duplicate wording or structures",
-      impact: "Repeated phrasing makes achievements feel templated and lowers perceived depth of experience.",
-      howToFix: "Consolidate overlapping bullets and rewrite the remaining bullets around distinct outcomes, scope, or tools.",
-      example: "Replace repeated 'Managed project delivery' bullets with separate bullets for planning, execution, and results.",
+      impact:
+        "Repeated phrasing makes achievements feel templated and lowers perceived depth of experience.",
+      howToFix:
+        "Consolidate overlapping bullets and rewrite the remaining bullets around distinct outcomes, scope, or tools.",
+      example:
+        "Replace repeated 'Managed project delivery' bullets with separate bullets for planning, execution, and results.",
     })
   }
 
-  if (params.bulletStats.starLike / Math.max(1, params.bulletStats.total) < 0.4) {
+  if (
+    params.bulletStats.starLike / Math.max(1, params.bulletStats.total) <
+    0.4
+  ) {
     pushIssue({
       severity: "medium",
       category: "STAR Structure",
-      issue: "Too few bullets follow a strong action-result or STAR-like pattern",
-      impact: "Weak story structure lowers the resume's evidence quality and makes achievements harder to verify quickly.",
-      howToFix: "Rewrite bullets to include context, action, quantified result, and timeframe when available.",
-      example: "Led API migration across 5 services using Node.js and AWS Lambda, cutting response time by 31% and support tickets by 22% over 4 months.",
+      issue:
+        "Too few bullets follow a strong action-result or STAR-like pattern",
+      impact:
+        "Weak story structure lowers the resume's evidence quality and makes achievements harder to verify quickly.",
+      howToFix:
+        "Rewrite bullets to include context, action, quantified result, and timeframe when available.",
+      example:
+        "Led API migration across 5 services using Node.js and AWS Lambda, cutting response time by 31% and support tickets by 22% over 4 months.",
     })
     pushRecommendation({
       priority: "medium",
       action: "Improve bullet structure with stronger STAR-style phrasing",
-      benefit: "Raises evidence quality and makes achievements easier to parse quickly.",
-      implementation: "For major bullets, include the challenge, what you did, how you did it, the measurable result, and the timeframe.",
+      benefit:
+        "Raises evidence quality and makes achievements easier to parse quickly.",
+      implementation:
+        "For major bullets, include the challenge, what you did, how you did it, the measurable result, and the timeframe.",
     })
   }
 
@@ -3052,27 +3904,37 @@ function buildIssuesAndRecommendations(params: {
       severity: "medium",
       category: "Professional Summary",
       issue: "The summary is missing ATS-critical positioning signals",
-      impact: "A weak opening reduces keyword visibility and delays fit recognition.",
-      howToFix: "Use a summary that names the target role, years of experience, a quantified highlight, and core skills.",
-      example: "Software Engineer with 6+ years of experience building cloud-native platforms. Delivered services supporting 2M+ users with 99.9% uptime. Expert in Python, AWS, Kubernetes, Terraform, and CI/CD.",
+      impact:
+        "A weak opening reduces keyword visibility and delays fit recognition.",
+      howToFix:
+        "Use a summary that names the target role, years of experience, a quantified highlight, and core skills.",
+      example:
+        "Software Engineer with 6+ years of experience building cloud-native platforms. Delivered services supporting 2M+ users with 99.9% uptime. Expert in Python, AWS, Kubernetes, Terraform, and CI/CD.",
     })
     pushRecommendation({
       priority: "medium",
       action: "Rebuild the professional summary",
       benefit: "Improves first-pass keyword visibility and role positioning.",
-      implementation: "Use 3 to 4 lines: title, years, quantified outcome, and top supported skills from the role.",
+      implementation:
+        "Use 3 to 4 lines: title, years, quantified outcome, and top supported skills from the role.",
     })
-    pushWeakness("The summary does not yet provide a strong role-specific ATS signal.")
+    pushWeakness(
+      "The summary does not yet provide a strong role-specific ATS signal."
+    )
   }
 
   if (params.summaryStats.hasObjectiveLanguage) {
     pushIssue({
       severity: "low",
       category: "Professional Summary",
-      issue: "The summary leans on objective-style phrasing instead of value-focused positioning",
-      impact: "Objective language uses space without adding much ATS or recruiter value.",
-      howToFix: "Replace job-seeker wording with concrete role, experience, skill, and impact language.",
-      example: "Replace 'Seeking a challenging role' with 'Senior Data Analyst with 7+ years of experience driving KPI reporting and experimentation strategy.'",
+      issue:
+        "The summary leans on objective-style phrasing instead of value-focused positioning",
+      impact:
+        "Objective language uses space without adding much ATS or recruiter value.",
+      howToFix:
+        "Replace job-seeker wording with concrete role, experience, skill, and impact language.",
+      example:
+        "Replace 'Seeking a challenging role' with 'Senior Data Analyst with 7+ years of experience driving KPI reporting and experimentation strategy.'",
     })
   }
 
@@ -3080,28 +3942,42 @@ function buildIssuesAndRecommendations(params: {
     pushIssue({
       severity: "medium",
       category: "Skills",
-      issue: "The skills section lacks enough structure or technical granularity",
-      impact: "Generic or thin skills sections lower keyword match quality and recruiter confidence.",
-      howToFix: "Group skills by category and use exact tools, services, frameworks, and platforms.",
-      example: "Languages: Python, TypeScript, SQL | Cloud: AWS, Lambda, ECS, S3 | DevOps: Docker, Terraform, GitHub Actions",
+      issue:
+        "The skills section lacks enough structure or technical granularity",
+      impact:
+        "Generic or thin skills sections lower keyword match quality and recruiter confidence.",
+      howToFix:
+        "Group skills by category and use exact tools, services, frameworks, and platforms.",
+      example:
+        "Languages: Python, TypeScript, SQL | Cloud: AWS, Lambda, ECS, S3 | DevOps: Docker, Terraform, GitHub Actions",
     })
     pushRecommendation({
       priority: "medium",
       action: "Make the skills section more granular",
-      benefit: "Improves exact-match retrieval for ATS queries and recruiter keyword search.",
-      implementation: "Break skills into categories such as Languages, Cloud, Frameworks, Databases, and Tools.",
+      benefit:
+        "Improves exact-match retrieval for ATS queries and recruiter keyword search.",
+      implementation:
+        "Break skills into categories such as Languages, Cloud, Frameworks, Databases, and Tools.",
     })
-    pushWeakness("The skills section is not yet specific enough for strong ATS retrieval.")
+    pushWeakness(
+      "The skills section is not yet specific enough for strong ATS retrieval."
+    )
   }
 
-  if (params.skillsAnalysis.items.length > 0 && (params.skillsAnalysis.items.length < 15 || params.skillsAnalysis.items.length > 25)) {
+  if (
+    params.skillsAnalysis.items.length > 0 &&
+    (params.skillsAnalysis.items.length < 15 ||
+      params.skillsAnalysis.items.length > 25)
+  ) {
     pushIssue({
       severity: "low",
       category: "Skills",
       issue: "The skills section is outside the recommended ATS-friendly range",
-      impact: "Too few skills limit keyword coverage; too many can make the section noisy and unfocused.",
+      impact:
+        "Too few skills limit keyword coverage; too many can make the section noisy and unfocused.",
       howToFix: "Aim for about 15 to 25 targeted skills grouped by category.",
-      example: "Languages: Python, TypeScript, SQL | Cloud: AWS, Lambda, ECS, S3 | Data: PostgreSQL, Redis, Kafka",
+      example:
+        "Languages: Python, TypeScript, SQL | Cloud: AWS, Lambda, ECS, S3 | Data: PostgreSQL, Redis, Kafka",
     })
   }
 
@@ -3110,30 +3986,43 @@ function buildIssuesAndRecommendations(params: {
       severity: "medium",
       category: "Dates",
       issue: "Date formatting is inconsistent",
-      impact: "Inconsistent dates make ATS parsing and recruiter review slower and less reliable.",
-      howToFix: "Use one format throughout the resume, preferably MM/YYYY or Mon YYYY.",
+      impact:
+        "Inconsistent dates make ATS parsing and recruiter review slower and less reliable.",
+      howToFix:
+        "Use one format throughout the resume, preferably MM/YYYY or Mon YYYY.",
       example: "01/2022 - 08/2024",
     })
     pushRecommendation({
       priority: "medium",
       action: "Standardize all date formats",
       benefit: "Improves parsing consistency and timeline readability.",
-      implementation: "Pick one date style and apply it across education, certifications, and every role.",
+      implementation:
+        "Pick one date style and apply it across education, certifications, and every role.",
     })
   }
 
-  if (params.keywordAnalysis && (params.keywordAnalysis.keywordDensity < 1.5 || params.keywordAnalysis.keywordDensity > 4.5)) {
+  if (
+    params.keywordAnalysis &&
+    (params.keywordAnalysis.keywordDensity < 1.5 ||
+      params.keywordAnalysis.keywordDensity > 4.5)
+  ) {
     pushIssue({
       severity: "low",
       category: "Keyword Density",
       issue: "Keyword density sits outside the recommended ATS target range",
-      impact: "Very low density weakens role alignment, while very high density can feel stuffed and repetitive.",
-      howToFix: "Keep supported keywords distributed naturally across summary, skills, and recent experience.",
-      example: "Add supported required terms to the summary and first recent-role bullet instead of repeating the same word throughout the resume.",
+      impact:
+        "Very low density weakens role alignment, while very high density can feel stuffed and repetitive.",
+      howToFix:
+        "Keep supported keywords distributed naturally across summary, skills, and recent experience.",
+      example:
+        "Add supported required terms to the summary and first recent-role bullet instead of repeating the same word throughout the resume.",
     })
   }
 
-  if (params.repetition.repeatedContentWords.length > 0 || params.repetition.repeatedPhrases.length > 0) {
+  if (
+    params.repetition.repeatedContentWords.length > 0 ||
+    params.repetition.repeatedPhrases.length > 0
+  ) {
     const repeated = [
       ...params.repetition.repeatedContentWords.slice(0, 3),
       ...params.repetition.repeatedPhrases.slice(0, 2),
@@ -3142,9 +4031,12 @@ function buildIssuesAndRecommendations(params: {
       severity: "low",
       category: "Repetition",
       issue: `Repeated wording reduces writing precision: ${repeated.join(", ")}`,
-      impact: "Heavy repetition makes the resume feel less precise and can reduce perceived writing quality.",
-      howToFix: "Vary word choice and replace repeated generic wording with more specific technical or business terms.",
-      example: "Replace repeated words like 'developed' or 'managed' with more specific alternatives such as architected, implemented, optimized, or automated where accurate.",
+      impact:
+        "Heavy repetition makes the resume feel less precise and can reduce perceived writing quality.",
+      howToFix:
+        "Vary word choice and replace repeated generic wording with more specific technical or business terms.",
+      example:
+        "Replace repeated words like 'developed' or 'managed' with more specific alternatives such as architected, implemented, optimized, or automated where accurate.",
     })
   }
 
@@ -3153,9 +4045,12 @@ function buildIssuesAndRecommendations(params: {
       severity: "low",
       category: "Action Verbs",
       issue: `Repeated lead verbs weaken bullet variety: ${params.bulletStats.repeatedLeadVerbs.join(", ")}`,
-      impact: "Repeated opening verbs make experience read as templated rather than accomplishment-driven.",
-      howToFix: "Vary lead verbs while keeping them accurate to the actual achievement.",
-      example: "Use a mix of Led, Built, Optimized, Implemented, Reduced, Automated, and Delivered where truthful.",
+      impact:
+        "Repeated opening verbs make experience read as templated rather than accomplishment-driven.",
+      howToFix:
+        "Vary lead verbs while keeping them accurate to the actual achievement.",
+      example:
+        "Use a mix of Led, Built, Optimized, Implemented, Reduced, Automated, and Delivered where truthful.",
     })
   }
 
@@ -3163,33 +4058,48 @@ function buildIssuesAndRecommendations(params: {
     pushIssue({
       severity: "high",
       category: "Qualification Alignment",
-      issue: "Estimated experience appears below the job's stated years requirement",
-      impact: "This can lower role-fit ranking for ATS filters and recruiter shortlist review.",
-      howToFix: "Emphasize the most relevant tenure and scope, but do not overstate years of experience.",
+      issue:
+        "Estimated experience appears below the job's stated years requirement",
+      impact:
+        "This can lower role-fit ranking for ATS filters and recruiter shortlist review.",
+      howToFix:
+        "Emphasize the most relevant tenure and scope, but do not overstate years of experience.",
       example: `Role asks for ${params.qualification.yearsRequired}+ years; resume evidence currently supports about ${params.qualification.yearsEstimated ?? 0} years.`,
     })
-    pushWeakness("Experience duration appears below the stated requirement in the job description.")
+    pushWeakness(
+      "Experience duration appears below the stated requirement in the job description."
+    )
   }
 
   if (params.qualification.seniorityAligned === false) {
     pushIssue({
       severity: "medium",
       category: "Seniority Alignment",
-      issue: "Resume seniority signals appear lighter than the target role level",
-      impact: "Recruiters may not quickly see the leadership, ownership, or scope expected for the role.",
-      howToFix: "Highlight the highest-level responsibilities you actually held, including scope, team influence, and decision-making.",
+      issue:
+        "Resume seniority signals appear lighter than the target role level",
+      impact:
+        "Recruiters may not quickly see the leadership, ownership, or scope expected for the role.",
+      howToFix:
+        "Highlight the highest-level responsibilities you actually held, including scope, team influence, and decision-making.",
       example: `Target role appears to be ${params.qualification.expectedSeniority}; resume currently reads closer to ${params.qualification.observedSeniority ?? "an unspecified level"}.`,
     })
   }
 
-  if (params.qualification.managementRequired && !params.qualification.managementObserved) {
+  if (
+    params.qualification.managementRequired &&
+    !params.qualification.managementObserved
+  ) {
     pushIssue({
       severity: "high",
       category: "Leadership Alignment",
-      issue: "The job appears to require management or mentorship signals that the resume does not clearly show",
-      impact: "Leadership-screening filters may score the resume below roles that emphasize people or cross-functional leadership.",
-      howToFix: "Surface team leadership, mentoring, hiring, planning, or stakeholder ownership examples if they are true.",
-      example: "Led cross-functional team of 9 engineers and designers to launch platform migration 6 weeks ahead of schedule.",
+      issue:
+        "The job appears to require management or mentorship signals that the resume does not clearly show",
+      impact:
+        "Leadership-screening filters may score the resume below roles that emphasize people or cross-functional leadership.",
+      howToFix:
+        "Surface team leadership, mentoring, hiring, planning, or stakeholder ownership examples if they are true.",
+      example:
+        "Led cross-functional team of 9 engineers and designers to launch platform migration 6 weeks ahead of schedule.",
     })
   }
 
@@ -3197,12 +4107,17 @@ function buildIssuesAndRecommendations(params: {
     pushIssue({
       severity: "medium",
       category: "Education",
-      issue: "The education section does not clearly show the degree level requested in the job description",
-      impact: "Recruiters may not be able to confirm minimum education requirements quickly.",
-      howToFix: "State the degree, institution, and completion date clearly in the education section.",
+      issue:
+        "The education section does not clearly show the degree level requested in the job description",
+      impact:
+        "Recruiters may not be able to confirm minimum education requirements quickly.",
+      howToFix:
+        "State the degree, institution, and completion date clearly in the education section.",
       example: "M.S. in Computer Science, University Name, 08/2025",
     })
-    pushWeakness("The required degree level is not clearly evidenced in the education section.")
+    pushWeakness(
+      "The required degree level is not clearly evidenced in the education section."
+    )
   }
 
   if (params.qualification.missingCertifications.length > 0) {
@@ -3210,22 +4125,29 @@ function buildIssuesAndRecommendations(params: {
       severity: "medium",
       category: "Certifications",
       issue: `Required certification(s) not found: ${params.qualification.missingCertifications.join(", ")}`,
-      impact: "Missing certifications can reduce role alignment when they are used as screening criteria.",
-      howToFix: "Add the certification only if it has been earned, or avoid implying it if not held.",
+      impact:
+        "Missing certifications can reduce role alignment when they are used as screening criteria.",
+      howToFix:
+        "Add the certification only if it has been earned, or avoid implying it if not held.",
       example: params.qualification.missingCertifications.join(", "),
     })
     if (params.missingOptionalSections.includes("Certifications")) {
       pushRecommendation({
         priority: "medium",
-        action: "Add a dedicated certifications section if relevant certifications exist",
-        benefit: "Makes credential screening faster for ATS and recruiter review.",
-        implementation: "Use a CERTIFICATIONS header and list each certification in plain text with issuing organization and year if available.",
+        action:
+          "Add a dedicated certifications section if relevant certifications exist",
+        benefit:
+          "Makes credential screening faster for ATS and recruiter review.",
+        implementation:
+          "Use a CERTIFICATIONS header and list each certification in plain text with issuing organization and year if available.",
       })
     }
   }
 
   if (params.missingOptionalSections.length > 0 && params.hasJD) {
-    pushWeakness(`Optional role-relevant section(s) are missing: ${params.missingOptionalSections.join(", ")}.`)
+    pushWeakness(
+      `Optional role-relevant section(s) are missing: ${params.missingOptionalSections.join(", ")}.`
+    )
   }
 
   const severityOrder: Record<ATSIssue["severity"], number> = {
@@ -3244,7 +4166,9 @@ function buildIssuesAndRecommendations(params: {
     .map((raw) => JSON.parse(raw) as ATSIssue)
     .sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity])
     .slice(0, 8)
-  const dedupedRecommendations = unique(recommendations.map((recommendation) => JSON.stringify(recommendation)))
+  const dedupedRecommendations = unique(
+    recommendations.map((recommendation) => JSON.stringify(recommendation))
+  )
     .map((raw) => JSON.parse(raw) as ATSRecommendation)
     .sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority])
     .slice(0, 6)
@@ -3274,8 +4198,12 @@ function buildSectionReviews(params: {
   qualification: QualificationAlignment
 }): ATSSectionReview[] {
   const keywordReviewScore = params.hasJD
-    ? params.keywordScore ?? 0
-    : round(params.skillsScore * 0.4 + params.summaryScore * 0.2 + params.contentScore * 0.4)
+    ? (params.keywordScore ?? 0)
+    : round(
+        params.skillsScore * 0.4 +
+          params.summaryScore * 0.2 +
+          params.contentScore * 0.4
+      )
 
   return [
     {
@@ -3288,24 +4216,38 @@ function buildSectionReviews(params: {
           ? "The summary gives the resume an ATS-friendly opening with role positioning, skill signals, and visible value."
           : "The summary is not yet doing enough work to establish role fit in the first few lines.",
       whatWorks: unique([
-        params.summaryStats.hasYears ? "Years of experience are stated early." : "",
-        params.summaryStats.hasMetric ? "The summary includes quantified value rather than generic positioning." : "",
-        params.summaryStats.first50KeywordMatches >= 2 ? "Critical keywords appear in the first 50 words." : "",
+        params.summaryStats.hasYears
+          ? "Years of experience are stated early."
+          : "",
+        params.summaryStats.hasMetric
+          ? "The summary includes quantified value rather than generic positioning."
+          : "",
+        params.summaryStats.first50KeywordMatches >= 2
+          ? "Critical keywords appear in the first 50 words."
+          : "",
       ]).filter(Boolean),
       gaps:
         params.summaryScore < 75
           ? unique([
-              params.summaryStats.lineCount > 0 && (params.summaryStats.lineCount < 3 || params.summaryStats.lineCount > 4)
+              params.summaryStats.lineCount > 0 &&
+              (params.summaryStats.lineCount < 3 ||
+                params.summaryStats.lineCount > 4)
                 ? "Keep the summary within 3 to 4 lines."
                 : "",
-              !params.summaryStats.hasMetric ? "Add one quantified outcome to the summary." : "",
-              params.summaryStats.hasObjectiveLanguage ? "Replace objective-style wording with value-focused language." : "",
+              !params.summaryStats.hasMetric
+                ? "Add one quantified outcome to the summary."
+                : "",
+              params.summaryStats.hasObjectiveLanguage
+                ? "Replace objective-style wording with value-focused language."
+                : "",
               params.summaryStats.matchedCriticalTerms < 2
                 ? "Add supported role-specific skills or title terms near the top."
                 : "",
             ]).filter(Boolean)
           : [],
-      actions: ["Keep the summary to 3 to 4 lines and front-load title, years, impact, and core skills."],
+      actions: [
+        "Keep the summary to 3 to 4 lines and front-load title, years, impact, and core skills.",
+      ],
     },
     {
       id: "workExperience",
@@ -3333,14 +4275,22 @@ function buildSectionReviews(params: {
               params.bulletStats.repeatedLeadVerbs.length > 0
                 ? `Reduce repeated lead verbs such as ${params.bulletStats.repeatedLeadVerbs.slice(0, 2).join(", ")}.`
                 : "",
-              params.bulletStats.passiveVoice > 0 ? "Reduce passive phrasing in bullet openings." : "",
-              params.bulletStats.duplicateBullets > 0 ? "Remove duplicate or near-duplicate bullet structures." : "",
-              params.bulletStats.starLike / Math.max(1, params.bulletStats.total) < 0.4
+              params.bulletStats.passiveVoice > 0
+                ? "Reduce passive phrasing in bullet openings."
+                : "",
+              params.bulletStats.duplicateBullets > 0
+                ? "Remove duplicate or near-duplicate bullet structures."
+                : "",
+              params.bulletStats.starLike /
+                Math.max(1, params.bulletStats.total) <
+              0.4
                 ? "Increase the share of bullets with context, action, result, and timeframe."
                 : "",
             ]).filter(Boolean)
           : [],
-      actions: ["Use action + what + how + quantified result + timeframe in core bullets."],
+      actions: [
+        "Use action + what + how + quantified result + timeframe in core bullets.",
+      ],
     },
     {
       id: "skills",
@@ -3352,22 +4302,33 @@ function buildSectionReviews(params: {
           ? "The skills section is structured well enough to support keyword retrieval and recruiter scanning."
           : "The skills section is too generic or too thin for strong ATS matching.",
       whatWorks: unique([
-        params.skillsAnalysis.categoryLabels.length >= 2 ? "Skills are grouped into readable categories." : "",
-        params.skillsAnalysis.canonicalTerms.length >= 8 ? "The section includes enough specific tools or platforms to support exact matching." : "",
+        params.skillsAnalysis.categoryLabels.length >= 2
+          ? "Skills are grouped into readable categories."
+          : "",
+        params.skillsAnalysis.canonicalTerms.length >= 8
+          ? "The section includes enough specific tools or platforms to support exact matching."
+          : "",
       ]).filter(Boolean),
       gaps:
         params.skillsScore < 75
           ? unique([
-              params.skillsAnalysis.items.length > 0 && (params.skillsAnalysis.items.length < 15 || params.skillsAnalysis.items.length > 25)
+              params.skillsAnalysis.items.length > 0 &&
+              (params.skillsAnalysis.items.length < 15 ||
+                params.skillsAnalysis.items.length > 25)
                 ? "Keep the section focused at roughly 15 to 25 role-relevant skills."
                 : "",
-              params.skillsAnalysis.categoryLabels.length < 2 ? "Add clearer category labels such as Languages, Cloud, Frameworks, or Tools." : "",
-              params.skillsAnalysis.genericTerms > Math.max(2, Math.floor(params.skillsAnalysis.items.length * 0.35))
+              params.skillsAnalysis.categoryLabels.length < 2
+                ? "Add clearer category labels such as Languages, Cloud, Frameworks, or Tools."
+                : "",
+              params.skillsAnalysis.genericTerms >
+              Math.max(2, Math.floor(params.skillsAnalysis.items.length * 0.35))
                 ? "Replace generic skill labels with more specific technologies or methods."
                 : "",
             ]).filter(Boolean)
           : [],
-      actions: ["Group skills into categories and use exact technology names instead of broad labels."],
+      actions: [
+        "Group skills into categories and use exact technology names instead of broad labels.",
+      ],
     },
     {
       id: "education",
@@ -3382,7 +4343,9 @@ function buildSectionReviews(params: {
         params.qualification.meetsDegreeRequirement === true
           ? "The education section appears to satisfy the degree level requested by the role."
           : "",
-        params.educationScore >= 75 ? "Degree, institution, and date information appear sufficiently visible." : "",
+        params.educationScore >= 75
+          ? "Degree, institution, and date information appear sufficiently visible."
+          : "",
       ]).filter(Boolean),
       gaps:
         params.educationScore < 75
@@ -3393,22 +4356,24 @@ function buildSectionReviews(params: {
                 : "",
             ]).filter(Boolean)
           : [],
-      actions: ["Keep education entries in plain text with degree, institution, and completion date."],
+      actions: [
+        "Keep education entries in plain text with degree, institution, and completion date.",
+      ],
     },
     {
       id: "keywords",
       title: "Keyword Alignment",
       score: keywordReviewScore,
       status: classifyStatus(keywordReviewScore),
-      diagnosis:
-        params.hasJD
-          ? "Keyword alignment is based on deterministic matching against the provided job description and critical term placement."
-          : "Without a job description, this score reflects general ATS keyword coverage in the summary, skills, and experience sections.",
+      diagnosis: params.hasJD
+        ? "Keyword alignment is based on deterministic matching against the provided job description and critical term placement."
+        : "Without a job description, this score reflects general ATS keyword coverage in the summary, skills, and experience sections.",
       whatWorks: unique([
         params.keywordAnalysis && params.keywordAnalysis.matchedKeywords > 0
           ? `Matched ${params.keywordAnalysis.matchedKeywords} job-description keyword${params.keywordAnalysis.matchedKeywords === 1 ? "" : "s"}.`
           : "",
-        params.keywordAnalysis && params.keywordAnalysis.coverageBySection.professionalSummary.length > 0
+        params.keywordAnalysis &&
+        params.keywordAnalysis.coverageBySection.professionalSummary.length > 0
           ? "Critical keywords appear in the professional summary."
           : "",
         params.qualification.matchedRoleFamilies.length > 0
@@ -3418,10 +4383,12 @@ function buildSectionReviews(params: {
       gaps:
         params.hasJD && (params.keywordScore ?? 0) < 75
           ? unique([
-              params.keywordAnalysis && params.keywordAnalysis.criticalMissingTerms.length > 0
+              params.keywordAnalysis &&
+              params.keywordAnalysis.criticalMissingTerms.length > 0
                 ? `Add supported critical terms such as ${params.keywordAnalysis.criticalMissingTerms.slice(0, 3).join(", ")}.`
                 : "",
-              params.keywordAnalysis && params.keywordAnalysis.coverageBySection.skills.length < 4
+              params.keywordAnalysis &&
+              params.keywordAnalysis.coverageBySection.skills.length < 4
                 ? "Increase skills-section coverage for the role's most important terms."
                 : "",
               params.repetition.repeatedContentWords.length > 0
@@ -3429,7 +4396,9 @@ function buildSectionReviews(params: {
                 : "",
             ]).filter(Boolean)
           : [],
-      actions: ["Mirror supported role terminology exactly where the resume already has matching evidence."],
+      actions: [
+        "Mirror supported role terminology exactly where the resume already has matching evidence.",
+      ],
     },
     {
       id: "formatting",
@@ -3441,17 +4410,25 @@ function buildSectionReviews(params: {
           ? "The extracted text looks sufficiently parseable for ATS ingestion."
           : "There are structural or formatting signals that may reduce parse confidence.",
       whatWorks: unique([
-        params.formattingScore >= 75 ? "The resume preserves enough structure for machine reading." : "",
-        params.structureScore >= 75 ? "The section order and core layout are reasonably ATS-safe." : "",
+        params.formattingScore >= 75
+          ? "The resume preserves enough structure for machine reading."
+          : "",
+        params.structureScore >= 75
+          ? "The section order and core layout are reasonably ATS-safe."
+          : "",
       ]).filter(Boolean),
       gaps:
         params.formattingScore < 75
           ? unique([
               "Standard headers, complete contact info, consistent dates, and bullet formatting need attention.",
-              params.summaryStats.firstPerson ? "Remove first-person phrasing from summary or bullets." : "",
+              params.summaryStats.firstPerson
+                ? "Remove first-person phrasing from summary or bullets."
+                : "",
             ]).filter(Boolean)
           : [],
-      actions: ["Keep ATS-safe section headers, consistent dates, and plain-text contact details in the resume body."],
+      actions: [
+        "Keep ATS-safe section headers, consistent dates, and plain-text contact details in the resume body.",
+      ],
     },
   ]
 }
@@ -3481,30 +4458,41 @@ function buildDebugAnalysis(params: {
           ? "Keep the summary within 3 to 4 lines for better ATS positioning."
           : undefined,
       severity:
-        params.summaryStats.lineCount >= 3 && params.summaryStats.lineCount <= 4 ? "good" : "warning",
+        params.summaryStats.lineCount >= 3 && params.summaryStats.lineCount <= 4
+          ? "good"
+          : "warning",
     })
     summaryItems.push({
       label: "Core signals",
-      detail: [
-        params.summaryStats.hasYears ? "years" : null,
-        params.summaryStats.hasMetric ? "metric" : null,
-        params.summaryStats.hasRoleTitle ? "title" : null,
-        params.summaryStats.hasCoreSkills ? "skills" : null,
-      ].filter(Boolean).join(", ") || "No major ATS summary signals detected",
+      detail:
+        [
+          params.summaryStats.hasYears ? "years" : null,
+          params.summaryStats.hasMetric ? "metric" : null,
+          params.summaryStats.hasRoleTitle ? "title" : null,
+          params.summaryStats.hasCoreSkills ? "skills" : null,
+        ]
+          .filter(Boolean)
+          .join(", ") || "No major ATS summary signals detected",
       suggestion:
-        !params.summaryStats.hasYears || !params.summaryStats.hasMetric || !params.summaryStats.hasCoreSkills
+        !params.summaryStats.hasYears ||
+        !params.summaryStats.hasMetric ||
+        !params.summaryStats.hasCoreSkills
           ? "Add role title, years of experience, one quantified outcome, and core skills near the top."
           : undefined,
       severity:
-        params.summaryStats.hasYears && params.summaryStats.hasMetric && params.summaryStats.hasCoreSkills
+        params.summaryStats.hasYears &&
+        params.summaryStats.hasMetric &&
+        params.summaryStats.hasCoreSkills
           ? "good"
           : "warning",
     })
     if (params.summaryStats.hasObjectiveLanguage) {
       summaryItems.push({
         label: "Objective-style phrasing",
-        detail: "The summary includes job-seeker wording such as seeking/objective language.",
-        suggestion: "Replace objective language with value-focused role positioning.",
+        detail:
+          "The summary includes job-seeker wording such as seeking/objective language.",
+        suggestion:
+          "Replace objective language with value-focused role positioning.",
         severity: "warning",
       })
     }
@@ -3513,7 +4501,8 @@ function buildDebugAnalysis(params: {
     sections.push({
       id: "summary",
       title: "Summary Analysis",
-      summary: "These checks evaluate the summary as the resume's first ATS entry point.",
+      summary:
+        "These checks evaluate the summary as the resume's first ATS entry point.",
       items: summaryItems,
     })
   }
@@ -3538,11 +4527,13 @@ function buildDebugAnalysis(params: {
         label: "Keyword density",
         detail: `${params.keywordAnalysis.keywordDensity}%`,
         suggestion:
-          params.keywordAnalysis.keywordDensity < 1.5 || params.keywordAnalysis.keywordDensity > 4.5
+          params.keywordAnalysis.keywordDensity < 1.5 ||
+          params.keywordAnalysis.keywordDensity > 4.5
             ? "Keep supported role keywords distributed naturally across the resume."
             : undefined,
         severity:
-          params.keywordAnalysis.keywordDensity >= 1.5 && params.keywordAnalysis.keywordDensity <= 4.5
+          params.keywordAnalysis.keywordDensity >= 1.5 &&
+          params.keywordAnalysis.keywordDensity <= 4.5
             ? "good"
             : "warning",
       },
@@ -3556,15 +4547,21 @@ function buildDebugAnalysis(params: {
           params.qualification.matchedRoleFamilies.length === 0
             ? "Increase evidence for the target role family in the summary, skills, and most relevant experience bullets."
             : undefined,
-        severity: params.qualification.matchedRoleFamilies.length > 0 ? "good" : "warning",
+        severity:
+          params.qualification.matchedRoleFamilies.length > 0
+            ? "good"
+            : "warning",
       },
     ]
 
     if (params.keywordAnalysis.criticalMissingTerms.length > 0) {
       keywordItems.push({
         label: "Missing critical terms",
-        detail: params.keywordAnalysis.criticalMissingTerms.slice(0, 6).join(", "),
-        suggestion: "Add only the missing terms that are supported by real experience or skills.",
+        detail: params.keywordAnalysis.criticalMissingTerms
+          .slice(0, 6)
+          .join(", "),
+        suggestion:
+          "Add only the missing terms that are supported by real experience or skills.",
         severity: "warning",
       })
     }
@@ -3572,7 +4569,8 @@ function buildDebugAnalysis(params: {
     sections.push({
       id: "keywords",
       title: "Keyword Coverage",
-      summary: "These checks focus on deterministic job-description matching and keyword placement.",
+      summary:
+        "These checks focus on deterministic job-description matching and keyword placement.",
       items: keywordItems,
     })
   }
@@ -3582,7 +4580,8 @@ function buildDebugAnalysis(params: {
     repetitionItems.push({
       label: "Repeated content words",
       detail: params.repetition.repeatedContentWords.slice(0, 6).join(", "),
-      suggestion: "Replace repeated generic wording with more specific technical or impact language where accurate.",
+      suggestion:
+        "Replace repeated generic wording with more specific technical or impact language where accurate.",
       severity: "warning",
     })
   }
@@ -3590,7 +4589,8 @@ function buildDebugAnalysis(params: {
     repetitionItems.push({
       label: "Repeated phrases",
       detail: params.repetition.repeatedPhrases.slice(0, 4).join(", "),
-      suggestion: "Vary sentence structures and avoid recycling the same phrase across multiple bullets.",
+      suggestion:
+        "Vary sentence structures and avoid recycling the same phrase across multiple bullets.",
       severity: "warning",
     })
   }
@@ -3598,7 +4598,8 @@ function buildDebugAnalysis(params: {
     repetitionItems.push({
       label: "Duplicate bullet fragments",
       detail: params.repetition.duplicateBulletFragments.slice(0, 4).join(", "),
-      suggestion: "Rewrite overlapping bullets so each one shows a distinct scope or outcome.",
+      suggestion:
+        "Rewrite overlapping bullets so each one shows a distinct scope or outcome.",
       severity: "warning",
     })
   }
@@ -3606,7 +4607,8 @@ function buildDebugAnalysis(params: {
     repetitionItems.push({
       label: "Repeated lead verbs",
       detail: params.bulletStats.repeatedLeadVerbs.slice(0, 5).join(", "),
-      suggestion: "Vary opening verbs across bullets to avoid a templated experience section.",
+      suggestion:
+        "Vary opening verbs across bullets to avoid a templated experience section.",
       severity: "warning",
     })
   }
@@ -3614,7 +4616,8 @@ function buildDebugAnalysis(params: {
     sections.push({
       id: "repetition",
       title: "Repeated Words",
-      summary: "The scorer found wording patterns that reduce precision and variety.",
+      summary:
+        "The scorer found wording patterns that reduce precision and variety.",
       items: repetitionItems,
     })
   }
@@ -3624,7 +4627,9 @@ function buildDebugAnalysis(params: {
     formattingItems.push({
       label: "Detected date formats",
       detail: params.dates.formats.join(", "),
-      suggestion: params.dates.consistent ? undefined : "Standardize all dates to one format, preferably MM/YYYY or Mon YYYY.",
+      suggestion: params.dates.consistent
+        ? undefined
+        : "Standardize all dates to one format, preferably MM/YYYY or Mon YYYY.",
       severity: params.dates.consistent ? "good" : "warning",
     })
   }
@@ -3632,7 +4637,8 @@ function buildDebugAnalysis(params: {
     formattingItems.push({
       label: "Date consistency",
       detail: "Multiple date formats detected across the resume.",
-      suggestion: "Use one consistent date format across jobs, education, and certifications.",
+      suggestion:
+        "Use one consistent date format across jobs, education, and certifications.",
       severity: "warning",
     })
   }
@@ -3640,7 +4646,8 @@ function buildDebugAnalysis(params: {
     formattingItems.push({
       label: "Bullet formatting",
       detail: "Different bullet markers were detected in the resume.",
-      suggestion: "Use one bullet style consistently across all experience and project sections.",
+      suggestion:
+        "Use one bullet style consistently across all experience and project sections.",
       severity: "warning",
     })
   }
@@ -3648,7 +4655,8 @@ function buildDebugAnalysis(params: {
     formattingItems.push({
       label: "Future-dated entries",
       detail: params.dates.futureDates.join(", "),
-      suggestion: "Check date ranges and ensure all future dates are intentional and correct.",
+      suggestion:
+        "Check date ranges and ensure all future dates are intentional and correct.",
       severity: "critical",
     })
   }
@@ -3656,7 +4664,8 @@ function buildDebugAnalysis(params: {
     formattingItems.push({
       label: "Email presentation",
       detail: "Email format may look informal.",
-      suggestion: "Use a straightforward professional email address if possible.",
+      suggestion:
+        "Use a straightforward professional email address if possible.",
       severity: "warning",
     })
   }
@@ -3664,7 +4673,8 @@ function buildDebugAnalysis(params: {
     sections.push({
       id: "formatting",
       title: "Formatting Consistency",
-      summary: "These checks come from the local scorer's ATS-safe formatting rules.",
+      summary:
+        "These checks come from the local scorer's ATS-safe formatting rules.",
       items: formattingItems,
     })
   }
@@ -3675,11 +4685,13 @@ function buildDebugAnalysis(params: {
       label: "Average bullet length",
       detail: `${params.bulletStats.averageWordCount} words`,
       suggestion:
-        params.bulletStats.averageWordCount < 12 || params.bulletStats.averageWordCount > 28
+        params.bulletStats.averageWordCount < 12 ||
+        params.bulletStats.averageWordCount > 28
           ? "Keep most bullets concise but complete, ideally around 12 to 28 words."
           : undefined,
       severity:
-        params.bulletStats.averageWordCount >= 12 && params.bulletStats.averageWordCount <= 28
+        params.bulletStats.averageWordCount >= 12 &&
+        params.bulletStats.averageWordCount <= 28
           ? "good"
           : "warning",
     })
@@ -3690,7 +4702,10 @@ function buildDebugAnalysis(params: {
         params.bulletStats.quantified / params.bulletStats.total < 0.6
           ? "Add metrics, scale, or business impact to more experience bullets."
           : undefined,
-      severity: params.bulletStats.quantified / params.bulletStats.total >= 0.6 ? "good" : "warning",
+      severity:
+        params.bulletStats.quantified / params.bulletStats.total >= 0.6
+          ? "good"
+          : "warning",
     })
     bulletItems.push({
       label: "STAR-like bullets",
@@ -3699,7 +4714,10 @@ function buildDebugAnalysis(params: {
         params.bulletStats.starLike / params.bulletStats.total < 0.4
           ? "Strengthen bullet structure with action, context, result, and timeframe."
           : undefined,
-      severity: params.bulletStats.starLike / params.bulletStats.total >= 0.4 ? "good" : "warning",
+      severity:
+        params.bulletStats.starLike / params.bulletStats.total >= 0.4
+          ? "good"
+          : "warning",
     })
     bulletItems.push({
       label: "Business impact bullets",
@@ -3708,13 +4726,17 @@ function buildDebugAnalysis(params: {
         params.bulletStats.businessImpact / params.bulletStats.total < 0.35
           ? "Tie more bullets to cost, revenue, speed, quality, reliability, customer, or efficiency outcomes."
           : undefined,
-      severity: params.bulletStats.businessImpact / params.bulletStats.total >= 0.35 ? "good" : "warning",
+      severity:
+        params.bulletStats.businessImpact / params.bulletStats.total >= 0.35
+          ? "good"
+          : "warning",
     })
     if (params.bulletStats.passiveVoice > 0) {
       bulletItems.push({
         label: "Passive phrasing",
         detail: `${params.bulletStats.passiveVoice} bullet${params.bulletStats.passiveVoice === 1 ? "" : "s"} may use passive voice`,
-        suggestion: "Start bullets with direct accomplishment verbs where accurate.",
+        suggestion:
+          "Start bullets with direct accomplishment verbs where accurate.",
         severity: "warning",
       })
     }
@@ -3722,7 +4744,8 @@ function buildDebugAnalysis(params: {
       bulletItems.push({
         label: "Length outliers",
         detail: `${params.bulletStats.tooShort} short, ${params.bulletStats.tooLong} long`,
-        suggestion: "Trim long bullets and expand vague short bullets so they carry one clear achievement.",
+        suggestion:
+          "Trim long bullets and expand vague short bullets so they carry one clear achievement.",
         severity: "warning",
       })
     }
@@ -3731,7 +4754,8 @@ function buildDebugAnalysis(params: {
     sections.push({
       id: "bullets",
       title: "Bullet Quality",
-      summary: "These checks reflect quantification, STAR structure, and bullet readability.",
+      summary:
+        "These checks reflect quantification, STAR structure, and bullet readability.",
       items: bulletItems,
     })
   }
@@ -3740,7 +4764,9 @@ function buildDebugAnalysis(params: {
     {
       label: "Required sections present",
       detail:
-        params.missingSections.length === 0 ? "All ATS-critical sections detected" : `Missing: ${params.missingSections.join(", ")}`,
+        params.missingSections.length === 0
+          ? "All ATS-critical sections detected"
+          : `Missing: ${params.missingSections.join(", ")}`,
       suggestion:
         params.missingSections.length > 0
           ? "Add standard ATS-safe section headers like Professional Summary, Work Experience, Skills, and Education."
@@ -3763,20 +4789,23 @@ function buildDebugAnalysis(params: {
         !params.contact.email || !params.contact.phone
           ? "Keep email and phone in plain text near the top of the resume body."
           : undefined,
-      severity: params.contact.email && params.contact.phone ? "good" : "critical",
+      severity:
+        params.contact.email && params.contact.phone ? "good" : "critical",
     },
     {
       label: "Skills inventory",
       detail: `${params.skillsAnalysis.items.length} skill entries detected`,
       suggestion:
         params.skillsAnalysis.items.length > 0 &&
-        (params.skillsAnalysis.items.length < 15 || params.skillsAnalysis.items.length > 25)
+        (params.skillsAnalysis.items.length < 15 ||
+          params.skillsAnalysis.items.length > 25)
           ? "Aim for roughly 15 to 25 targeted skills grouped by category."
           : undefined,
       severity:
         params.skillsAnalysis.items.length === 0
           ? "critical"
-          : params.skillsAnalysis.items.length >= 15 && params.skillsAnalysis.items.length <= 25
+          : params.skillsAnalysis.items.length >= 15 &&
+              params.skillsAnalysis.items.length <= 25
             ? "good"
             : "warning",
     },
@@ -3785,7 +4814,8 @@ function buildDebugAnalysis(params: {
     structureItems.push({
       label: "Missing optional role-relevant sections",
       detail: params.missingOptionalSections.join(", "),
-      suggestion: "Add only the optional sections that are genuinely supported by your background.",
+      suggestion:
+        "Add only the optional sections that are genuinely supported by your background.",
       severity: "info",
     })
   }
@@ -3793,41 +4823,44 @@ function buildDebugAnalysis(params: {
   sections.push({
     id: "structure",
     title: "Structure Analysis",
-    summary: "The local scorer checks ATS-safe sections, contact data, skills coverage, and required structure.",
+    summary:
+      "The local scorer checks ATS-safe sections, contact data, skills coverage, and required structure.",
     items: structureItems,
   })
 
-  const compatibilityItems: ATSScoreResponse["debugAnalysis"][number]["items"] = [
-    {
-      label: "Parseability",
-      detail: `${params.atsCompatibility.parseability}%`,
-      suggestion:
-        params.atsCompatibility.parseability < 80
-          ? "Improve section headers, contact placement, bullet consistency, and date formatting to raise parse confidence."
-          : undefined,
-      severity:
-        params.atsCompatibility.parseability >= 80
-          ? "good"
-          : params.atsCompatibility.parseability >= 60
-            ? "warning"
-            : "critical",
-    },
-    ...params.atsCompatibility.issues.map((issue) => ({
-      label: "Critical issue",
-      detail: issue,
-      severity: "critical" as const,
-    })),
-    ...params.atsCompatibility.warnings.slice(0, 3).map((warning) => ({
-      label: "Warning",
-      detail: warning,
-      severity: "warning" as const,
-    })),
-  ]
+  const compatibilityItems: ATSScoreResponse["debugAnalysis"][number]["items"] =
+    [
+      {
+        label: "Parseability",
+        detail: `${params.atsCompatibility.parseability}%`,
+        suggestion:
+          params.atsCompatibility.parseability < 80
+            ? "Improve section headers, contact placement, bullet consistency, and date formatting to raise parse confidence."
+            : undefined,
+        severity:
+          params.atsCompatibility.parseability >= 80
+            ? "good"
+            : params.atsCompatibility.parseability >= 60
+              ? "warning"
+              : "critical",
+      },
+      ...params.atsCompatibility.issues.map((issue) => ({
+        label: "Critical issue",
+        detail: issue,
+        severity: "critical" as const,
+      })),
+      ...params.atsCompatibility.warnings.slice(0, 3).map((warning) => ({
+        label: "Warning",
+        detail: warning,
+        severity: "warning" as const,
+      })),
+    ]
 
   sections.push({
     id: "atsCompatibility",
     title: "ATS Compatibility",
-    summary: "These checks show how reliably the resume structure should survive ATS parsing.",
+    summary:
+      "These checks show how reliably the resume structure should survive ATS parsing.",
     items: compatibilityItems,
   })
 
@@ -3852,9 +4885,16 @@ export function scoreResumeDeterministically(input: {
   const hasJD = jobDescription.length > 0
 
   const parsedSections = extractSections(resumeContent)
-  const artifactSections = extractSectionsFromArtifacts(input.extractionArtifacts)
-  const { sections, order } = mergeSectionResults(parsedSections, artifactSections)
-  const structureSignals = deriveDocumentStructureSignals(input.extractionArtifacts)
+  const artifactSections = extractSectionsFromArtifacts(
+    input.extractionArtifacts
+  )
+  const { sections, order } = mergeSectionResults(
+    parsedSections,
+    artifactSections
+  )
+  const structureSignals = deriveDocumentStructureSignals(
+    input.extractionArtifacts
+  )
   const summaryText = getSectionText(sections.professionalSummary)
   const skillsText = getSectionText(sections.skills)
   const experienceText = getSectionText(sections.workExperience)
@@ -3870,19 +4910,52 @@ export function scoreResumeDeterministically(input: {
   const repetition = analyzeRepetition(resumeContent, jdAnalysis)
   const skillsAnalysis = analyzeSkillsSection(skillsText)
   const lexicalCoverage = buildResumeLexicalCoverage(resumeContent, sections)
-  const keywordAnalysis = buildKeywordAnalysis(jdAnalysis, resumeContent, sections)
+  const keywordAnalysis = buildKeywordAnalysis(
+    jdAnalysis,
+    resumeContent,
+    sections
+  )
   const criticalTerms = unique([
     ...(jdAnalysis?.titleTerms || []),
     ...(jdAnalysis?.requiredTerms || []).slice(0, 20),
     ...(jdAnalysis?.responsibilityTerms || []).slice(0, 10),
   ])
-  const bulletStats = extractBulletStats(experienceText, projectText, criticalTerms)
-  const keywordScore = keywordAnalysis ? scoreKeywordMatch(keywordAnalysis, jdAnalysis, lexicalCoverage) : null
-  const summaryScore = scoreProfessionalSummary(summaryText, jdAnalysis, summaryStats)
+  const bulletStats = extractBulletStats(
+    experienceText,
+    projectText,
+    criticalTerms
+  )
+  const keywordScore = keywordAnalysis
+    ? scoreKeywordMatch(keywordAnalysis, jdAnalysis, lexicalCoverage)
+    : null
+  const summaryScore = scoreProfessionalSummary(
+    summaryText,
+    jdAnalysis,
+    summaryStats
+  )
   const skillsScore = scoreSkills(skillsText, jdAnalysis, skillsAnalysis)
-  const contentQualityScore = scoreContentQuality(bulletStats, repetition, lexicalCoverage)
-  const structureScore = scoreStructure(sections, order, contact, summaryStats, skillsAnalysis, jdAnalysis, structureSignals)
-  const formatting = scoreFormatting(sections, contact, dates, resumeContent, bulletStats, structureSignals)
+  const contentQualityScore = scoreContentQuality(
+    bulletStats,
+    repetition,
+    lexicalCoverage
+  )
+  const structureScore = scoreStructure(
+    sections,
+    order,
+    contact,
+    summaryStats,
+    skillsAnalysis,
+    jdAnalysis,
+    structureSignals
+  )
+  const formatting = scoreFormatting(
+    sections,
+    contact,
+    dates,
+    resumeContent,
+    bulletStats,
+    structureSignals
+  )
   const educationScore = scoreEducation(educationText, jdAnalysis)
   const qualification = inferQualificationAlignment(
     jdAnalysis,
@@ -3894,7 +4967,9 @@ export function scoreResumeDeterministically(input: {
     experienceText
   )
 
-  const missingSections = REQUIRED_SECTION_KEYS.filter((key) => !sections[key]).map((key) => titleCase(key))
+  const missingSections = REQUIRED_SECTION_KEYS.filter(
+    (key) => !sections[key]
+  ).map((key) => titleCase(key))
   const missingOptionalSections = (jdAnalysis?.optionalSections || [])
     .filter((key) => !sections[key])
     .map((key) => titleCase(key))
@@ -3987,7 +5062,9 @@ export function scoreResumeDeterministically(input: {
     keyFindings: {
       strengths: derived.strengths,
       weaknesses: derived.weaknesses,
-      missingKeywords: hasJD ? keywordAnalysis?.missingByCategory.required.slice(0, 20) || [] : null,
+      missingKeywords: hasJD
+        ? keywordAnalysis?.missingByCategory.required.slice(0, 20) || []
+        : null,
       presentKeywords: hasJD
         ? unique([
             ...(keywordAnalysis?.matchedByCategory.title || []),
@@ -4008,7 +5085,9 @@ export function scoreResumeDeterministically(input: {
     keywordAnalysis,
     debugAnalysis,
     evidence: {
-      requiredSectionsPresent: REQUIRED_SECTION_KEYS.filter((key) => sections[key]).map((key) => titleCase(key)),
+      requiredSectionsPresent: REQUIRED_SECTION_KEYS.filter(
+        (key) => sections[key]
+      ).map((key) => titleCase(key)),
       missingSections,
       missingOptionalSections,
       contact,

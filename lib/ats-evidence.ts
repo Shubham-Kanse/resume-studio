@@ -1,5 +1,5 @@
-import type { ATSScoreResponse } from "@/lib/ats-types"
 import type { DeterministicATSResult } from "@/lib/local-ats-scorer"
+import type { ATSScoreResponse } from "@/types/ats"
 
 export function buildEvidenceSummary(
   result: DeterministicATSResult
@@ -14,8 +14,10 @@ export function buildEvidenceSummary(
     yearsEstimated: result.evidence.qualification.yearsEstimated,
     meetsYearsRequirement: result.evidence.qualification.meetsYearsRequirement,
     degreeRequirement: result.evidence.qualification.degreeRequirement,
-    meetsDegreeRequirement: result.evidence.qualification.meetsDegreeRequirement,
-    requiredCertifications: result.evidence.qualification.requiredCertifications,
+    meetsDegreeRequirement:
+      result.evidence.qualification.meetsDegreeRequirement,
+    requiredCertifications:
+      result.evidence.qualification.requiredCertifications,
     missingCertifications: result.evidence.qualification.missingCertifications,
     matchedRoleFamilies: result.evidence.qualification.matchedRoleFamilies,
     expectedSeniority: result.evidence.qualification.expectedSeniority,

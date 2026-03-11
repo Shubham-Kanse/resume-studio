@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
+
+import { customError } from "@/lib/api-response"
 import { fetchWithPolicy } from "@/lib/http"
 
 interface RateLimitOptions {
@@ -26,15 +28,18 @@ async function enforceUpstashRateLimit(
   }
 
   try {
-    const incrResponse = await fetchWithPolicy(`${url}/incr/${encodeURIComponent(storeKey)}`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      cache: "no-store",
-      retries: 1,
-      timeoutMs: 5_000,
-    })
+    const incrResponse = await fetchWithPolicy(
+      `${url}/incr/${encodeURIComponent(storeKey)}`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        cache: "no-store",
+        retries: 1,
+        timeoutMs: 5_000,
+      }
+    )
 
     if (!incrResponse.ok) {
       return null
@@ -59,16 +64,15 @@ async function enforceUpstashRateLimit(
     }
 
     if (count > options.limit) {
-      return NextResponse.json(
-        { error: "Too many requests. Please try again shortly." },
-        {
-          status: 429,
-          headers: {
-            "Retry-After": String(Math.ceil(options.windowMs / 1000)),
-            "X-RateLimit-Limit": String(options.limit),
-          },
-        }
-      )
+      return customError("Too many requests. Please try again shortly.", {
+        status: 429,
+        code: "RATE_LIMITED",
+        retryable: true,
+        headers: {
+          "Retry-After": String(Math.ceil(options.windowMs / 1000)),
+          "X-RateLimit-Limit": String(options.limit),
+        },
+      })
     }
 
     return null
@@ -123,16 +127,15 @@ export async function enforceRateLimit(
 
   if (current.count >= options.limit) {
     const retryAfter = Math.max(1, Math.ceil((current.resetAt - now) / 1000))
-    return NextResponse.json(
-      { error: "Too many requests. Please try again shortly." },
-      {
-        status: 429,
-        headers: {
-          "Retry-After": String(retryAfter),
-          "X-RateLimit-Limit": String(options.limit),
-        },
-      }
-    )
+    return customError("Too many requests. Please try again shortly.", {
+      status: 429,
+      code: "RATE_LIMITED",
+      retryable: true,
+      headers: {
+        "Retry-After": String(retryAfter),
+        "X-RateLimit-Limit": String(options.limit),
+      },
+    })
   }
 
   current.count += 1
