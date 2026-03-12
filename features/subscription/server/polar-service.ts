@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server"
 
 import {
   createPlanSnapshot,
+  isSubscriptionStatus,
   SUBSCRIPTION_PLAN,
   SUBSCRIPTION_STATUS,
   type PlanSnapshot,
@@ -55,6 +56,16 @@ function buildCheckoutSuccessUrl(request: NextRequest) {
 
 function buildReturnUrl(request: NextRequest) {
   return new URL("/", getOrigin(request)).toString()
+}
+
+export function normalizePolarSubscriptionStatus(
+  status: string | null | undefined
+) {
+  if (!status) {
+    return SUBSCRIPTION_STATUS.INACTIVE
+  }
+
+  return isSubscriptionStatus(status) ? status : SUBSCRIPTION_STATUS.INACTIVE
 }
 
 export async function createPolarCheckoutUrl(params: {
@@ -140,12 +151,9 @@ export async function syncSubscriptionFromPolarCustomerState(
   const nextPlan = activeSubscription
     ? SUBSCRIPTION_PLAN.PRO
     : SUBSCRIPTION_PLAN.FREE
-  const nextStatus =
-    activeSubscription?.status === SUBSCRIPTION_STATUS.TRIALING
-      ? SUBSCRIPTION_STATUS.TRIALING
-      : activeSubscription?.status === SUBSCRIPTION_STATUS.ACTIVE
-        ? SUBSCRIPTION_STATUS.ACTIVE
-        : SUBSCRIPTION_STATUS.INACTIVE
+  const nextStatus = normalizePolarSubscriptionStatus(
+    activeSubscription?.status
+  )
   const nextPeriodEnd = activeSubscription
     ? activeSubscription.currentPeriodEnd.toISOString()
     : null

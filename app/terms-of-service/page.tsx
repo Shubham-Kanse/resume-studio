@@ -39,6 +39,14 @@ export default function TermsOfServicePage() {
         </div>
 
         <section className={sectionClassName}>
+          <h2 className="text-lg font-medium">Effective Date</h2>
+          <p className="mt-3 text-sm leading-6 text-muted-foreground">
+            These terms apply to the current Resume Studio service and may be
+            revised as the product, billing terms, or supported features change.
+          </p>
+        </section>
+
+        <section className={sectionClassName}>
           <h2 className="text-lg font-medium">Use Of The Service</h2>
           <p className="mt-3 text-sm leading-6 text-muted-foreground">
             You may use Resume Studio only for lawful purposes and only with
@@ -55,6 +63,30 @@ export default function TermsOfServicePage() {
             and job tracking may require an account. You are responsible for the
             activity associated with your account and for keeping access to it
             secure.
+          </p>
+        </section>
+
+        <section className={sectionClassName}>
+          <h2 className="text-lg font-medium">
+            Billing, Renewal, And Cancellation
+          </h2>
+          <p className="mt-3 text-sm leading-6 text-muted-foreground">
+            Paid features are managed through the billing provider shown at
+            checkout. If you purchase a subscription, you authorize recurring
+            charges according to the plan presented during checkout until you
+            cancel. You can manage or cancel billing through the in-app billing
+            portal, and changes generally take effect at the end of the current
+            billing period unless the checkout terms state otherwise.
+          </p>
+        </section>
+
+        <section className={sectionClassName}>
+          <h2 className="text-lg font-medium">Refunds</h2>
+          <p className="mt-3 text-sm leading-6 text-muted-foreground">
+            Fees are generally non-refundable unless a refund is required by law
+            or explicitly offered at the time of purchase. Promotional pricing,
+            taxes, and billing terms shown during checkout control if they
+            differ from general product messaging.
           </p>
         </section>
 
@@ -93,6 +125,15 @@ export default function TermsOfServicePage() {
             Resume Studio is provided on an as-is and as-available basis,
             without guarantees of uninterrupted operation, perfect accuracy, or
             suitability for any specific hiring outcome.
+          </p>
+        </section>
+
+        <section className={sectionClassName}>
+          <h2 className="text-lg font-medium">Contact</h2>
+          <p className="mt-3 text-sm leading-6 text-muted-foreground">
+            For support or billing questions, use the contact method provided
+            with the Resume Studio service or the support channel listed where
+            the product is offered.
           </p>
         </section>
 

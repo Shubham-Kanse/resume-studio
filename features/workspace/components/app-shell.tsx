@@ -50,6 +50,7 @@ import {
   useWorkspaceState,
   type AppMode,
 } from "@/features/workspace/hooks/use-workspace-state"
+import { trackEvent } from "@/lib/analytics"
 import {
   clearServerSession,
   syncServerSession,
@@ -76,6 +77,13 @@ import {
   normalizeJobApplication,
   normalizeTrackedRun,
 } from "@/lib/record-normalizers"
+import {
+  hydrateJobApplicationResumeUrls,
+  hydrateTrackedRunResumeUrls,
+  isDataUrl,
+  removeResumeFile,
+  uploadResumeDataUrl,
+} from "@/lib/resume-storage"
 import {
   atsServiceClient,
   resumeServiceClient,
@@ -150,79 +158,78 @@ function getValidationPayload(value: Record<string, unknown> | null) {
     : null
 }
 
+const preloadWebglShader = () => import("@/components/webgl-shader")
+const preloadDashboardPanel = () => import("@/components/dashboard-panel")
+const preloadJobApplicationsPanel = () =>
+  import("@/components/job-applications-panel")
+const preloadResumeInputPanel = () => import("@/components/resume-input-panel")
+const preloadResumePreviewPanel = () =>
+  import("@/components/resume-preview-panel")
+const preloadATSScorePanel = () => import("@/components/ats-score-panel")
+const preloadLatexSplitWorkspace = () =>
+  import("@/components/latex-split-workspace")
+const preloadAuthDialog = () => import("@/components/auth-dialog")
+const preloadLegalDialog = () => import("@/components/legal-dialog")
+const preloadPlanDialog = () =>
+  import("@/features/subscription/components/plan-dialog")
+
 const WebGLShader = dynamic(
-  () => import("@/components/webgl-shader").then((mod) => mod.WebGLShader),
+  () => preloadWebglShader().then((mod) => mod.WebGLShader),
   { ssr: false, loading: () => null }
 )
 
 const DashboardPanel = dynamic(
-  () =>
-    import("@/components/dashboard-panel").then((mod) => mod.DashboardPanel),
+  () => preloadDashboardPanel().then((mod) => mod.DashboardPanel),
   {
     loading: () => null,
   }
 )
 
 const JobApplicationsPanel = dynamic(
-  () =>
-    import("@/components/job-applications-panel").then(
-      (mod) => mod.JobApplicationsPanel
-    ),
+  () => preloadJobApplicationsPanel().then((mod) => mod.JobApplicationsPanel),
   { loading: () => null }
 )
 
 const ResumeInputPanel = dynamic(
-  () =>
-    import("@/components/resume-input-panel").then(
-      (mod) => mod.ResumeInputPanel
-    ),
+  () => preloadResumeInputPanel().then((mod) => mod.ResumeInputPanel),
   {
     loading: () => null,
   }
 )
 
 const ResumePreviewPanel = dynamic(
-  () =>
-    import("@/components/resume-preview-panel").then(
-      (mod) => mod.ResumePreviewPanel
-    ),
+  () => preloadResumePreviewPanel().then((mod) => mod.ResumePreviewPanel),
   { loading: () => null }
 )
 
 const ATSScorePanel = dynamic(
-  () => import("@/components/ats-score-panel").then((mod) => mod.ATSScorePanel),
+  () => preloadATSScorePanel().then((mod) => mod.ATSScorePanel),
   {
     loading: () => null,
   }
 )
 
 const LatexSplitWorkspace = dynamic(
-  () =>
-    import("@/components/latex-split-workspace").then(
-      (mod) => mod.LatexSplitWorkspace
-    ),
+  () => preloadLatexSplitWorkspace().then((mod) => mod.LatexSplitWorkspace),
   { loading: () => null }
 )
 
 const AuthDialog = dynamic(
-  () => import("@/components/auth-dialog").then((mod) => mod.AuthDialog),
+  () => preloadAuthDialog().then((mod) => mod.AuthDialog),
   {
     loading: () => null,
   }
 )
 
 const LegalDialog = dynamic(
-  () => import("@/components/legal-dialog").then((mod) => mod.LegalDialog),
+  () => preloadLegalDialog().then((mod) => mod.LegalDialog),
   {
     loading: () => null,
   }
 )
 
 const PlanDialog = dynamic(
-  () =>
-    import("@/features/subscription/components/plan-dialog").then(
-      (mod) => mod.PlanDialog
-    ),
+  () => preloadPlanDialog().then((mod) => mod.PlanDialog),
   {
     loading: () => null,
   }
@@ -776,6 +783,7 @@ export default function AppShell() {
   const [session, setSession] = useState<Session | null>(null)
   const [supabase, setSupabase] = useState<SupabaseClient | null>(null)
   const [isSupabaseReady, setIsSupabaseReady] = useState(false)
+  const [isBackgroundReady, setIsBackgroundReady] = useState(false)
   const [planSnapshot, setPlanSnapshot] = useState<PlanSnapshot>(() =>
     getGuestPlanSnapshot()
   )
@@ -857,11 +865,97 @@ export default function AppShell() {
   }, [])
 
   useEffect(() => {
+    if (typeof window === "undefined") return
+
+    if ("requestIdleCallback" in window) {
+      const idleCallbackId = window.requestIdleCallback(() => {
+        setIsBackgroundReady(true)
+      })
+
+      return () => window.cancelIdleCallback(idleCallbackId)
+    }
+
+    const timeoutId = globalThis.setTimeout(() => {
+      setIsBackgroundReady(true)
+    }, 250)
+
+    return () => globalThis.clearTimeout(timeoutId)
+  }, [])
+
+  useEffect(() => {
     if (!error) return
 
     const timer = window.setTimeout(() => setError(null), 4500)
     return () => window.clearTimeout(timer)
   }, [error, setError])
+
+  useEffect(() => {
+    void preloadResumeInputPanel()
+
+    if (mode === APP_MODE.DASHBOARD) {
+      void preloadDashboardPanel()
+      return
+    }
+
+    if (mode === APP_MODE.JOB_TRACKER) {
+      void preloadJobApplicationsPanel()
+      return
+    }
+
+    if (mode === TRACKED_RUN_MODE.GENERATE) {
+      void preloadResumePreviewPanel()
+      if (isSplitWorkspaceOpen) {
+        void preloadLatexSplitWorkspace()
+      }
+      return
+    }
+
+    if (mode === TRACKED_RUN_MODE.ATS_SCORE) {
+      void preloadATSScorePanel()
+    }
+  }, [APP_MODE, isSplitWorkspaceOpen, mode])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    if (!isAuthenticated) {
+      void preloadAuthDialog()
+      return
+    }
+
+    void preloadDashboardPanel()
+
+    if (entitlements.canUseJobTracker) {
+      void preloadJobApplicationsPanel()
+    }
+
+    if (!entitlements.canUseAiGenerator || !entitlements.canUseAiInsights) {
+      void preloadPlanDialog()
+    }
+  }, [
+    entitlements.canUseAiGenerator,
+    entitlements.canUseAiInsights,
+    entitlements.canUseJobTracker,
+    isAuthenticated,
+  ])
+
+  useEffect(() => {
+    if (legalDialog) {
+      void preloadLegalDialog()
+    }
+  }, [legalDialog])
+
+  useEffect(() => {
+    if (isAuthDialogOpen) {
+      void preloadAuthDialog()
+    }
+  }, [isAuthDialogOpen])
+
+  useEffect(() => {
+    if (isPlanDialogOpen) {
+      void preloadPlanDialog()
+    }
+  }, [isPlanDialogOpen])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -1087,7 +1181,8 @@ export default function AppShell() {
       const normalized = ((data ?? []) as Record<string, unknown>[]).map(
         normalizeTrackedRun
       )
-      const merged = mergeTrackedRuns(normalized, localHistory, HISTORY_LIMIT)
+      const hydrated = await hydrateTrackedRunResumeUrls(supabase, normalized)
+      const merged = mergeTrackedRuns(hydrated, localHistory, HISTORY_LIMIT)
       persistLocalTrackedRuns(userId, merged)
       setHistoryItems(merged)
       setSelectedHistoryRunId((current) => current ?? merged[0]?.id ?? null)
@@ -1135,7 +1230,11 @@ export default function AppShell() {
       const normalized = sortJobApplications(
         ((data ?? []) as Record<string, unknown>[]).map(normalizeJobApplication)
       )
-      const merged = mergeJobApplications(normalized, localApplications)
+      const hydrated = await hydrateJobApplicationResumeUrls(
+        supabase,
+        normalized
+      )
+      const merged = mergeJobApplications(hydrated, localApplications)
       persistLocalJobApplications(userId, merged)
       setJobApplications(merged)
       setJobApplicationsNotice(null)
@@ -1172,8 +1271,35 @@ export default function AppShell() {
       input,
       label
     )
+    const initialFileDataUrl = input.sourceFileDataUrl?.trim() || null
+    const initialFilePath = input.sourceFilePath?.trim() || null
+    let resumeFilePath = initialFilePath
+    let payloadFileDataUrl = initialFileDataUrl
+
+    if (supabase && initialFileDataUrl && isDataUrl(initialFileDataUrl)) {
+      try {
+        resumeFilePath = await uploadResumeDataUrl({
+          supabase,
+          userId: session.user.id,
+          recordId: localRecord.id,
+          kind: "tracked-runs",
+          fileName: input.sourceFileName,
+          mimeType: input.sourceFileMimeType,
+          dataUrl: initialFileDataUrl,
+          existingPath: initialFilePath,
+        })
+        payloadFileDataUrl = null
+      } catch (uploadError) {
+        reportClientError(uploadError, "tracked-run-resume-upload")
+        console.error("Failed to upload tracked run resume file:", uploadError)
+        setAuthMessage(
+          "Saved your run, but the attached resume file stayed in browser storage."
+        )
+      }
+    }
 
     const payload = {
+      id: localRecord.id,
       user_id: session.user.id,
       mode: input.mode,
       label,
@@ -1181,7 +1307,8 @@ export default function AppShell() {
       resume_content: input.resumeContent,
       resume_file_name: input.sourceFileName?.trim() || null,
       resume_file_mime_type: input.sourceFileMimeType?.trim() || null,
-      resume_file_data_url: input.sourceFileDataUrl?.trim() || null,
+      resume_file_path: resumeFilePath,
+      resume_file_data_url: resumeFilePath ? null : payloadFileDataUrl,
       extra_instructions: input.extraInstructions?.trim()
         ? input.extraInstructions.trim()
         : null,
@@ -1213,26 +1340,45 @@ export default function AppShell() {
         setAuthMessage(`Signed in, but save failed: ${saveError.message}`)
       }
 
+      if (resumeFilePath && resumeFilePath !== initialFilePath) {
+        try {
+          await removeResumeFile(supabase, resumeFilePath)
+        } catch (cleanupError) {
+          console.error(
+            "Failed to clean up tracked run resume after save error:",
+            cleanupError
+          )
+        }
+      }
+
+      const fallbackRecord = {
+        ...localRecord,
+        resume_file_path: resumeFilePath,
+      }
       const localOnlyHistory = mergeTrackedRuns(
-        [localRecord],
+        [fallbackRecord],
         loadLocalTrackedRuns(session.user.id),
         HISTORY_LIMIT
       )
       persistLocalTrackedRuns(session.user.id, localOnlyHistory)
-      upsertHistoryRecord(localRecord)
-      return localRecord.id
+      upsertHistoryRecord(fallbackRecord)
+      return fallbackRecord.id
     }
 
     const normalized = normalizeTrackedRun(data as Record<string, unknown>)
+    const [hydratedRecord] = await hydrateTrackedRunResumeUrls(supabase, [
+      normalized,
+    ])
+    const nextRecord = hydratedRecord ?? normalized
     const merged = mergeTrackedRuns(
-      [normalized],
+      [nextRecord],
       loadLocalTrackedRuns(session.user.id),
       HISTORY_LIMIT
     )
     persistLocalTrackedRuns(session.user.id, merged)
-    upsertHistoryRecord(normalized)
+    upsertHistoryRecord(nextRecord)
     setStorageNotice(null)
-    return normalized.id
+    return nextRecord.id
   }
 
   const updateTrackedRunScore = async (
@@ -1390,6 +1536,10 @@ export default function AppShell() {
           ? "Generated and auto-repaired successfully."
           : ""
       )
+      trackEvent("resume_generated", {
+        authenticated: Boolean(session?.user?.id),
+        repaired: Boolean(data?.validation?.repaired),
+      })
 
       if (session?.user?.id) {
         const savedRunId = await saveTrackedRun({
@@ -1527,6 +1677,11 @@ export default function AppShell() {
           requestId
         )
       }
+
+      trackEvent("ats_scored", {
+        authenticated: Boolean(session?.user?.id),
+        ai_insights_available: entitlements.canUseAiInsights,
+      })
     } catch (scoringError) {
       reportClientError(scoringError, "ats-score")
       console.error("Scoring error:", scoringError)
@@ -1568,7 +1723,11 @@ export default function AppShell() {
     if (signInError) {
       setAuthLoading(false)
       setAuthMessage(signInError.message)
+      trackEvent("signin_failed", { provider: "google" })
+      return
     }
+
+    trackEvent("signin_started", { provider: "google" })
   }
 
   const handleEmailSignIn = async (email: string, password: string) => {
@@ -1588,11 +1747,13 @@ export default function AppShell() {
     if (signInError) {
       setAuthLoading(false)
       setAuthMessage(signInError.message)
+      trackEvent("signin_failed", { provider: "password" })
       return
     }
 
     setAuthLoading(false)
     setAuthMessage("Signed in successfully.")
+    trackEvent("signin_completed", { provider: "password" })
   }
 
   const handleEmailSignUp = async (input: {
@@ -1633,6 +1794,7 @@ export default function AppShell() {
     if (signUpError) {
       setAuthLoading(false)
       setAuthMessage(signUpError.message)
+      trackEvent("signup_failed", { provider: "password" })
       return false
     }
 
@@ -1642,6 +1804,10 @@ export default function AppShell() {
         ? "Account created and signed in."
         : "Account created. Check your email to confirm your address before signing in."
     )
+    trackEvent("signup_completed", {
+      provider: "password",
+      session_created: Boolean(data.session),
+    })
     return true
   }
 
@@ -1679,6 +1845,7 @@ export default function AppShell() {
       document.body.removeChild(anchor)
       URL.revokeObjectURL(url)
       setAuthMessage("Your account export is downloading.")
+      trackEvent("account_exported")
     } catch (error) {
       reportClientError(error, "account-export")
       setAuthMessage(
@@ -1716,6 +1883,7 @@ export default function AppShell() {
       setSession(null)
       setIsAuthDialogOpen(false)
       setAuthMessage("Your account has been deleted.")
+      trackEvent("account_deleted")
     } catch (error) {
       reportClientError(error, "account-delete")
       setAuthMessage(getUserFacingMessage(error, "Failed to delete account"))
@@ -1757,6 +1925,8 @@ export default function AppShell() {
 
     setDeletingRunId(runId)
 
+    const deletedRun =
+      historyItems.find((record) => record.id === runId) ?? null
     const localNext = removeLocalTrackedRun(session.user.id, runId)
     setHistoryItems(localNext)
     setSelectedHistoryRunId((current) => {
@@ -1771,6 +1941,17 @@ export default function AppShell() {
     if (!supabase) {
       setDeletingRunId(null)
       return
+    }
+
+    if (deletedRun?.resume_file_path) {
+      try {
+        await removeResumeFile(supabase, deletedRun.resume_file_path)
+      } catch (removeError) {
+        console.error(
+          "Failed to remove tracked run resume file before delete:",
+          removeError
+        )
+      }
     }
 
     const { error: deleteError } = await supabase
@@ -1796,7 +1977,7 @@ export default function AppShell() {
       return
     }
 
-    const payload = {
+    const basePayload = {
       id: record.id,
       user_id: session.user.id,
       company: record.company.trim() || "",
@@ -1809,10 +1990,62 @@ export default function AppShell() {
       resume_file_mime_type: record.resume_file_mime_type?.trim()
         ? record.resume_file_mime_type.trim()
         : null,
-      resume_file_data_url: record.resume_file_data_url?.trim()
-        ? record.resume_file_data_url.trim()
-        : null,
       applied_on: formatJobApplicationDateForStorage(record.applied_on),
+    }
+
+    const currentResumeDataUrl = record.resume_file_data_url?.trim() || null
+    const currentResumeFilePath = record.resume_file_path?.trim() || null
+    let resumeFilePath = currentResumeFilePath
+    let payloadFileDataUrl =
+      currentResumeFilePath || !currentResumeDataUrl
+        ? null
+        : currentResumeDataUrl
+
+    if (!basePayload.resume_file_name && currentResumeFilePath) {
+      try {
+        await removeResumeFile(supabase, currentResumeFilePath)
+      } catch (removeError) {
+        reportClientError(removeError, "job-application-resume-delete")
+        console.error(
+          "Failed to remove cleared job application resume file:",
+          removeError
+        )
+      }
+
+      resumeFilePath = null
+    } else if (
+      basePayload.resume_file_name &&
+      currentResumeDataUrl &&
+      isDataUrl(currentResumeDataUrl)
+    ) {
+      try {
+        resumeFilePath = await uploadResumeDataUrl({
+          supabase,
+          userId: session.user.id,
+          recordId: record.id,
+          kind: "job-applications",
+          fileName: basePayload.resume_file_name,
+          mimeType: basePayload.resume_file_mime_type,
+          dataUrl: currentResumeDataUrl,
+          existingPath: currentResumeFilePath,
+        })
+        payloadFileDataUrl = null
+      } catch (uploadError) {
+        reportClientError(uploadError, "job-application-resume-upload")
+        console.error(
+          "Failed to upload job application resume file:",
+          uploadError
+        )
+        setAuthMessage(
+          "Saved the tracker entry, but the attached resume file stayed in browser storage."
+        )
+      }
+    }
+
+    const payload = {
+      ...basePayload,
+      resume_file_path: resumeFilePath,
+      resume_file_data_url: resumeFilePath ? null : payloadFileDataUrl,
     }
 
     const { data, error: saveError } = await supabase
@@ -1827,6 +2060,18 @@ export default function AppShell() {
       } else {
         setAuthMessage(`Failed to save job application: ${saveError.message}`)
       }
+
+      if (resumeFilePath && resumeFilePath !== currentResumeFilePath) {
+        try {
+          await removeResumeFile(supabase, resumeFilePath)
+        } catch (cleanupError) {
+          console.error(
+            "Failed to clean up job application resume after save error:",
+            cleanupError
+          )
+        }
+      }
+
       setSavingJobApplicationId((current) =>
         current === record.id ? null : current
       )
@@ -1834,8 +2079,12 @@ export default function AppShell() {
     }
 
     const normalized = normalizeJobApplication(data as Record<string, unknown>)
+    const [hydratedRecord] = await hydrateJobApplicationResumeUrls(supabase, [
+      normalized,
+    ])
+    const nextRecord = hydratedRecord ?? normalized
     setJobApplications((prev) => {
-      const merged = mergeJobApplications([normalized], prev)
+      const merged = mergeJobApplications([nextRecord], prev)
       persistLocalJobApplications(session.user.id, merged)
       return merged
     })
@@ -1875,6 +2124,7 @@ export default function AppShell() {
       return next
     })
     scheduleJobApplicationSave(draft, 0)
+    trackEvent("job_application_created")
   }
 
   const handleUpdateJobApplication = (
@@ -1888,6 +2138,7 @@ export default function AppShell() {
         | "job_link"
         | "resume_file_name"
         | "resume_file_mime_type"
+        | "resume_file_path"
         | "resume_file_data_url"
         | "applied_on"
       >
@@ -1932,12 +2183,25 @@ export default function AppShell() {
 
     setDeletingJobApplicationId(applicationId)
 
+    const deletedApplication =
+      jobApplications.find((record) => record.id === applicationId) ?? null
     const localNext = removeLocalJobApplication(session.user.id, applicationId)
     setJobApplications(localNext)
 
     if (!supabase) {
       setDeletingJobApplicationId(null)
       return
+    }
+
+    if (deletedApplication?.resume_file_path) {
+      try {
+        await removeResumeFile(supabase, deletedApplication.resume_file_path)
+      } catch (removeError) {
+        console.error(
+          "Failed to remove job application resume file before delete:",
+          removeError
+        )
+      }
     }
 
     const { error: deleteError } = await supabase
@@ -2005,6 +2269,14 @@ export default function AppShell() {
     setIsBillingActionLoading(true)
 
     try {
+      trackEvent(
+        planSnapshot.plan === SUBSCRIPTION_PLAN.PRO
+          ? "billing_portal_opened"
+          : "checkout_started",
+        {
+          current_plan: planSnapshot.plan,
+        }
+      )
       const response =
         planSnapshot.plan === SUBSCRIPTION_PLAN.PRO
           ? await billingServiceClient.createCustomerPortalSession(
@@ -2232,7 +2504,7 @@ export default function AppShell() {
           fallbackMessage="The animated background failed to initialize. The workspace is still available."
           compact
         >
-          <WebGLShader theme={backgroundTheme} />
+          {isBackgroundReady ? <WebGLShader theme={backgroundTheme} /> : null}
         </ErrorBoundary>
         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.04),rgba(0,0,0,0.38))]" />
       </div>

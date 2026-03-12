@@ -17,6 +17,7 @@ export interface TrackedRunRecord {
   resume_content: string
   resume_file_name: string | null
   resume_file_mime_type: string | null
+  resume_file_path: string | null
   resume_file_data_url: string | null
   extra_instructions: string | null
   latex_content: string | null
@@ -32,6 +33,7 @@ export interface SaveTrackedRunInput {
   extraInstructions?: string
   sourceFileName?: string
   sourceFileMimeType?: string
+  sourceFilePath?: string
   sourceFileDataUrl?: string
   latexContent?: string | null
   atsScore?: ATSScoreResponse | null

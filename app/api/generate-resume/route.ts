@@ -32,6 +32,7 @@ export async function POST(request: NextRequest) {
     key: "generate-resume",
     limit: 10,
     windowMs: 60_000,
+    requireRemoteInProduction: true,
   })
   if (rateLimitResponse) return rateLimitResponse
 

@@ -25,6 +25,7 @@ export async function POST(request: NextRequest) {
     key: "ats-insights",
     limit: 12,
     windowMs: 60_000,
+    requireRemoteInProduction: true,
   })
   if (rateLimitResponse) return rateLimitResponse
 

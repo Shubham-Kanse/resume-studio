@@ -12,6 +12,10 @@ interface LegalDialogProps {
 
 const privacySections = [
   {
+    title: "Effective Date",
+    body: "This policy applies to the current version of Resume Studio and may be updated as the product, billing flows, or data processors change over time.",
+  },
+  {
     title: "Information We Process",
     body: "Resume Studio may process the information you provide in order to generate resumes, score resumes against job descriptions, and maintain your saved workspace history. This can include your Google account email, uploaded resume files, job descriptions, generated LaTeX output, ATS analysis results, and job tracker entries you choose to store.",
   },
@@ -21,19 +25,27 @@ const privacySections = [
   },
   {
     title: "Storage And Processors",
-    body: "Account authentication and saved application data may be stored using Supabase. Resume generation and ATS-related requests may be processed by third-party model providers used by the app. Uploaded and generated content is handled only to fulfill the features you invoke inside the product.",
+    body: "Account authentication and saved application data may be stored using Supabase. Billing is processed through Polar. Resume generation and ATS-related requests may be processed by third-party model providers used by the app. Uploaded and generated content is handled only to fulfill the features you invoke inside the product.",
   },
   {
     title: "Retention And Deletion",
-    body: "You can remove saved history and job tracker entries from within the app. Local browser fallback data stays on the device and browser where it was created. Cloud-saved records remain available until you delete them or the service removes them according to future policy updates.",
+    body: "You can remove saved history and job tracker entries from within the app. You can also request account deletion from the account settings flow. Local browser fallback data stays on the device and browser where it was created. Cloud-saved records remain available until you delete them or the service removes them according to future policy updates.",
   },
   {
     title: "Security",
     body: "Reasonable technical measures are used to protect stored data, but no online service can guarantee absolute security. You should avoid uploading material you are not permitted to share or highly sensitive information unless you are comfortable with that risk.",
   },
+  {
+    title: "Contact And Requests",
+    body: "If you need support, billing help, or privacy-related assistance, use the contact method provided with the Resume Studio service or the support channel listed where the product is offered.",
+  },
 ]
 
 const termsSections = [
+  {
+    title: "Effective Date",
+    body: "These terms apply to the current Resume Studio service and may be revised as the product, billing terms, or supported features change.",
+  },
   {
     title: "Use Of The Service",
     body: "You may use Resume Studio only for lawful purposes and only with content you have the right to upload, analyze, store, or transform. You are responsible for the accuracy and legality of the information you submit.",
@@ -41,6 +53,14 @@ const termsSections = [
   {
     title: "Accounts",
     body: "Some features are available without signing in, while saved history and job tracking may require an account. You are responsible for the activity associated with your account and for keeping access to it secure.",
+  },
+  {
+    title: "Billing, Renewal, And Cancellation",
+    body: "Paid features are managed through the billing provider shown at checkout. If you purchase a subscription, you authorize recurring charges according to the plan presented during checkout until you cancel. You can manage or cancel billing through the in-app billing portal, and changes generally take effect at the end of the current billing period unless the checkout terms state otherwise.",
+  },
+  {
+    title: "Refunds",
+    body: "Fees are generally non-refundable unless a refund is required by law or explicitly offered at the time of purchase. Promotional pricing, taxes, and billing terms shown during checkout control if they differ from general product messaging.",
   },
   {
     title: "AI-Generated Output",
@@ -57,6 +77,10 @@ const termsSections = [
   {
     title: "Disclaimer",
     body: "Resume Studio is provided on an as-is and as-available basis, without guarantees of uninterrupted operation, perfect accuracy, or suitability for any specific hiring outcome.",
+  },
+  {
+    title: "Contact",
+    body: "For support or billing questions, use the contact method provided with the Resume Studio service or the support channel listed where the product is offered.",
   },
 ]
 

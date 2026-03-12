@@ -20,6 +20,7 @@ export async function POST(request: NextRequest) {
     key: "latex-to-pdf",
     limit: 10,
     windowMs: 60_000,
+    requireRemoteInProduction: true,
   })
   if (rateLimitResponse) return rateLimitResponse
 

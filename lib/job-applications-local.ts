@@ -36,6 +36,10 @@ function normalizeLocalJobApplication(
       typeof record.resume_file_mime_type === "string"
         ? record.resume_file_mime_type
         : null,
+    resume_file_path:
+      typeof record.resume_file_path === "string"
+        ? record.resume_file_path
+        : null,
     resume_file_data_url:
       typeof record.resume_file_data_url === "string"
         ? record.resume_file_data_url
@@ -121,7 +125,7 @@ export function mergeJobApplications(
 ) {
   const byId = new Map<string, JobApplicationRecord>()
 
-  ;[...remote, ...local].forEach((record) => {
+  ;[...local, ...remote].forEach((record) => {
     const existing = byId.get(record.id)
 
     if (!existing) {

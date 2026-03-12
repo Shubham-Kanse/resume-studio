@@ -39,6 +39,15 @@ export default function PrivacyPolicyPage() {
         </div>
 
         <section className={sectionClassName}>
+          <h2 className="text-lg font-medium">Effective Date</h2>
+          <p className="mt-3 text-sm leading-6 text-muted-foreground">
+            This policy applies to the current version of Resume Studio and may
+            be updated as the product, billing flows, or data processors change
+            over time.
+          </p>
+        </section>
+
+        <section className={sectionClassName}>
           <h2 className="text-lg font-medium">Information We Process</h2>
           <p className="mt-3 text-sm leading-6 text-muted-foreground">
             Resume Studio may process the information you provide in order to
@@ -65,10 +74,10 @@ export default function PrivacyPolicyPage() {
           <h2 className="text-lg font-medium">Storage And Processors</h2>
           <p className="mt-3 text-sm leading-6 text-muted-foreground">
             Account authentication and saved application data may be stored
-            using Supabase. Resume generation and ATS-related requests may be
-            processed by third-party model providers used by the app. Uploaded
-            and generated content is handled only to fulfill the features you
-            invoke inside the product.
+            using Supabase. Billing is processed through Polar. Resume
+            generation and ATS-related requests may be processed by third-party
+            model providers used by the app. Uploaded and generated content is
+            handled only to fulfill the features you invoke inside the product.
           </p>
         </section>
 
@@ -76,7 +85,8 @@ export default function PrivacyPolicyPage() {
           <h2 className="text-lg font-medium">Retention And Deletion</h2>
           <p className="mt-3 text-sm leading-6 text-muted-foreground">
             You can remove saved history and job tracker entries from within the
-            app. Local browser fallback data stays on the device and browser
+            app. You can also request account deletion from the account settings
+            flow. Local browser fallback data stays on the device and browser
             where it was created. Cloud-saved records remain available until you
             delete them or the service removes them according to future policy
             updates.
@@ -90,6 +100,15 @@ export default function PrivacyPolicyPage() {
             no online service can guarantee absolute security. You should avoid
             uploading material you are not permitted to share or highly
             sensitive information unless you are comfortable with that risk.
+          </p>
+        </section>
+
+        <section className={sectionClassName}>
+          <h2 className="text-lg font-medium">Contact And Requests</h2>
+          <p className="mt-3 text-sm leading-6 text-muted-foreground">
+            If you need support, billing help, or privacy-related assistance,
+            use the contact method provided with the Resume Studio service or
+            the support channel listed where the product is offered.
           </p>
         </section>
 

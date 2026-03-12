@@ -1,9 +1,6 @@
 import type React from "react"
 
-import { Analytics } from "@vercel/analytics/react"
-import { SpeedInsights } from "@vercel/speed-insights/next"
-
-import { ClientRuntimeGuard } from "@/components/client-runtime-guard"
+import { ClientEnhancements } from "@/components/client-enhancements"
 
 import type { Metadata } from "next"
 import "./globals.css"
@@ -19,13 +16,29 @@ export default function RootLayout({
 }: {
   children: React.ReactNode
 }) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || null
+
   return (
     <html lang="en" className="dark h-full">
+      <head>
+        <link rel="dns-prefetch" href="//api.groq.com" />
+        <link rel="preconnect" href="https://api.groq.com" crossOrigin="" />
+        <link rel="dns-prefetch" href="//latex.ytotech.com" />
+        <link
+          rel="preconnect"
+          href="https://latex.ytotech.com"
+          crossOrigin=""
+        />
+        {supabaseUrl ? (
+          <>
+            <link rel="dns-prefetch" href={supabaseUrl} />
+            <link rel="preconnect" href={supabaseUrl} crossOrigin="" />
+          </>
+        ) : null}
+      </head>
       <body className="font-sans antialiased h-full">
-        <ClientRuntimeGuard />
         {children}
-        <Analytics />
-        <SpeedInsights />
+        <ClientEnhancements />
       </body>
     </html>
   )

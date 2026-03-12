@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process"
 
 const budgetKb = Number(process.env.BUNDLE_BUDGET_KB || 150)
 
-const result = spawnSync("pnpm", ["build"], {
+const result = spawnSync("pnpm", ["build:next"], {
   cwd: process.cwd(),
   encoding: "utf8",
   stdio: "pipe",

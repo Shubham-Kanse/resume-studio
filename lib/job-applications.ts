@@ -46,6 +46,7 @@ export interface JobApplicationRecord {
   job_link: string | null
   resume_file_name: string | null
   resume_file_mime_type: string | null
+  resume_file_path: string | null
   resume_file_data_url: string | null
   applied_on: string | null
   created_at: string
@@ -201,6 +202,7 @@ export function createJobApplicationDraft(
     job_link: "",
     resume_file_name: "",
     resume_file_mime_type: "",
+    resume_file_path: "",
     resume_file_data_url: "",
     applied_on: appliedOn ?? null,
     created_at: timestamp,

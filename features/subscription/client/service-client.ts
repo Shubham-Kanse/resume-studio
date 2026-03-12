@@ -118,10 +118,10 @@ export const accountServiceClient = {
   async deleteAccount(accessToken: string, confirmation: string) {
     const response = await request(serviceContracts.account.delete, {
       method: "DELETE",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
+      headers: withAuthHeaders(
+        { "Content-Type": "application/json" },
+        accessToken
+      ),
       body: JSON.stringify({ confirmation }),
     })
 

@@ -194,7 +194,7 @@ User Input (Resume + Job Description)
 
 - Node.js 18+ installed
 - pnpm package manager
-- OpenRouter API key (for AI resume generation)
+- Groq API key (for AI resume generation)
 
 ### Installation
 
@@ -214,7 +214,8 @@ pnpm install
    Create a `.env.local` file in the root directory:
 
 ```
-OPENROUTER_API_KEY=your_openrouter_api_key_here
+GROQ_API_KEY=your_groq_api_key_here
+GROQ_MODEL=meta-llama/llama-4-scout-17b-16e-instruct
 NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key_here
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key_here
@@ -224,7 +225,7 @@ POLAR_PRO_PRODUCT_ID=your_polar_pro_product_id_here
 POLAR_SERVER=sandbox
 ```
 
-Get your API key at [https://openrouter.ai/keys](https://openrouter.ai/keys)
+Get your API key from [https://console.groq.com/keys](https://console.groq.com/keys)
 
 If you want saved history:
 
@@ -275,7 +276,7 @@ pnpm lint
 
 - **Node.js** 18+ (check with `node --version`)
 - **pnpm** package manager (install with `npm install -g pnpm`)
-- **OpenRouter API key** (get one at [openrouter.ai](https://openrouter.ai/keys))
+- **Groq API key** (get one at [console.groq.com/keys](https://console.groq.com/keys))
 
 ### Local Development Setup
 
@@ -297,13 +298,23 @@ pnpm install
 
 ```bash
 # Required for AI resume generation
-OPENROUTER_API_KEY=your_openrouter_api_key_here
+GROQ_API_KEY=your_groq_api_key_here
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key_here
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key_here
+POLAR_ACCESS_TOKEN=polar_oat_your_access_token_here
+POLAR_WEBHOOK_SECRET=whsec_your_webhook_secret_here
+POLAR_PRO_PRODUCT_ID=your_polar_pro_product_id_here
 
-# Optional: Override default model (defaults to deepseek/deepseek-chat)
-# OPENROUTER_MODEL=anthropic/claude-3-5-sonnet
+# Optional: Override default model
+# GROQ_MODEL=meta-llama/llama-4-scout-17b-16e-instruct
 
 # Optional: Set app URL for production
 # NEXT_PUBLIC_APP_URL=https://your-domain.com
+
+# Required for reliable rate limiting in production
+# UPSTASH_REDIS_REST_URL=https://your-upstash-instance.upstash.io
+# UPSTASH_REDIS_REST_TOKEN=your_upstash_rest_token_here
 ```
 
 4. **Start development server**
@@ -523,7 +534,7 @@ Content-Type: multipart/form-data
    - LLM_utils/Claude-ATS-Cheatsheet-Instructions.md
    - Action verbs from LLM_utils/Action-Verbs-claude.txt
    - User's resume and target job description
-4. Send to OpenRouter API (default: deepseek/deepseek-chat)
+4. Send to Groq API (default model configurable via `GROQ_MODEL`)
 5. Stream and parse LaTeX response
 6. Return complete LaTeX document
 
@@ -565,10 +576,12 @@ Content-Disposition: attachment; filename="resume.pdf"
 
 ```bash
 # Required for operation
-OPENROUTER_API_KEY=sk_***                    # API key from openrouter.ai
+GROQ_API_KEY=gsk_***                         # API key from console.groq.com
 
 # Optional
-OPENROUTER_MODEL=deepseek/deepseek-chat      # LLM model to use
+GROQ_MODEL=meta-llama/llama-4-scout-17b-16e-instruct
+UPSTASH_REDIS_REST_URL=https://...           # Required in production
+UPSTASH_REDIS_REST_TOKEN=...                 # Required in production
 NODE_ENV=development                         # development | production
 ```
 
@@ -652,7 +665,7 @@ User Prompt Construction
   └─ Extra Instructions (if provided by user)
    ↓
 OpenRouter API Call
-  ├─ Model: deepseek/deepseek-chat (configurable)
+  ├─ Model: configurable via GROQ_MODEL
   ├─ Temperature: 0.7 (balanced creativity/consistency)
   └─ Max Tokens: 4000+
    ↓
@@ -823,7 +836,7 @@ git push origin main
 2. **Connect to Vercel**
    - Go to vercel.com
    - Import your GitHub repository
-   - Set environment variables (OPENROUTER_API_KEY)
+   - Set environment variables (`GROQ_API_KEY`, plus Upstash Redis for production rate limiting)
 
 3. **Deploy**
    - Vercel automatically builds and deploys on push
@@ -834,7 +847,7 @@ git push origin main
 
 - Node.js 18+ runtime
 - Ability to set environment variables
-- Access to OpenRouter API
+- Access to Groq API
 
 **Platforms:**
 
@@ -855,8 +868,8 @@ git push origin main
 # Check .env.local exists in root
 cat .env.local
 
-# Should contain: OPENROUTER_API_KEY=sk-or-v1-***
-# Get your key at: https://openrouter.ai/keys
+# Should contain: GROQ_API_KEY=gsk_***
+# Get your key at: https://console.groq.com/keys
 ```
 
 **Issue: "PDF extraction fails"**

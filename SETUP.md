@@ -6,19 +6,20 @@
 pnpm install
 ```
 
-## 2. Get OpenRouter API Key
+## 2. Get Groq API Key
 
-1. Go to [https://openrouter.ai/keys](https://openrouter.ai/keys)
+1. Go to [https://console.groq.com/keys](https://console.groq.com/keys)
 2. Sign up or log in
 3. Create a new API key
-4. Copy the key (starts with `sk-or-v1-`)
+4. Copy the key (starts with `gsk_`)
 
 ## 3. Configure Environment
 
 Create `.env.local` file in the root directory:
 
 ```bash
-OPENROUTER_API_KEY=sk-or-v1-your-key-here
+GROQ_API_KEY=gsk_your-key-here
+GROQ_MODEL=meta-llama/llama-4-scout-17b-16e-instruct
 NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key_here
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key_here
@@ -31,11 +32,12 @@ POLAR_SERVER=sandbox
 Optional settings:
 
 ```bash
-# Use a different model (default: deepseek/deepseek-chat)
-OPENROUTER_MODEL=anthropic/claude-3-5-sonnet
-
 # Set production URL
 NEXT_PUBLIC_APP_URL=https://your-domain.com
+
+# Required for reliable rate limiting in production
+UPSTASH_REDIS_REST_URL=https://your-upstash-instance.upstash.io
+UPSTASH_REDIS_REST_TOKEN=your_upstash_rest_token_here
 ```
 
 Supabase is optional for guests. If you want Google login and saved history:
@@ -71,13 +73,13 @@ Open [http://localhost:3000](http://localhost:3000)
 ### "API key not configured"
 
 - Make sure `.env.local` exists in the root directory
-- Verify the key starts with `sk-or-v1-`
+- Verify the key starts with `gsk_`
 - Restart the dev server after creating `.env.local`
 
 ### "Failed to generate resume"
 
-- Check your OpenRouter account has credits
-- Try a different model (e.g., `deepseek/deepseek-chat` is cheaper)
+- Check your Groq account has access to the selected model
+- Try a different Groq-supported model
 - Check the browser console for detailed errors
 
 ### PDF preview not working
@@ -94,11 +96,4 @@ Open [http://localhost:3000](http://localhost:3000)
 
 ## Available Models
 
-Popular models on OpenRouter:
-
-- `deepseek/deepseek-chat` (fast, cheap, recommended)
-- `anthropic/claude-3-5-sonnet` (high quality)
-- `openai/gpt-4o` (balanced)
-- `google/gemini-pro` (fast)
-
-Set via `OPENROUTER_MODEL` in `.env.local`
+Set your model with `GROQ_MODEL` in `.env.local`. Pick a Groq-supported model that matches your latency and quality requirements.

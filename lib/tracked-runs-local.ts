@@ -12,6 +12,49 @@ function isBrowser() {
   return typeof window !== "undefined"
 }
 
+function normalizeLocalTrackedRun(
+  record: Record<string, unknown>
+): TrackedRunRecord {
+  return {
+    id: String(record.id),
+    user_id: String(record.user_id),
+    mode: record.mode === "ats-score" ? "ats-score" : "generate",
+    label: typeof record.label === "string" ? record.label : "",
+    job_description:
+      typeof record.job_description === "string"
+        ? record.job_description
+        : null,
+    resume_content:
+      typeof record.resume_content === "string" ? record.resume_content : "",
+    resume_file_name:
+      typeof record.resume_file_name === "string"
+        ? record.resume_file_name
+        : null,
+    resume_file_mime_type:
+      typeof record.resume_file_mime_type === "string"
+        ? record.resume_file_mime_type
+        : null,
+    resume_file_path:
+      typeof record.resume_file_path === "string"
+        ? record.resume_file_path
+        : null,
+    resume_file_data_url:
+      typeof record.resume_file_data_url === "string"
+        ? record.resume_file_data_url
+        : null,
+    extra_instructions:
+      typeof record.extra_instructions === "string"
+        ? record.extra_instructions
+        : null,
+    latex_content:
+      typeof record.latex_content === "string" ? record.latex_content : null,
+    ats_score:
+      (record.ats_score as ATSScoreResponse | null | undefined) ?? null,
+    created_at: String(record.created_at),
+    updated_at: String(record.updated_at),
+  }
+}
+
 export function loadLocalTrackedRuns(userId: string): TrackedRunRecord[] {
   if (!isBrowser()) return []
 
@@ -21,9 +64,13 @@ export function loadLocalTrackedRuns(userId: string): TrackedRunRecord[] {
 
     const parsed = JSON.parse(raw)
     return Array.isArray(parsed)
-      ? (parsed as TrackedRunRecord[]).filter((record) =>
-          shouldKeepCachedRecord(record.updated_at)
-        )
+      ? parsed
+          .filter(
+            (record): record is Record<string, unknown> =>
+              typeof record === "object" && record !== null
+          )
+          .map(normalizeLocalTrackedRun)
+          .filter((record) => shouldKeepCachedRecord(record.updated_at))
       : []
   } catch {
     return []
@@ -72,7 +119,7 @@ export function mergeTrackedRuns(
 ) {
   const byId = new Map<string, TrackedRunRecord>()
 
-  ;[...remote, ...local].forEach((record) => {
+  ;[...local, ...remote].forEach((record) => {
     const existing = byId.get(record.id)
 
     if (!existing) {
@@ -111,6 +158,7 @@ export function createLocalTrackedRunRecord(
     resume_content: input.resumeContent,
     resume_file_name: input.sourceFileName?.trim() || null,
     resume_file_mime_type: input.sourceFileMimeType?.trim() || null,
+    resume_file_path: input.sourceFilePath?.trim() || null,
     resume_file_data_url: input.sourceFileDataUrl?.trim() || null,
     extra_instructions: input.extraInstructions?.trim()
       ? input.extraInstructions.trim()

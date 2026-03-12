@@ -7,6 +7,7 @@ interface RateLimitOptions {
   key: string
   limit: number
   windowMs: number
+  requireRemoteInProduction?: boolean
 }
 
 interface RateLimitEntry {
@@ -15,6 +16,12 @@ interface RateLimitEntry {
 }
 
 const rateLimitStore = new Map<string, RateLimitEntry>()
+
+export function hasRemoteRateLimitConfig() {
+  return Boolean(
+    process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
+  )
+}
 
 async function enforceUpstashRateLimit(
   storeKey: string,
@@ -106,6 +113,21 @@ export async function enforceRateLimit(
   request: NextRequest,
   options: RateLimitOptions
 ): Promise<NextResponse | null> {
+  if (
+    options.requireRemoteInProduction &&
+    process.env.NODE_ENV === "production" &&
+    !hasRemoteRateLimitConfig()
+  ) {
+    return customError(
+      "Rate limiting is not configured for this environment.",
+      {
+        status: 503,
+        code: "SERVICE_UNAVAILABLE",
+        retryable: false,
+      }
+    )
+  }
+
   const storeKey = buildStoreKey(request, options.key)
   const remoteResponse = await enforceUpstashRateLimit(storeKey, options)
   if (remoteResponse) {
