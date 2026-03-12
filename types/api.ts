@@ -33,6 +33,12 @@ export interface ExtractResumeResponse {
 }
 
 export interface ResumeValidationIssue {
+  type?:
+    | "latex_error"
+    | "format_violation"
+    | "unsupported_claim"
+    | "keyword_alignment"
+    | "other"
   message?: string
   severity?: "high" | "medium" | "low"
 }

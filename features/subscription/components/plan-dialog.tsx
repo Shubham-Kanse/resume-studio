@@ -1,7 +1,7 @@
 "use client"
 
 import {
-  Crown,
+  Gem,
   Sparkles,
   Target,
   X,
@@ -141,7 +141,7 @@ export function PlanDialog({
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="flex items-center gap-2 text-[11px] uppercase tracking-[0.28em] text-sky-200/80">
-                  <Crown className="h-3.5 w-3.5" />
+                  <Gem className="h-3.5 w-3.5" />
                   Pro
                 </p>
                 <h3 className="mt-2 text-2xl font-semibold text-foreground">

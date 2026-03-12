@@ -60,13 +60,31 @@ export function buildResumeStoragePath(
 }
 
 async function dataUrlToBlob(dataUrl: string) {
-  const response = await fetch(dataUrl)
-
-  if (!response.ok) {
+  const match = dataUrl.match(
+    /^data:([^;,]+)?(?:;charset=[^;,]+)?(;base64)?,([\s\S]*)$/
+  )
+  if (!match) {
     throw new Error("Failed to read the uploaded resume file.")
   }
 
-  return response.blob()
+  const mimeType = match[1] || "application/octet-stream"
+  const isBase64 = Boolean(match[2])
+  const payload = match[3] || ""
+
+  if (isBase64) {
+    if (typeof Buffer !== "undefined") {
+      return new Blob([Buffer.from(payload, "base64")], { type: mimeType })
+    }
+
+    const decoded = atob(payload)
+    const bytes = new Uint8Array(decoded.length)
+    for (let index = 0; index < decoded.length; index += 1) {
+      bytes[index] = decoded.charCodeAt(index)
+    }
+    return new Blob([bytes], { type: mimeType })
+  }
+
+  return new Blob([decodeURIComponent(payload)], { type: mimeType })
 }
 
 export async function uploadResumeDataUrl({

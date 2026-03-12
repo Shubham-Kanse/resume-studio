@@ -15,8 +15,8 @@ import dynamic from "next/dynamic"
 import {
   BriefcaseBusiness,
   ChevronDown,
-  Crown,
   FileCode2,
+  Gem,
   House,
   LayoutDashboard,
   LogOut,
@@ -60,8 +60,10 @@ import type { DocumentArtifacts } from "@/lib/document-artifacts"
 import { reportClientError } from "@/lib/error-monitoring"
 import { getUserFacingMessage } from "@/lib/errors"
 import { type JobApplicationRecord } from "@/lib/job-applications"
+import { latexToPlainText } from "@/lib/latex-text"
 import {
   atsServiceClient,
+  documentServiceClient,
   resumeServiceClient,
   ServiceClientError,
 } from "@/lib/services/gateway-client"
@@ -77,6 +79,36 @@ import type { Session, SupabaseClient } from "@supabase/supabase-js"
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 const ATS_LOADING_MIN_DURATION_MS = 11000
 const PLAN_SNAPSHOT_STORAGE_KEY_PREFIX = "resume-studio:plan-snapshot:"
+
+function readBlobAsDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () =>
+      resolve(typeof reader.result === "string" ? reader.result : "")
+    reader.onerror = () => reject(new Error("Failed to read generated PDF."))
+    reader.readAsDataURL(blob)
+  })
+}
+
+function buildGeneratedPdfFileName(
+  sourceFileName: string,
+  jobDescription: string
+) {
+  const source = sourceFileName.trim()
+  if (source) {
+    const normalized = source.replace(/\.[^.]+$/, "")
+    return `${normalized || "generated-resume"}.pdf`
+  }
+
+  const jdTitle = jobDescription
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 48)
+
+  return `${jdTitle || "generated-resume"}.pdf`
+}
 
 function getPlanSnapshotStorageKey(userId: string) {
   return `${PLAN_SNAPSHOT_STORAGE_KEY_PREFIX}${userId}`
@@ -331,7 +363,7 @@ const PageHeader = memo(function PageHeader({
                 : "border-sky-400/25 bg-sky-500/12 text-sky-50 hover:bg-sky-500/18"
             )}
           >
-            <Crown className="h-4 w-4" />
+            <Gem className="h-4 w-4" />
             <span className="text-xs font-medium sm:text-sm">
               {currentPlan === SUBSCRIPTION_PLAN.PRO ? "Pro" : "Upgrade"}
             </span>
@@ -1203,19 +1235,47 @@ export default function AppShell() {
       })
 
       if (session?.user?.id) {
+        let generatedPdfDataUrl = ""
+        let generatedPdfFileName = ""
+
+        try {
+          setStatusMessage("Compiling generated PDF for dashboard save...")
+          const generatedPdfResponse = await documentServiceClient.compileLatex(
+            {
+              latex,
+              preview: false,
+            }
+          )
+          const generatedPdfBlob = await generatedPdfResponse.blob()
+          generatedPdfDataUrl = await readBlobAsDataUrl(generatedPdfBlob)
+          generatedPdfFileName = buildGeneratedPdfFileName(resumeFileName, jd)
+        } catch (savePdfError) {
+          reportClientError(savePdfError, "generated-pdf-save")
+          console.warn("Generated PDF save preparation failed:", savePdfError)
+          setAuthMessage(
+            "Generated resume saved without PDF attachment. LaTeX output is still available."
+          )
+        }
+
         const savedRunId = await saveTrackedRun({
           mode: TRACKED_RUN_MODE.GENERATE,
           jobDescription: jd,
-          resumeContent: resume,
-          sourceFileName: resumeFileName,
-          sourceFileMimeType: resumeFileMimeType,
-          sourceFileDataUrl: resumeFileDataUrl,
+          resumeContent: latexToPlainText(latex),
+          sourceFileName: generatedPdfFileName || undefined,
+          sourceFileMimeType: generatedPdfDataUrl
+            ? "application/pdf"
+            : undefined,
+          sourceFileDataUrl: generatedPdfDataUrl || undefined,
           extraInstructions: additional,
           latexContent: latex,
         })
 
         if (savedRunId) {
-          setAuthMessage("Resume saved to your account.")
+          setAuthMessage(
+            generatedPdfDataUrl
+              ? "Resume saved to your account."
+              : "Resume saved to your account without PDF attachment."
+          )
         }
       }
     } catch (generationError) {
@@ -1259,7 +1319,7 @@ export default function AppShell() {
       }
 
       setError(message)
-      setLatexContent(`% Error: ${message}\n% Please try again`)
+      setLatexContent("")
       setStatusMessage("")
     } finally {
       setIsGenerating(false)
@@ -1591,6 +1651,13 @@ export default function AppShell() {
       return
     }
 
+    if (!entitlements.canUseJobTracker) {
+      setError(getFeatureUpgradeMessage(PREMIUM_FEATURE.JOB_TRACKER))
+      setPlanHighlightFeature(PREMIUM_FEATURE.JOB_TRACKER)
+      setIsPlanDialogOpen(true)
+      return
+    }
+
     addJobApplication()
     trackEvent("job_application_created")
   }
@@ -1612,10 +1679,34 @@ export default function AppShell() {
       >
     >
   ) => {
+    if (!session?.user?.id) {
+      setIsAuthDialogOpen(true)
+      return
+    }
+
+    if (!entitlements.canUseJobTracker) {
+      setError(getFeatureUpgradeMessage(PREMIUM_FEATURE.JOB_TRACKER))
+      setPlanHighlightFeature(PREMIUM_FEATURE.JOB_TRACKER)
+      setIsPlanDialogOpen(true)
+      return
+    }
+
     updateJobApplication(applicationId, patch)
   }
 
   const handleDeleteJobApplication = async (applicationId: string) => {
+    if (!session?.user?.id) {
+      setIsAuthDialogOpen(true)
+      return
+    }
+
+    if (!entitlements.canUseJobTracker) {
+      setError(getFeatureUpgradeMessage(PREMIUM_FEATURE.JOB_TRACKER))
+      setPlanHighlightFeature(PREMIUM_FEATURE.JOB_TRACKER)
+      setIsPlanDialogOpen(true)
+      return
+    }
+
     await deleteJobApplication(applicationId)
   }
 
@@ -1717,35 +1808,9 @@ export default function AppShell() {
 
   const handleModeChange = useCallback(
     (nextMode: AppMode) => {
-      if (
-        isAuthenticated &&
-        isPlanLoading &&
-        nextMode === APP_MODE.JOB_TRACKER
-      ) {
-        setAuthMessage("Checking your subscription plan...")
-        return
-      }
-
-      if (nextMode === APP_MODE.JOB_TRACKER && !entitlements.canUseJobTracker) {
-        setError(getFeatureUpgradeMessage(PREMIUM_FEATURE.JOB_TRACKER))
-        setPlanHighlightFeature(PREMIUM_FEATURE.JOB_TRACKER)
-        setIsPlanDialogOpen(true)
-        return
-      }
-
       setMode(nextMode)
     },
-    [
-      APP_MODE.JOB_TRACKER,
-      entitlements.canUseJobTracker,
-      isAuthenticated,
-      isPlanLoading,
-      setAuthMessage,
-      setError,
-      setIsPlanDialogOpen,
-      setMode,
-      setPlanHighlightFeature,
-    ]
+    [setMode]
   )
 
   const handleBackgroundThemeChange = useCallback(
@@ -1793,12 +1858,17 @@ export default function AppShell() {
   const trackerProps: JobApplicationsPanelProps = {
     authAvailable,
     isAuthenticated,
+    canTrackJobs: entitlements.canUseJobTracker,
+    canEditJobs: entitlements.canUseJobTracker,
     storageNotice: jobApplicationsNotice,
     applications: jobApplications,
     applicationsLoading: jobApplicationsLoading,
     savingApplicationId: savingJobApplicationId,
     deletingApplicationId: deletingJobApplicationId,
     onAddApplication: handleAddJobApplication,
+    onUpgradeToPro: () => handleOpenPlanDialog(PREMIUM_FEATURE.JOB_TRACKER),
+    onLockedInteraction: () =>
+      handleOpenPlanDialog(PREMIUM_FEATURE.JOB_TRACKER),
     onUpdateApplication: handleUpdateJobApplication,
     onDeleteApplication: handleDeleteJobApplication,
     onOpenAuth: handleOpenAuthDialog,

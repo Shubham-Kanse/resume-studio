@@ -2,7 +2,11 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 import { mergeJobApplications } from "@/lib/job-applications-local"
-import { buildResumeStoragePath, isDataUrl } from "@/lib/resume-storage"
+import {
+  buildResumeStoragePath,
+  isDataUrl,
+  uploadResumeDataUrl,
+} from "@/lib/resume-storage"
 import { mergeTrackedRuns } from "@/lib/tracked-runs-local"
 
 test("resume storage path is scoped by user and sanitizes the file name", () => {
@@ -25,6 +29,50 @@ test("data URL detection ignores regular signed URLs", () => {
     ),
     false
   )
+})
+
+test("uploadResumeDataUrl accepts base64 data URLs without fetch", async () => {
+  let uploadedBlob: unknown = null
+  let uploadedPath = ""
+  let uploadedContentType = ""
+
+  const supabase = {
+    storage: {
+      from() {
+        return {
+          upload: async (
+            path: string,
+            blob: Blob,
+            options: { contentType?: string; upsert?: boolean }
+          ) => {
+            uploadedPath = path
+            uploadedBlob = blob
+            uploadedContentType = options.contentType || ""
+            return { error: null }
+          },
+          remove: async () => ({ error: null }),
+        }
+      },
+    },
+  }
+
+  await uploadResumeDataUrl({
+    supabase: supabase as never,
+    userId: "user-123",
+    recordId: "record-456",
+    kind: "tracked-runs",
+    fileName: "generated-resume.pdf",
+    mimeType: "application/pdf",
+    dataUrl: "data:application/pdf;base64,SGVsbG8=",
+  })
+
+  assert.equal(
+    uploadedPath,
+    "user-123/tracked-runs/record-456/generated-resume.pdf"
+  )
+  assert.equal(uploadedContentType, "application/pdf")
+  assert.ok(uploadedBlob instanceof Blob)
+  assert.equal(await new Response(uploadedBlob).text(), "Hello")
 })
 
 test("tracked run merge prefers the remote record on equal timestamps", () => {

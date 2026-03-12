@@ -12,7 +12,7 @@ import {
 import {
   Target,
   CheckCircle2,
-  Crown,
+  Gem,
   XCircle,
   ChevronDown,
   ChevronUp,
@@ -1030,7 +1030,7 @@ function ATSScorePanelComponent({
             className="h-9 rounded-full border-sky-400/25 bg-sky-500/10 px-3 text-xs whitespace-nowrap text-sky-100 hover:bg-sky-500/15 sm:px-4 sm:text-sm"
             onClick={onUpgradeToPro}
           >
-            <Crown className="h-4 w-4" />
+            <Gem className="h-4 w-4" />
             AI Insights
           </Button>
         )}
@@ -1185,7 +1185,7 @@ function ATSScorePanelComponent({
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <h3 className="flex items-center gap-2 text-sm font-semibold text-sky-100">
-                      <Crown className="h-4 w-4" />
+                      <Gem className="h-4 w-4" />
                       Get AI ATS Insights with Pro
                     </h3>
                     <p className="mt-1 text-xs leading-5 text-sky-100/75">

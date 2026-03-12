@@ -2,6 +2,8 @@ import { AppError } from "@/lib/errors"
 import { createGroqChatCompletion, getGroqModel } from "@/lib/groq"
 import { compileLatexDocument } from "@/lib/latex-compiler"
 import { validateLaTeX } from "@/lib/latex-editor"
+import { latexToPlainText } from "@/lib/latex-text"
+import { scoreResumeDeterministically } from "@/lib/local-ats-scorer"
 
 type LatexIssueSeverity = "high" | "medium" | "low"
 type LatexIssueType =
@@ -28,6 +30,18 @@ interface LatexCompileResult {
   summary: string
   logExcerpt: string | null
   issues: LatexVerificationIssue[]
+}
+
+interface LatexAtsOptimizationResult {
+  pass: boolean
+  summary: string
+  issues: LatexVerificationIssue[]
+  scores: {
+    overall: number
+    parseability: number
+    keywordMatch: number | null
+  }
+  missingCriticalTerms: string[]
 }
 
 interface VerifyAndRepairLatexInput {
@@ -72,14 +86,39 @@ export function normalizeGeneratedLatex(text: string): string {
   return start > 0 ? stripped.slice(start) : stripped
 }
 
-function sanitizePlainTextLatex(latex: string): string {
+function shouldSanitizePlainTextLatex(latex: string): boolean {
+  const trimmed = latex.trim()
+  if (!trimmed) return false
+
+  // Full LaTeX documents already contain structure that is safer to validate
+  // and repair than to mutate heuristically.
+  if (
+    trimmed.includes("\\documentclass") ||
+    trimmed.includes("\\begin{document}") ||
+    trimmed.includes("\\end{document}")
+  ) {
+    return false
+  }
+
+  const commandMatches = trimmed.match(/\\[A-Za-z@]+/g) || []
+  return commandMatches.length < 8
+}
+
+export function sanitizePlainTextLatex(latex: string): string {
+  if (!shouldSanitizePlainTextLatex(latex)) {
+    return latex
+  }
+
   const lines = latex.split("\n")
   const envStack: string[] = []
 
   return lines
     .map((line) => {
       const escapedLine = line.replace(/\\%/g, "__ESCAPED_PERCENT__")
-      const commentStart = escapedLine.indexOf("%")
+      const trimmedStart = escapedLine.trimStart()
+      const commentStart = trimmedStart.startsWith("%")
+        ? escapedLine.indexOf("%")
+        : -1
       const codePart =
         commentStart >= 0
           ? line.slice(0, commentStart).replace(/__ESCAPED_PERCENT__/g, "\\%")
@@ -130,6 +169,157 @@ export function buildLocalLatexVerification(
       : "Local LaTeX validation passed.",
     issues,
   }
+}
+
+export function buildAtsOptimizationVerification(
+  latex: string,
+  jobDescription: string
+): LatexAtsOptimizationResult {
+  if (!jobDescription.trim()) {
+    return {
+      pass: true,
+      summary:
+        "ATS optimization check skipped because no job description was provided.",
+      issues: [],
+      scores: {
+        overall: 0,
+        parseability: 0,
+        keywordMatch: null,
+      },
+      missingCriticalTerms: [],
+    }
+  }
+
+  const resumeText = latexToPlainText(latex)
+  const score = scoreResumeDeterministically({
+    resumeContent: resumeText,
+    jobDescription,
+  })
+
+  const keywordMatch = score.categoryScores.keywordMatch?.score ?? null
+  const missingCriticalTerms =
+    score.evidenceSummary?.missingKeywords.slice(0, 8) ??
+    score.keywordAnalysis?.missingByCategory.required.slice(0, 8) ??
+    []
+  const issues: LatexVerificationIssue[] = []
+
+  if (score.overallScore < 78) {
+    issues.push({
+      type: "keyword_alignment",
+      severity: "high",
+      message: `Deterministic ATS overall score is ${score.overallScore}/100. Strengthen summary, skills, and recent experience alignment to the target role.`,
+    })
+  } else if (score.overallScore < 86) {
+    issues.push({
+      type: "keyword_alignment",
+      severity: "medium",
+      message: `Deterministic ATS overall score is ${score.overallScore}/100. There is still room to improve role alignment and evidence placement.`,
+    })
+  }
+
+  if (score.atsCompatibility.parseability < 82) {
+    issues.push({
+      type: "format_violation",
+      severity: "high",
+      message: `Deterministic parseability score is ${score.atsCompatibility.parseability}/100. The generated resume may not be sufficiently ATS-safe when reduced to plain text.`,
+    })
+  } else if (score.atsCompatibility.parseability < 90) {
+    issues.push({
+      type: "format_violation",
+      severity: "medium",
+      message: `Deterministic parseability score is ${score.atsCompatibility.parseability}/100. Tighten section structure, keyword placement, and extraction clarity.`,
+    })
+  }
+
+  if (keywordMatch !== null && keywordMatch < 76) {
+    issues.push({
+      type: "keyword_alignment",
+      severity: "high",
+      message: `Deterministic keyword-match score is ${keywordMatch}/100. The draft is missing too much supported job terminology.`,
+    })
+  } else if (keywordMatch !== null && keywordMatch < 88) {
+    issues.push({
+      type: "keyword_alignment",
+      severity: "medium",
+      message: `Deterministic keyword-match score is ${keywordMatch}/100. Increase supported exact-match terminology in summary, skills, and recent bullets.`,
+    })
+  }
+
+  if (missingCriticalTerms.length >= 5) {
+    issues.push({
+      type: "keyword_alignment",
+      severity: "high",
+      message: `Supported critical terms are still missing: ${missingCriticalTerms.join(", ")}.`,
+    })
+  } else if (missingCriticalTerms.length > 0) {
+    issues.push({
+      type: "keyword_alignment",
+      severity: "medium",
+      message: `Add more supported critical terms where accurate: ${missingCriticalTerms.join(", ")}.`,
+    })
+  }
+
+  for (const issue of score.atsCompatibility.issues.slice(0, 3)) {
+    issues.push({
+      type: "format_violation",
+      severity: "medium",
+      message: issue,
+    })
+  }
+
+  const requiredMissing = score.evidence.missingSections.slice(0, 3)
+  if (requiredMissing.length > 0) {
+    issues.push({
+      type: "format_violation",
+      severity: "high",
+      message: `Required ATS sections are missing or not extractable: ${requiredMissing.join(", ")}.`,
+    })
+  }
+
+  return {
+    pass: !issues.some((issue) => issue.severity === "high"),
+    summary: `Deterministic ATS check: overall ${score.overallScore}/100, parseability ${score.atsCompatibility.parseability}/100${keywordMatch !== null ? `, keyword match ${keywordMatch}/100` : ""}.`,
+    issues,
+    scores: {
+      overall: score.overallScore,
+      parseability: score.atsCompatibility.parseability,
+      keywordMatch,
+    },
+    missingCriticalTerms,
+  }
+}
+
+export function buildRepairVerificationSummary(params: {
+  repairedPass: boolean
+  repairedValidation: LatexVerificationResult
+  repairedCompile: LatexCompileResult | null
+  repairedAts: LatexAtsOptimizationResult | null
+}): string {
+  const { repairedPass, repairedValidation, repairedCompile, repairedAts } =
+    params
+
+  if (repairedPass) {
+    return (
+      repairedCompile?.summary ||
+      repairedAts?.summary ||
+      repairedValidation.summary ||
+      "Repair attempt completed."
+    )
+  }
+
+  if (!repairedValidation.pass) {
+    return repairedValidation.summary || "Repair attempt failed validation."
+  }
+
+  if (repairedCompile && !repairedCompile.pass) {
+    return repairedCompile.summary || "Repair attempt failed validation."
+  }
+
+  if (repairedAts && !repairedAts.pass) {
+    return repairedAts.summary || "Repair attempt failed validation."
+  }
+
+  return "Repair attempt failed validation."
 }
 
 async function compileLatexForDiagnostics(
@@ -193,7 +383,8 @@ async function compileLatexForDiagnostics(
 
 function buildVerificationPrompt(
   input: VerifyAndRepairLatexInput,
-  localResult: LatexVerificationResult
+  localResult: LatexVerificationResult,
+  atsResult?: LatexAtsOptimizationResult
 ): string {
   return `Review this generated LaTeX resume against the source resume and job description.
 
@@ -219,7 +410,14 @@ JSON schema:
 Local validation summary:
 ${JSON.stringify(localResult, null, 2)}
 
-## JOB DESCRIPTION
+${
+  atsResult
+    ? `Deterministic ATS summary:
+${JSON.stringify(atsResult, null, 2)}
+
+`
+    : ""
+}## JOB DESCRIPTION
 ${input.jobDescription}
 
 ## SOURCE RESUME
@@ -232,7 +430,8 @@ ${input.latex}`
 function buildRepairPrompt(
   input: VerifyAndRepairLatexInput,
   verification: LatexVerificationResult,
-  compileResult?: LatexCompileResult
+  compileResult?: LatexCompileResult,
+  atsResult?: LatexAtsOptimizationResult
 ): string {
   return `Repair this generated LaTeX resume.
 
@@ -253,7 +452,14 @@ ${compileResult.logExcerpt}
 
 `
     : ""
-}Focus on fixing any real pdflatex compilation errors first, then formatting or alignment issues.
+}${
+    atsResult
+      ? `Deterministic ATS diagnostics:
+${JSON.stringify(atsResult, null, 2)}
+
+`
+      : ""
+  }Focus on fixing any real pdflatex compilation errors first, then ATS parseability and keyword alignment issues.
 
 ## JOB DESCRIPTION
 ${input.jobDescription}
@@ -267,7 +473,8 @@ ${input.latex}`
 
 async function verifyLatexWithGroq(
   input: VerifyAndRepairLatexInput,
-  localResult: LatexVerificationResult
+  localResult: LatexVerificationResult,
+  atsResult?: LatexAtsOptimizationResult
 ): Promise<LatexVerificationResult> {
   const data = await createGroqChatCompletion({
     model: getGroqModel(),
@@ -279,7 +486,7 @@ async function verifyLatexWithGroq(
       },
       {
         role: "user",
-        content: buildVerificationPrompt(input, localResult),
+        content: buildVerificationPrompt(input, localResult, atsResult),
       },
     ],
     temperature: 0.1,
@@ -314,7 +521,8 @@ async function verifyLatexWithGroq(
 async function repairLatexWithGroq(
   input: VerifyAndRepairLatexInput,
   verification: LatexVerificationResult,
-  compileResult?: LatexCompileResult
+  compileResult?: LatexCompileResult,
+  atsResult?: LatexAtsOptimizationResult
 ): Promise<string> {
   const data = await createGroqChatCompletion({
     model: getGroqModel(),
@@ -326,7 +534,12 @@ async function repairLatexWithGroq(
       },
       {
         role: "user",
-        content: buildRepairPrompt(input, verification, compileResult),
+        content: buildRepairPrompt(
+          input,
+          verification,
+          compileResult,
+          atsResult
+        ),
       },
     ],
     temperature: 0.1,
@@ -350,6 +563,23 @@ export async function verifyAndRepairLatex(
   const localResult = buildLocalLatexVerification(normalized)
   let combinedResult = localResult
   let compileResult: LatexCompileResult | null = null
+  let atsResult: LatexAtsOptimizationResult | null = null
+
+  try {
+    atsResult = buildAtsOptimizationVerification(
+      normalized,
+      input.jobDescription
+    )
+    if (!atsResult.pass) {
+      combinedResult = {
+        pass: false,
+        summary: atsResult.summary,
+        issues: [...combinedResult.issues, ...atsResult.issues],
+      }
+    }
+  } catch {
+    atsResult = null
+  }
 
   try {
     const modelResult = await verifyLatexWithGroq(
@@ -357,7 +587,8 @@ export async function verifyAndRepairLatex(
         ...input,
         latex: normalized,
       },
-      localResult
+      localResult,
+      atsResult || undefined
     )
 
     combinedResult = {
@@ -393,33 +624,38 @@ export async function verifyAndRepairLatex(
         latex: normalized,
       },
       combinedResult,
-      compileResult || undefined
+      compileResult || undefined,
+      atsResult || undefined
     )
 
     const repairedValidation = buildLocalLatexVerification(repairedLatex)
+    const repairedAts = input.jobDescription.trim()
+      ? buildAtsOptimizationVerification(repairedLatex, input.jobDescription)
+      : null
     const repairedCompile = await compileLatexForDiagnostics(
       repairedLatex
     ).catch(() => null)
     const repairedIssues = [
       ...repairedValidation.issues,
+      ...(repairedAts?.issues || []),
       ...(repairedCompile && !repairedCompile.pass
         ? repairedCompile.issues
         : []),
     ]
     const repairedPass =
-      repairedValidation.pass && (repairedCompile?.pass ?? true)
+      repairedValidation.pass &&
+      (repairedCompile?.pass ?? true) &&
+      (repairedAts?.pass ?? true)
     return {
       latex: repairedLatex,
       verification: {
         pass: repairedPass,
-        summary: repairedPass
-          ? repairedCompile?.summary ||
-            repairedValidation.summary ||
-            "Repair attempt completed."
-          : (!repairedValidation.pass
-              ? repairedValidation.summary
-              : repairedCompile?.summary) ||
-            "Repair attempt failed validation.",
+        summary: buildRepairVerificationSummary({
+          repairedPass,
+          repairedValidation,
+          repairedCompile,
+          repairedAts,
+        }),
         issues: repairedIssues,
       },
       repaired: true,

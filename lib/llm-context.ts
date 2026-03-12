@@ -252,7 +252,8 @@ ${rendered}`
 export function buildUserPrompt(
   jd: string,
   resume: string,
-  additionalInstructions?: string
+  additionalInstructions?: string,
+  tailoringBlueprint?: string
 ): string {
   let prompt = `Generate an ATS-optimized LaTeX resume from the provided job description and candidate background.
 
@@ -285,6 +286,15 @@ ${jd}
 ## CANDIDATE BACKGROUND
 ${resume}`
 
+  if (tailoringBlueprint?.trim()) {
+    prompt += `
+
+## TAILORING BLUEPRINT
+${tailoringBlueprint.trim()}
+
+Use this blueprint as the execution plan for section ordering, keyword coverage, and emphasis decisions.`
+  }
+
   if (additionalInstructions?.trim()) {
     prompt += `
 
@@ -300,6 +310,72 @@ ${additionalInstructions.trim()}`
 3. Do not wrap the response in code fences
 4. Do not include explanations before or after the LaTeX
 5. Omit unsupported claims instead of inventing them`
+
+  return prompt
+}
+
+export function buildTailoringPlanPrompt(
+  jd: string,
+  resume: string,
+  additionalInstructions?: string
+): string {
+  let prompt = `Analyze the job description and candidate background, then produce a structured tailoring plan for a high-performing ATS-safe resume.
+
+Return valid JSON only.
+
+Planning goals:
+- prioritize the job's real screening requirements
+- map only supported evidence from the candidate background
+- identify the strongest keywords to surface in summary, skills, and recent experience
+- avoid unsupported tools, metrics, certifications, or responsibilities
+
+JSON schema:
+{
+  "targetRole": string,
+  "targetSeniority": string | null,
+  "priorityKeywords": string[],
+  "supportedKeywords": string[],
+  "unsupportedKeywords": string[],
+  "summaryStrategy": string[],
+  "skillsBuckets": [
+    {
+      "category": string,
+      "keywords": string[]
+    }
+  ],
+  "experiencePriorities": [
+    {
+      "focusArea": string,
+      "evidence": string[],
+      "keywords": string[]
+    }
+  ],
+  "atsGuardrails": string[],
+  "deEmphasize": string[]
+}
+
+Constraints:
+- 8 to 15 priorityKeywords
+- 0 to 8 unsupportedKeywords
+- 3 to 6 summaryStrategy items
+- 3 to 7 skillsBuckets
+- 2 to 6 experiencePriorities
+- 3 to 6 atsGuardrails
+- 0 to 5 deEmphasize items
+- Keep every item concise and specific.
+
+## JOB DESCRIPTION
+${jd}
+
+## CANDIDATE BACKGROUND
+${resume}`
+
+  if (additionalInstructions?.trim()) {
+    prompt += `
+
+## ADDITIONAL INSTRUCTIONS
+${additionalInstructions.trim()}`
+  }
 
   return prompt
 }

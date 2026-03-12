@@ -24,6 +24,21 @@ import {
 export const runtime = "nodejs"
 export const maxDuration = 60
 
+function hasBlockingLatexValidationIssue(
+  issues:
+    | Array<{
+        type?: string
+        severity?: string
+      }>
+    | undefined
+) {
+  return Boolean(
+    issues?.some(
+      (issue) => issue?.severity === "high" && issue?.type === "latex_error"
+    )
+  )
+}
+
 export async function POST(request: NextRequest) {
   const csrfError = verifyCsrfRequest(request)
   if (csrfError) return csrfError
@@ -61,7 +76,7 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await generateResume(parsed.data)
-    if (!data.validation.pass) {
+    if (hasBlockingLatexValidationIssue(data.validation.issues)) {
       return customError(
         data.validation.summary || "Generated LaTeX did not pass validation.",
         {

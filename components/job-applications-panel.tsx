@@ -15,7 +15,6 @@ import {
   Sparkles,
   Trash2,
   Upload,
-  UserRound,
   X,
 } from "lucide-react"
 
@@ -33,12 +32,16 @@ import { cn } from "@/lib/utils"
 interface JobApplicationsPanelProps {
   authAvailable: boolean
   isAuthenticated: boolean
+  canTrackJobs: boolean
+  canEditJobs: boolean
   storageNotice: string | null
   applications: JobApplicationRecord[]
   applicationsLoading: boolean
   savingApplicationId: string | null
   deletingApplicationId: string | null
   onAddApplication: () => void
+  onUpgradeToPro: () => void
+  onLockedInteraction: () => void
   onUpdateApplication: (
     applicationId: string,
     patch: Partial<
@@ -108,12 +111,16 @@ function readFileAsDataUrl(file: File): Promise<string> {
 function JobApplicationsPanelComponent({
   authAvailable,
   isAuthenticated,
+  canTrackJobs,
+  canEditJobs,
   storageNotice,
   applications,
   applicationsLoading,
   savingApplicationId,
   deletingApplicationId,
   onAddApplication,
+  onUpgradeToPro,
+  onLockedInteraction,
   onUpdateApplication,
   onDeleteApplication,
   onOpenAuth,
@@ -144,6 +151,27 @@ function JobApplicationsPanelComponent({
   const [pendingDeleteApplicationId, setPendingDeleteApplicationId] = useState<
     string | null
   >(null)
+  const handleAddApplicationIntent = () => {
+    if (!isAuthenticated) {
+      onOpenAuth()
+      return
+    }
+
+    if (!canTrackJobs) {
+      onUpgradeToPro()
+      return
+    }
+
+    onAddApplication()
+  }
+  const handleLockedInteraction = () => {
+    if (!isAuthenticated) {
+      onOpenAuth()
+      return
+    }
+
+    onLockedInteraction()
+  }
 
   const filteredApplications = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase()
@@ -231,6 +259,12 @@ function JobApplicationsPanelComponent({
     applicationId: string,
     event: ChangeEvent<HTMLInputElement>
   ) => {
+    if (!canEditJobs) {
+      event.target.value = ""
+      handleLockedInteraction()
+      return
+    }
+
     const file = event.target.files?.[0]
     event.target.value = ""
 
@@ -257,57 +291,17 @@ function JobApplicationsPanelComponent({
   }
 
   const handleRemoveResume = (applicationId: string) => {
+    if (!canEditJobs) {
+      handleLockedInteraction()
+      return
+    }
+
     setUploadError(null)
     onUpdateApplication(applicationId, {
       resume_file_name: "",
       resume_file_mime_type: "",
       resume_file_data_url: "",
     })
-  }
-
-  if (!isAuthenticated) {
-    return (
-      <div className="flex h-full min-h-0 flex-col">
-        <div className="mb-4">
-          <h2 className="text-xl font-bold text-foreground">
-            Job Application Tracker
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Track the companies you have applied to, their current stage, and
-            the exact resume file you used.
-          </p>
-        </div>
-
-        <div className="flex flex-1 items-center justify-center">
-          <div className="w-full max-w-2xl rounded-[28px] border border-white/8 bg-black/12 p-8 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-white/10 bg-white/5">
-              <UserRound className="h-6 w-6 text-primary" />
-            </div>
-            <h3 className="mt-5 text-2xl font-semibold text-foreground">
-              Sign in to use the tracker
-            </h3>
-            <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-muted-foreground">
-              Resume generation and ATS checks can stay in guest mode. The job
-              application tracker is tied to your account so your application
-              pipeline stays private and persistent.
-            </p>
-            <Button
-              type="button"
-              variant="cool"
-              size="lg"
-              className="mt-6 rounded-2xl px-8"
-              onClick={onOpenAuth}
-              disabled={!authAvailable}
-            >
-              <Sparkles className="h-4 w-4" />
-              {authAvailable
-                ? "Continue with Google"
-                : "Supabase not configured"}
-            </Button>
-          </div>
-        </div>
-      </div>
-    )
   }
 
   return (
@@ -318,11 +312,14 @@ function JobApplicationsPanelComponent({
             Job Application Tracker
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Keep your applications, stages, links, and resume files in one
-            editable workspace.
+            {isAuthenticated
+              ? canTrackJobs
+                ? "Keep your applications, stages, links, and resume files in one editable workspace."
+                : "Preview the tracker layout now. Get Pro to track your jobs in one place."
+              : "Preview the tracker layout now. Sign in when you want to save and manage applications."}
           </p>
         </div>
-        {savingApplicationId ? (
+        {isAuthenticated && savingApplicationId ? (
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-1.5">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -421,7 +418,9 @@ function JobApplicationsPanelComponent({
                 All applications
               </div>
               <p className="mt-2 text-sm text-muted-foreground">
-                A clean editable grid. Changes are saved automatically.
+                {canEditJobs
+                  ? "A clean editable grid. Changes are saved automatically."
+                  : "A clean tracker preview. Get Pro to add, edit, and manage applications here."}
               </p>
             </div>
             <Button
@@ -429,10 +428,21 @@ function JobApplicationsPanelComponent({
               variant="cool"
               size="sm"
               className="rounded-full px-4"
-              onClick={onAddApplication}
+              onClick={handleAddApplicationIntent}
+              disabled={!authAvailable}
             >
-              <Plus className="h-4 w-4" />
-              New application
+              {isAuthenticated ? (
+                <Plus className="h-4 w-4" />
+              ) : (
+                <Sparkles className="h-4 w-4" />
+              )}
+              {isAuthenticated
+                ? canTrackJobs
+                  ? "New application"
+                  : "Get Pro to add"
+                : authAvailable
+                  ? "Sign in to add"
+                  : "Supabase not configured"}
             </Button>
           </div>
 
@@ -537,17 +547,31 @@ function JobApplicationsPanelComponent({
                   No applications yet
                 </h3>
                 <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-                  Start with your first row and keep the company, role, date,
-                  and resume file attached to one place.
+                  {isAuthenticated
+                    ? canTrackJobs
+                      ? "Start with your first row and keep the company, role, date, and resume file attached to one place."
+                      : "Get Pro to track your jobs in one place and keep every company, role, date, and resume file together."
+                    : "Browse the tracker layout now. Sign in when you are ready to add and save your first application."}
                 </p>
                 <Button
                   type="button"
                   variant="outline"
                   className="mt-5 rounded-full px-5"
-                  onClick={onAddApplication}
+                  onClick={handleAddApplicationIntent}
+                  disabled={!authAvailable}
                 >
-                  <Plus className="h-4 w-4" />
-                  Add first application
+                  {isAuthenticated ? (
+                    <Plus className="h-4 w-4" />
+                  ) : (
+                    <Sparkles className="h-4 w-4" />
+                  )}
+                  {isAuthenticated
+                    ? canTrackJobs
+                      ? "Add first application"
+                      : "Get Pro to track your jobs"
+                    : authAvailable
+                      ? "Sign in to add your first application"
+                      : "Supabase not configured"}
                 </Button>
               </div>
             </div>
@@ -619,6 +643,7 @@ function JobApplicationsPanelComponent({
                             <div className="relative w-full min-w-0">
                               <select
                                 value={application.stage}
+                                disabled={!canEditJobs}
                                 onChange={(event) =>
                                   onUpdateApplication(application.id, {
                                     stage: event.target
@@ -627,8 +652,14 @@ function JobApplicationsPanelComponent({
                                 }
                                 className={cn(
                                   "h-9 w-full appearance-none bg-transparent px-0 pr-5 text-sm font-medium outline-none transition-colors",
+                                  !canEditJobs && "cursor-pointer",
                                   stageMeta[application.stage].textClassName
                                 )}
+                                onClick={() => {
+                                  if (!canEditJobs) {
+                                    handleLockedInteraction()
+                                  }
+                                }}
                               >
                                 {JOB_APPLICATION_STAGES.map((stage) => (
                                   <option
@@ -652,12 +683,21 @@ function JobApplicationsPanelComponent({
                             <input
                               type="text"
                               value={application.company}
+                              readOnly={!canEditJobs}
                               onChange={(event) =>
                                 onUpdateApplication(application.id, {
                                   company: event.target.value,
                                 })
                               }
-                              className="h-10 w-full min-w-0 bg-transparent text-sm font-medium text-foreground outline-none placeholder:text-muted-foreground focus:bg-transparent"
+                              onClick={() => {
+                                if (!canEditJobs) {
+                                  handleLockedInteraction()
+                                }
+                              }}
+                              className={cn(
+                                "h-10 w-full min-w-0 bg-transparent text-sm font-medium text-foreground outline-none placeholder:text-muted-foreground focus:bg-transparent",
+                                !canEditJobs && "cursor-pointer"
+                              )}
                               placeholder="Company"
                             />
                           </td>
@@ -665,12 +705,21 @@ function JobApplicationsPanelComponent({
                             <input
                               type="text"
                               value={application.position ?? ""}
+                              readOnly={!canEditJobs}
                               onChange={(event) =>
                                 onUpdateApplication(application.id, {
                                   position: event.target.value,
                                 })
                               }
-                              className="h-10 w-full min-w-0 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground focus:bg-transparent"
+                              onClick={() => {
+                                if (!canEditJobs) {
+                                  handleLockedInteraction()
+                                }
+                              }}
+                              className={cn(
+                                "h-10 w-full min-w-0 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground focus:bg-transparent",
+                                !canEditJobs && "cursor-pointer"
+                              )}
                               placeholder="Role / position"
                             />
                           </td>
@@ -679,12 +728,21 @@ function JobApplicationsPanelComponent({
                               <input
                                 type="url"
                                 value={application.job_link ?? ""}
+                                readOnly={!canEditJobs}
                                 onChange={(event) =>
                                   onUpdateApplication(application.id, {
                                     job_link: event.target.value,
                                   })
                                 }
-                                className="h-10 w-full min-w-0 bg-transparent pr-8 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:bg-transparent"
+                                onClick={() => {
+                                  if (!canEditJobs) {
+                                    handleLockedInteraction()
+                                  }
+                                }}
+                                className={cn(
+                                  "h-10 w-full min-w-0 bg-transparent pr-8 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:bg-transparent",
+                                  !canEditJobs && "cursor-pointer"
+                                )}
                                 placeholder="https://company.com/jobs/..."
                               />
                               {application.job_link ? (
@@ -703,11 +761,24 @@ function JobApplicationsPanelComponent({
                           <td className="border-b border-white/8 px-4 py-2.5">
                             <div className="flex h-10 items-center gap-1.5">
                               <div className="group/file relative">
-                                <label className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg border border-dashed border-white/10 bg-transparent text-sm text-foreground transition-colors hover:border-primary/30 hover:bg-white/[0.03]">
+                                <label
+                                  className={cn(
+                                    "flex h-9 w-9 items-center justify-center rounded-lg border border-dashed border-white/10 bg-transparent text-sm text-foreground transition-colors",
+                                    canEditJobs
+                                      ? "cursor-pointer hover:border-primary/30 hover:bg-white/[0.03]"
+                                      : "cursor-pointer"
+                                  )}
+                                  onClick={() => {
+                                    if (!canEditJobs) {
+                                      handleLockedInteraction()
+                                    }
+                                  }}
+                                >
                                   <input
                                     type="file"
                                     accept=".pdf,.doc,.docx,.txt,.md,.json,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,application/json"
                                     className="hidden"
+                                    disabled={!canEditJobs}
                                     onChange={(event) =>
                                       void handleResumeUpload(
                                         application.id,
@@ -755,11 +826,14 @@ function JobApplicationsPanelComponent({
                                 onClick={() =>
                                   handleRemoveResume(application.id)
                                 }
+                                disabled={!canEditJobs}
                                 className={cn(
                                   "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-transparent bg-transparent text-white/28 transition-colors",
-                                  application.resume_file_name
+                                  application.resume_file_name && canEditJobs
                                     ? "hover:border-white/10 hover:bg-white/[0.04] hover:text-foreground"
-                                    : "pointer-events-none opacity-0"
+                                    : application.resume_file_name
+                                      ? "opacity-100"
+                                      : "pointer-events-none opacity-0"
                                 )}
                                 aria-label="Remove uploaded resume"
                               >
@@ -772,6 +846,7 @@ function JobApplicationsPanelComponent({
                               <input
                                 type="text"
                                 value={application.applied_on ?? ""}
+                                readOnly={!canEditJobs}
                                 onChange={(event) =>
                                   onUpdateApplication(application.id, {
                                     applied_on:
@@ -783,8 +858,14 @@ function JobApplicationsPanelComponent({
                                 inputMode="numeric"
                                 maxLength={8}
                                 pattern="^(0[1-9]|[12][0-9]|3[01])/(0[1-9]|1[0-2])/\\d{2}$"
+                                onClick={() => {
+                                  if (!canEditJobs) {
+                                    handleLockedInteraction()
+                                  }
+                                }}
                                 className={cn(
                                   "h-10 w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground focus:bg-transparent",
+                                  !canEditJobs && "cursor-pointer",
                                   application.applied_on &&
                                     !isJobApplicationDisplayDate(
                                       application.applied_on
@@ -815,6 +896,10 @@ function JobApplicationsPanelComponent({
                                   deletingApplicationId === application.id
                                 }
                                 onClick={() => {
+                                  if (!canEditJobs) {
+                                    handleLockedInteraction()
+                                    return
+                                  }
                                   if (!isPendingDelete) {
                                     setPendingDeleteApplicationId(
                                       application.id
