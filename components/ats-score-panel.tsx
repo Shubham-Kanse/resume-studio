@@ -27,6 +27,8 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 
 interface ATSScorePanelProps {
   scoreData: ATSScoreResponse | null
+  runtimeSpellMetrics: RuntimeSpellCheckMetrics | null
+  nlpAnalysis: ATSNLPAnalysis | null
   resumeContent: string
   jobDescription: string
   resumeFileName: string
@@ -43,6 +45,8 @@ interface ATSScorePanelProps {
   onResumeFileDataUrlChange: (value: string) => void
   onResumeArtifactsChange: (value: DocumentArtifacts | null) => void
   onGetATSScore: () => void
+  onRuntimeSpellMetricsChange: (value: RuntimeSpellCheckMetrics | null) => void
+  onNlpAnalysisChange: (value: ATSNLPAnalysis | null) => void
 }
 
 const ATS_LOADING_STEP_DURATION_MS = 880
@@ -151,6 +155,8 @@ function ATSLoadingPanel({
 
 function ATSScorePanelComponent({
   scoreData,
+  runtimeSpellMetrics,
+  nlpAnalysis,
   resumeContent,
   jobDescription,
   resumeFileName,
@@ -167,14 +173,13 @@ function ATSScorePanelComponent({
   onResumeFileDataUrlChange,
   onResumeArtifactsChange,
   onGetATSScore,
+  onRuntimeSpellMetricsChange,
+  onNlpAnalysisChange,
 }: ATSScorePanelProps) {
   const { extractResume } = useDocumentActions()
   const [activeSection, setActiveSection] =
     useState<ATSPanelSectionId>("overview")
   const [isScoreVisible, setIsScoreVisible] = useState(false)
-  const [runtimeSpellMetrics, setRuntimeSpellMetrics] =
-    useState<RuntimeSpellCheckMetrics | null>(null)
-  const [nlpAnalysis, setNlpAnalysis] = useState<ATSNLPAnalysis | null>(null)
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
   const [isExtracting, setIsExtracting] = useState(false)
   const [extractionError, setExtractionError] = useState<string | null>(null)
@@ -222,10 +227,12 @@ function ATSScorePanelComponent({
 
   useEffect(() => {
     if (!scoreData || !resumeContent.trim()) {
-      setRuntimeSpellMetrics(null)
+      onRuntimeSpellMetricsChange(null)
       lastSpellRequestKeyRef.current = null
       return
     }
+
+    if (runtimeSpellMetrics) return
 
     const requestKey = JSON.stringify({
       content: resumeContent,
@@ -253,11 +260,11 @@ function ATSScorePanelComponent({
         runtimeSpellMetricsCache.set(requestKey, pendingRequest)
         const data = await pendingRequest
         if (!cancelled) {
-          setRuntimeSpellMetrics(data)
+          onRuntimeSpellMetricsChange(data)
         }
       } catch {
         if (!cancelled) {
-          setRuntimeSpellMetrics(null)
+          onRuntimeSpellMetricsChange(null)
         }
       }
     }
@@ -267,14 +274,21 @@ function ATSScorePanelComponent({
     return () => {
       cancelled = true
     }
-  }, [resumeContent, scoreData])
+  }, [
+    onRuntimeSpellMetricsChange,
+    resumeContent,
+    runtimeSpellMetrics,
+    scoreData,
+  ])
 
   useEffect(() => {
     if (!scoreData || !resumeContent.trim()) {
-      setNlpAnalysis(null)
+      onNlpAnalysisChange(null)
       lastNlpRequestKeyRef.current = null
       return
     }
+
+    if (nlpAnalysis) return
 
     const requestKey = JSON.stringify({
       resumeContent,
@@ -300,6 +314,7 @@ function ATSScorePanelComponent({
             })
             .catch(() => null)
 
+        nlpAnalysisCache.set(requestKey, pendingRequest)
         const data = await pendingRequest
         if (data) {
           nlpAnalysisCache.set(requestKey, Promise.resolve(data))
@@ -307,12 +322,12 @@ function ATSScorePanelComponent({
           nlpAnalysisCache.delete(requestKey)
         }
         if (!cancelled) {
-          setNlpAnalysis(data)
+          onNlpAnalysisChange(data)
         }
       } catch {
         nlpAnalysisCache.delete(requestKey)
         if (!cancelled) {
-          setNlpAnalysis(null)
+          onNlpAnalysisChange(null)
         }
       }
     }
@@ -322,7 +337,7 @@ function ATSScorePanelComponent({
     return () => {
       cancelled = true
     }
-  }, [resumeContent, scoreData])
+  }, [nlpAnalysis, onNlpAnalysisChange, resumeContent, scoreData])
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -621,8 +636,15 @@ function ATSScorePanelComponent({
                             nlpAnalysis
                           )
                         : null
-                      const navScoreClass =
-                        navScore !== null && navScore >= 9
+                      const isSpellCheck = item.id === "spell-check"
+                      const navBadge = isSpellCheck
+                        ? "!"
+                        : navScore !== null
+                          ? String(navScore)
+                          : null
+                      const navScoreClass = isSpellCheck
+                        ? "text-amber-500"
+                        : navScore !== null && navScore >= 9
                           ? isActive
                             ? "text-green-500"
                             : "text-green-500"
@@ -648,14 +670,14 @@ function ATSScorePanelComponent({
                           )}
                         >
                           <span>{item.label}</span>
-                          {navScore !== null ? (
+                          {navBadge !== null ? (
                             <span
                               className={cn(
                                 "shrink-0 text-sm font-medium",
                                 navScoreClass
                               )}
                             >
-                              {navScore}
+                              {navBadge}
                             </span>
                           ) : null}
                         </button>

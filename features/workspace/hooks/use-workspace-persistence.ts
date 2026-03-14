@@ -16,6 +16,11 @@ import {
   removeLocalJobApplication,
 } from "@/lib/job-applications-local"
 import {
+  addPendingDeletionId,
+  loadPendingDeletionIds,
+  removePendingDeletionId,
+} from "@/lib/pending-deletions"
+import {
   isMissingJobApplicationsTable,
   isMissingTrackedRunsTable,
   normalizeJobApplication,
@@ -85,6 +90,54 @@ export function useWorkspacePersistence({
     string | null
   >(null)
 
+  const retryPendingTrackedRunDeletes = useCallback(
+    async (userId: string) => {
+      if (!supabase) return
+
+      const pendingIds = [...loadPendingDeletionIds(userId, "tracked-runs")]
+      if (pendingIds.length === 0) return
+
+      await Promise.all(
+        pendingIds.map(async (runId) => {
+          const { error } = await supabase
+            .from("tracked_runs")
+            .delete()
+            .eq("id", runId)
+            .eq("user_id", userId)
+
+          if (!error || isMissingTrackedRunsTable(error)) {
+            removePendingDeletionId(userId, "tracked-runs", runId)
+          }
+        })
+      )
+    },
+    [supabase]
+  )
+
+  const retryPendingJobApplicationDeletes = useCallback(
+    async (userId: string) => {
+      if (!supabase) return
+
+      const pendingIds = [...loadPendingDeletionIds(userId, "job-applications")]
+      if (pendingIds.length === 0) return
+
+      await Promise.all(
+        pendingIds.map(async (applicationId) => {
+          const { error } = await supabase
+            .from("job_applications")
+            .delete()
+            .eq("id", applicationId)
+            .eq("user_id", userId)
+
+          if (!error || isMissingJobApplicationsTable(error)) {
+            removePendingDeletionId(userId, "job-applications", applicationId)
+          }
+        })
+      )
+    },
+    [supabase]
+  )
+
   const upsertHistoryRecord = useCallback((record: TrackedRunRecord) => {
     setHistoryItems((prev) => {
       const next = [
@@ -99,10 +152,14 @@ export function useWorkspacePersistence({
   const loadHistory = useCallback(
     async (userId: string) => {
       const localHistory = loadLocalTrackedRuns(userId)
-      if (localHistory.length > 0) {
-        setHistoryItems(localHistory)
+      const pendingDeletedIds = loadPendingDeletionIds(userId, "tracked-runs")
+      const visibleLocalHistory = localHistory.filter(
+        (record) => !pendingDeletedIds.has(record.id)
+      )
+      if (visibleLocalHistory.length > 0) {
+        setHistoryItems(visibleLocalHistory)
         setSelectedHistoryRunId(
-          (current) => current ?? localHistory[0]?.id ?? null
+          (current) => current ?? visibleLocalHistory[0]?.id ?? null
         )
       }
 
@@ -134,21 +191,33 @@ export function useWorkspacePersistence({
         normalizeTrackedRun
       )
       const hydrated = await hydrateTrackedRunResumeUrls(supabase, normalized)
-      const merged = mergeTrackedRuns(hydrated, localHistory, HISTORY_LIMIT)
+      const merged = mergeTrackedRuns(
+        hydrated.filter((record) => !pendingDeletedIds.has(record.id)),
+        visibleLocalHistory,
+        HISTORY_LIMIT
+      )
       persistLocalTrackedRuns(userId, merged)
       setHistoryItems(merged)
       setSelectedHistoryRunId((current) => current ?? merged[0]?.id ?? null)
       setHistoryLoading(false)
       setStorageNotice(null)
+      void retryPendingTrackedRunDeletes(userId)
     },
-    [setAuthMessage, supabase]
+    [retryPendingTrackedRunDeletes, setAuthMessage, supabase]
   )
 
   const loadJobApplications = useCallback(
     async (userId: string) => {
       const localApplications = loadLocalJobApplications(userId)
-      if (localApplications.length > 0) {
-        setJobApplications(localApplications)
+      const pendingDeletedIds = loadPendingDeletionIds(
+        userId,
+        "job-applications"
+      )
+      const visibleLocalApplications = localApplications.filter(
+        (record) => !pendingDeletedIds.has(record.id)
+      )
+      if (visibleLocalApplications.length > 0) {
+        setJobApplications(visibleLocalApplications)
       } else {
         setJobApplications([])
       }
@@ -186,13 +255,17 @@ export function useWorkspacePersistence({
         supabase,
         normalized
       )
-      const merged = mergeJobApplications(hydrated, localApplications)
+      const merged = mergeJobApplications(
+        hydrated.filter((record) => !pendingDeletedIds.has(record.id)),
+        visibleLocalApplications
+      )
       persistLocalJobApplications(userId, merged)
       setJobApplications(merged)
       setJobApplicationsNotice(null)
       setJobApplicationsLoading(false)
+      void retryPendingJobApplicationDeletes(userId)
     },
-    [setAuthMessage, supabase]
+    [retryPendingJobApplicationDeletes, setAuthMessage, supabase]
   )
 
   useEffect(() => {
@@ -240,6 +313,19 @@ export function useWorkspacePersistence({
       let resumeFilePath = initialFilePath
       let payloadFileDataUrl = initialFileDataUrl
 
+      const optimisticRecord: TrackedRunRecord = {
+        ...localRecord,
+        resume_file_path: initialFilePath,
+        resume_file_data_url: initialFileDataUrl,
+      }
+      const optimisticHistory = mergeTrackedRuns(
+        [optimisticRecord],
+        loadLocalTrackedRuns(session.user.id),
+        HISTORY_LIMIT
+      )
+      persistLocalTrackedRuns(session.user.id, optimisticHistory)
+      upsertHistoryRecord(optimisticRecord)
+
       if (supabase && initialFileDataUrl && isDataUrl(initialFileDataUrl)) {
         try {
           resumeFilePath = await uploadResumeDataUrl({
@@ -283,13 +369,6 @@ export function useWorkspacePersistence({
       }
 
       if (!supabase) {
-        const localOnlyHistory = mergeTrackedRuns(
-          [localRecord],
-          loadLocalTrackedRuns(session.user.id),
-          HISTORY_LIMIT
-        )
-        persistLocalTrackedRuns(session.user.id, localOnlyHistory)
-        upsertHistoryRecord(localRecord)
         return localRecord.id
       }
 
@@ -320,6 +399,7 @@ export function useWorkspacePersistence({
         const fallbackRecord = {
           ...localRecord,
           resume_file_path: resumeFilePath,
+          resume_file_data_url: resumeFilePath ? null : payloadFileDataUrl,
         }
         const localOnlyHistory = mergeTrackedRuns(
           [fallbackRecord],
@@ -409,6 +489,7 @@ export function useWorkspacePersistence({
 
       const deletedRun =
         historyItems.find((record) => record.id === runId) ?? null
+      addPendingDeletionId(session.user.id, "tracked-runs", runId)
       const localNext = removeLocalTrackedRun(session.user.id, runId)
       setHistoryItems(localNext)
       setSelectedHistoryRunId((current) => {
@@ -440,6 +521,8 @@ export function useWorkspacePersistence({
 
       if (deleteError && !isMissingTrackedRunsTable(deleteError)) {
         setAuthMessage(`Failed to remove saved history: ${deleteError.message}`)
+      } else {
+        removePendingDeletionId(session.user.id, "tracked-runs", runId)
       }
 
       setDeletingRunId(null)
@@ -668,6 +751,7 @@ export function useWorkspacePersistence({
 
       const deletedApplication =
         jobApplications.find((record) => record.id === applicationId) ?? null
+      addPendingDeletionId(session.user.id, "job-applications", applicationId)
       const localNext = removeLocalJobApplication(
         session.user.id,
         applicationId
@@ -699,6 +783,11 @@ export function useWorkspacePersistence({
       if (deleteError) {
         if (isMissingJobApplicationsTable(deleteError)) {
           setJobApplicationsNotice(JOB_APPLICATIONS_STORAGE_NOTICE)
+          removePendingDeletionId(
+            session.user.id,
+            "job-applications",
+            applicationId
+          )
         } else {
           setAuthMessage(
             `Failed to remove job application: ${deleteError.message}`
@@ -706,6 +795,11 @@ export function useWorkspacePersistence({
         }
       } else {
         setJobApplicationsNotice(null)
+        removePendingDeletionId(
+          session.user.id,
+          "job-applications",
+          applicationId
+        )
       }
 
       setDeletingJobApplicationId(null)

@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react"
 
 import { APP_MODE, type AppMode } from "@/features/workspace/workspace-mode"
+import type { ATSNLPAnalysis } from "@/lib/ats-nlp-analysis-types"
+import type { RuntimeSpellCheckMetrics } from "@/lib/ats-runtime-spell-check"
 import type { DocumentArtifacts } from "@/lib/document-artifacts"
 import type { ATSScoreResponse } from "@/types/ats"
 
@@ -25,6 +27,11 @@ export function useWorkspaceState(initialMode: AppMode = APP_MODE.HOME) {
   const [statusMessage, setStatusMessage] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [atsScore, setAtsScore] = useState<ATSScoreResponse | null>(null)
+  const [atsNlpAnalysis, setAtsNlpAnalysis] = useState<ATSNLPAnalysis | null>(
+    null
+  )
+  const [atsRuntimeSpellMetrics, setAtsRuntimeSpellMetrics] =
+    useState<RuntimeSpellCheckMetrics | null>(null)
   const [isScoring, setIsScoring] = useState(false)
   const [isLoadingInsights, setIsLoadingInsights] = useState(false)
   const [hasLoadedAIInsights, setHasLoadedAIInsights] = useState(false)
@@ -63,6 +70,10 @@ export function useWorkspaceState(initialMode: AppMode = APP_MODE.HOME) {
     setError,
     atsScore,
     setAtsScore,
+    atsNlpAnalysis,
+    setAtsNlpAnalysis,
+    atsRuntimeSpellMetrics,
+    setAtsRuntimeSpellMetrics,
     isScoring,
     setIsScoring,
     isLoadingInsights,

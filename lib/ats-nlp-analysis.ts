@@ -1,13 +1,13 @@
-import { createRequire } from "node:module"
-
 import {
   ACTION_VERB_DICTIONARY,
   WEAK_ACTION_VERB_DICTIONARY,
 } from "@/lib/action-verb-dictionary"
 import {
   NATURAL_STOPWORDS,
+  buildNaturalCorpusDocuments,
   findNaturalTermEvidence,
   getNaturalNgramPhrases,
+  getNaturalSimilarity,
   rankTermsByTfIdf,
   stemNaturalToken,
   tokenizeNaturalText,
@@ -25,48 +25,7 @@ import type {
 import { extractBullets, parseResumeSections } from "@/lib/ats-resume-parsing"
 import { BUZZWORD_FAMILIES } from "@/lib/buzzword-families"
 import { REPETITION_STRONG_ACTION_VERBS } from "@/lib/repetition-exclusions"
-
-const require = createRequire(import.meta.url)
-
-type TokenizerLike = {
-  tokenize: (text: string) => string[]
-}
-
-type WordTokenizerCtor = new () => TokenizerLike
-type PorterStemmerLike = {
-  stem: (token: string) => string
-}
-type TfIdfLike = {
-  addDocument: (document: string) => void
-  tfidf: (term: string, index: number) => number
-}
-type TfIdfCtor = new () => TfIdfLike
-type JaroWinklerDistanceLike = (left: string, right: string) => number
-type NgramsLike = {
-  ngrams: (sequence: string[], size: number) => string[][]
-}
-type StopwordsLike = {
-  words: string[]
-}
-
-const ngramsModule = require("natural/lib/natural/ngrams/ngrams") as NgramsLike
-const PorterStemmer =
-  require("natural/lib/natural/stemmers/porter_stemmer") as PorterStemmerLike
-const { TfIdf } = require("natural/lib/natural/tfidf/tfidf") as {
-  TfIdf: TfIdfCtor
-}
-const { WordTokenizer } =
-  require("natural/lib/natural/tokenizers/regexp_tokenizer") as {
-    WordTokenizer: WordTokenizerCtor
-  }
-const JaroWinklerDistance =
-  require("natural/lib/natural/distance/jaro-winkler_distance") as JaroWinklerDistanceLike
-const stopwordsModule =
-  require("natural/lib/natural/util/stopwords") as StopwordsLike
-
-const tokenizer = new WordTokenizer()
-const stem = PorterStemmer.stem
-const stopwords = new Set(stopwordsModule.words as string[])
+const stopwords = new Set(NATURAL_STOPWORDS)
 const strongActionVerbs = new Set([
   ...REPETITION_STRONG_ACTION_VERBS.map((verb) => verb.toLowerCase()),
   ...ACTION_VERB_DICTIONARY.map((entry) => entry.verb.toLowerCase()),
@@ -212,14 +171,17 @@ function unique<T>(items: T[]) {
 }
 
 function getNormalizedTokens(text: string) {
-  return tokenizer
-    .tokenize(text)
-    .map(normalizeWord)
-    .filter((token: string) => token.length > 2 && !stopwords.has(token))
+  return tokenizeNaturalText(text, {
+    minLength: 3,
+    stopwords,
+    excludeStopwords: true,
+  }).map(normalizeWord)
 }
 
 function getStemmedTokens(text: string) {
-  return getNormalizedTokens(text).map((token: string) => stem(token))
+  return getNormalizedTokens(text).map((token: string) =>
+    stemNaturalToken(token)
+  )
 }
 
 function countStemMatches(tokens: string[], dictionary: Set<string>) {
@@ -227,20 +189,7 @@ function countStemMatches(tokens: string[], dictionary: Set<string>) {
 }
 
 function hasStemPhraseMatch(tokens: string[], phrases: string[]) {
-  const joinedBigrams = ngramsModule
-    .ngrams(tokens, 2)
-    .map((gram: string[]) => gram.join(" "))
-  const joinedTrigrams = ngramsModule
-    .ngrams(tokens, 3)
-    .map((gram: string[]) => gram.join(" "))
-  const joinedFourgrams = ngramsModule
-    .ngrams(tokens, 4)
-    .map((gram: string[]) => gram.join(" "))
-  const allPhrases = new Set([
-    ...joinedBigrams,
-    ...joinedTrigrams,
-    ...joinedFourgrams,
-  ])
+  const allPhrases = new Set(getNaturalNgramPhrases(tokens, [2, 3, 4]))
 
   return phrases.some((phrase) => allPhrases.has(phrase))
 }
@@ -251,13 +200,13 @@ function getTopRepeatedPhrases(bullets: string[]) {
 
   for (const tokens of stemmedBullets) {
     for (const size of [2, 3]) {
-      const grams = ngramsModule.ngrams(tokens, size)
-      for (const gram of grams) {
-        const phrase = gram.join(" ")
+      const grams = getNaturalNgramPhrases(tokens, [size])
+      for (const phrase of grams) {
         if (
           phrase.split(" ").every((part: string) => strongActionVerbs.has(part))
-        )
+        ) {
           continue
+        }
         counts.set(phrase, (counts.get(phrase) ?? 0) + 1)
       }
     }
@@ -276,6 +225,9 @@ function getTopJobTerms(jobDescription: string) {
   const rankedTokens = rankTermsByTfIdf(jobDescription, {
     limit: 18,
     stopwords: impactStopwords,
+    corpusDocuments: buildNaturalCorpusDocuments(jobDescription, {
+      stopwords: impactStopwords,
+    }),
   })
   const tokenScores = new Map(
     rankedTokens.map((item) => [item.token, item.score])
@@ -369,16 +321,16 @@ function classifyBulletLength(
   const informativeTokenCount = new Set(tokens).size
   const contentDensity = wordCount > 0 ? informativeTokenCount / wordCount : 0
   const technicalEntities = getTechnicalEntities(bullet)
-  const bulletStemSet = new Set(tokens.map((token) => stem(token)))
+  const bulletStemSet = new Set(tokens.map((token) => stemNaturalToken(token)))
   const keywordMatches = context.jdTerms.filter((term) =>
-    bulletStemSet.has(stem(term))
+    bulletStemSet.has(stemNaturalToken(term))
   )
   const hasMetric = /\b\d[\d.,]*\b|%|\$|£|€|\b(?:kpi|okr|mrr|arr|roi)\b/i.test(
     bullet
   )
   const hasOutcome =
     countStemMatches(
-      tokens.map((token: string) => stem(token)),
+      tokens.map((token: string) => stemNaturalToken(token)),
       outcomeStemSet
     ) > 0
   const leadVerb = normalizeWord(bullet.split(/\s+/)[0] || "")
@@ -870,7 +822,7 @@ function analyzeBuzzwords(resumeText: string): ATSBuzzwordAnalysis {
     const matchedTerms = family.terms.filter(
       (term) =>
         countPhraseMatches(normalized, term) > 0 ||
-        JaroWinklerDistance(normalized, term) > 0.94
+        getNaturalSimilarity(normalized, term) > 0.94
     )
 
     return {
@@ -919,34 +871,30 @@ function analyzeJobMatch(
     }
   }
 
-  const tfidf = new TfIdf()
-  tfidf.addDocument(jobDescription)
-  tfidf.addDocument(resumeText)
-
   const jdTerms = unique(
-    getNormalizedTokens(jobDescription)
-      .map((token: string) => ({
-        token,
-        stem: stem(token),
-        tfidf: tfidf.tfidf(token, 0),
-      }))
-      .sort(
-        (left: { tfidf: number }, right: { tfidf: number }) =>
-          right.tfidf - left.tfidf
-      )
-      .slice(0, 25)
-      .map((item: { token: string }) => item.token)
+    rankTermsByTfIdf(jobDescription, {
+      limit: 25,
+      stopwords,
+      corpusDocuments: [
+        ...buildNaturalCorpusDocuments(jobDescription, { stopwords }),
+        ...buildNaturalCorpusDocuments(resumeText, { stopwords }),
+      ],
+    }).map((item) => item.token)
   )
 
   const resumeTokens = new Set(getStemmedTokens(resumeText))
-  const matchedTerms = jdTerms.filter((term) => resumeTokens.has(stem(term)))
-  const missingTerms = jdTerms.filter((term) => !resumeTokens.has(stem(term)))
+  const matchedTerms = jdTerms.filter((term) =>
+    resumeTokens.has(stemNaturalToken(term))
+  )
+  const missingTerms = jdTerms.filter(
+    (term) => !resumeTokens.has(stemNaturalToken(term))
+  )
   const sectionCoverage: Record<string, string[]> = {}
 
   for (const [section, lines] of sections.entries()) {
     const sectionTokens = new Set(getStemmedTokens(lines.join(" ")))
     sectionCoverage[section] = jdTerms.filter((term) =>
-      sectionTokens.has(stem(term))
+      sectionTokens.has(stemNaturalToken(term))
     )
   }
 

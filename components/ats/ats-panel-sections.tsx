@@ -398,8 +398,8 @@ function getPersonalPronounMetrics(resumeContent: string) {
 }
 
 function getScoreBand(score: number): ColorBand {
-  if (score >= 90) return "green"
-  if (score >= 60) return "orange"
+  if (Math.round(score / 10) >= 9) return "green"
+  if (Math.round(score / 10) >= 6) return "orange"
   return "red"
 }
 
@@ -613,11 +613,10 @@ function buildOverviewMetrics(
           "active-voice",
           "consistency",
           "date-order",
-          "spell-check",
         ],
         data.atsCompatibility.parseability
       ),
-      note: "Built from the section scores for structure, tone, consistency, dates, and spelling.",
+      note: "Built from the section scores for structure, tone, consistency, and dates.",
     },
     {
       id: "average-bullet-score",
@@ -641,6 +640,31 @@ function buildOverviewMetrics(
       metrics.map((metric) => metric.score),
       data.overallScore
     ),
+  }
+}
+
+export function getATSOverviewDisplayScores(
+  scoreData: ATSScoreResponse,
+  resumeContent: string,
+  nlpAnalysis?: ATSNLPAnalysis | null
+) {
+  const { overallScore: derivedOverviewScore } = buildOverviewMetrics(
+    scoreData,
+    resumeContent,
+    null,
+    nlpAnalysis ?? null
+  )
+
+  const resumeScore =
+    scoreData.analysisMode === "resume-with-jd"
+      ? scoreData.resumeQualityScore
+      : derivedOverviewScore
+
+  return {
+    resumeScore,
+    overallScore: resumeScore,
+    derivedOverviewScore,
+    targetRoleScore: scoreData.targetRoleScore,
   }
 }
 
@@ -727,11 +751,11 @@ function OverviewMetricRow({
     metric.score,
     `${metric.id}:${metric.score}`
   )
-  const scoreOutOfTen = Math.max(
+  const scoreOutOfHundred = Math.max(
     0,
-    Math.min(10, Math.round(animatedScore / 10))
+    Math.min(100, Math.round(animatedScore))
   )
-  const displayFill = Math.max(0, Math.min(100, scoreOutOfTen * 10))
+  const displayFill = Math.max(0, Math.min(100, scoreOutOfHundred))
 
   return (
     <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3">
@@ -745,7 +769,7 @@ function OverviewMetricRow({
             getScoreTextColor(metric.score)
           )}
         >
-          {scoreOutOfTen}
+          {scoreOutOfHundred}
         </div>
       </div>
       <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
@@ -788,38 +812,39 @@ function OverviewMetricList({ metrics }: { metrics: OverviewMetric[] }) {
 function ATSOverviewSection({
   scoreData,
   resumeContent,
-  nlpAnalysis,
   spellMetrics,
 }: ATSSectionRendererProps) {
-  const { metrics, overallScore } = useMemo(
-    () =>
-      buildOverviewMetrics(scoreData, resumeContent, spellMetrics, nlpAnalysis),
-    [nlpAnalysis, resumeContent, scoreData, spellMetrics]
+  const { metrics, overallScore: derivedOverviewScore } = useMemo(
+    () => buildOverviewMetrics(scoreData, resumeContent, spellMetrics, null),
+    [resumeContent, scoreData, spellMetrics]
   )
   const hasTargetMyCVScore = scoreData.targetRoleScore !== null
+  const resumeScore = hasTargetMyCVScore
+    ? scoreData.resumeQualityScore
+    : derivedOverviewScore
   const overviewSummary = (() => {
     const score = hasTargetMyCVScore
       ? scoreData.targetRoleScore || 0
-      : overallScore
+      : resumeScore
 
     if (hasTargetMyCVScore) {
       if (score >= 90) {
-        return `Your resume is already strong on its own, and the current job-targeting is excellent. Resume ATS is ${overallScore}/100 and Target My CV is ${scoreData.targetRoleScore}/100.`
+        return `Your resume is already strong on its own, and the current job-targeting is excellent. Resume ATS is ${resumeScore}/100 and Target My CV is ${scoreData.targetRoleScore}/100.`
       }
 
       if (score >= 80) {
-        return `Your resume foundation is solid, and the job targeting is in a strong range. Resume ATS is ${overallScore}/100 and Target My CV is ${scoreData.targetRoleScore}/100.`
+        return `Your resume foundation is solid, and the job targeting is in a strong range. Resume ATS is ${resumeScore}/100 and Target My CV is ${scoreData.targetRoleScore}/100.`
       }
 
       if (score >= 70) {
-        return `Your resume reads reasonably well for ATS, but the job-specific positioning still has room to improve. Resume ATS is ${overallScore}/100 and Target My CV is ${scoreData.targetRoleScore}/100.`
+        return `Your resume reads reasonably well for ATS, but the job-specific positioning still has room to improve. Resume ATS is ${resumeScore}/100 and Target My CV is ${scoreData.targetRoleScore}/100.`
       }
 
       if (score >= 60) {
-        return `Your base resume is workable, but the current job match is still underpowered. Resume ATS is ${overallScore}/100 and Target My CV is ${scoreData.targetRoleScore}/100.`
+        return `Your base resume is workable, but the current job match is still underpowered. Resume ATS is ${resumeScore}/100 and Target My CV is ${scoreData.targetRoleScore}/100.`
       }
 
-      return `Your resume needs stronger tailoring to this job before it will compete well. Resume ATS is ${overallScore}/100 and Target My CV is ${scoreData.targetRoleScore}/100.`
+      return `Your resume needs stronger tailoring to this job before it will compete well. Resume ATS is ${resumeScore}/100 and Target My CV is ${scoreData.targetRoleScore}/100.`
     }
 
     if (score >= 90) {
@@ -860,7 +885,7 @@ function ATSOverviewSection({
         {hasTargetMyCVScore ? (
           <div className="grid gap-4 md:grid-cols-2">
             <ScoreMeter
-              score={overallScore}
+              score={resumeScore}
               label="Resume ATS"
               caption="Standalone CV"
             />
@@ -871,7 +896,7 @@ function ATSOverviewSection({
             />
           </div>
         ) : (
-          <ScoreMeter score={overallScore} />
+          <ScoreMeter score={resumeScore} />
         )}
         <OverviewMetricList metrics={metrics} />
       </div>

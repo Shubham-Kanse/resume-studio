@@ -57,6 +57,8 @@ import {
   coerceAppMode,
 } from "@/features/workspace/workspace-mode"
 import { trackEvent } from "@/lib/analytics"
+import type { ATSNLPAnalysis } from "@/lib/ats-nlp-analysis-types"
+import type { RuntimeSpellCheckMetrics } from "@/lib/ats-runtime-spell-check"
 import {
   clearServerSession,
   syncServerSession,
@@ -99,6 +101,8 @@ type WorkspaceDraft = {
   latexContent: string
   editableLatexContent: string
   atsScore: ATSScoreResponse | null
+  atsNlpAnalysis: ATSNLPAnalysis | null
+  atsRuntimeSpellMetrics: RuntimeSpellCheckMetrics | null
 }
 
 function readBlobAsDataUrl(blob: Blob): Promise<string> {
@@ -179,6 +183,13 @@ function loadWorkspaceDraft(userId: string): WorkspaceDraft | null {
           : "",
       atsScore:
         (parsed.atsScore as ATSScoreResponse | null | undefined) ?? null,
+      atsNlpAnalysis:
+        (parsed.atsNlpAnalysis as ATSNLPAnalysis | null | undefined) ?? null,
+      atsRuntimeSpellMetrics:
+        (parsed.atsRuntimeSpellMetrics as
+          | RuntimeSpellCheckMetrics
+          | null
+          | undefined) ?? null,
     }
   } catch {
     return null
@@ -851,6 +862,10 @@ export default function AppShell({ initialMode }: { initialMode?: AppMode }) {
     setError,
     atsScore,
     setAtsScore,
+    atsNlpAnalysis,
+    setAtsNlpAnalysis,
+    atsRuntimeSpellMetrics,
+    setAtsRuntimeSpellMetrics,
     isScoring,
     setIsScoring,
     isLoadingInsights,
@@ -858,6 +873,20 @@ export default function AppShell({ initialMode }: { initialMode?: AppMode }) {
     hasLoadedAIInsights,
     setHasLoadedAIInsights,
   } = useWorkspaceState(coerceAppMode(initialMode))
+
+  const invalidateATSRequests = useCallback(() => {
+    atsRequestIdRef.current += 1
+    savedAtsRunIdRef.current = null
+    setAtsNlpAnalysis(null)
+    setAtsRuntimeSpellMetrics(null)
+    setIsLoadingInsights(false)
+    setHasLoadedAIInsights(false)
+  }, [
+    setAtsNlpAnalysis,
+    setAtsRuntimeSpellMetrics,
+    setHasLoadedAIInsights,
+    setIsLoadingInsights,
+  ])
   const [session, setSession] = useState<Session | null>(null)
   const [supabase, setSupabase] = useState<SupabaseClient | null>(null)
   const [isSupabaseReady, setIsSupabaseReady] = useState(false)
@@ -1255,6 +1284,8 @@ export default function AppShell({ initialMode }: { initialMode?: AppMode }) {
     setLatexContent(draft.latexContent)
     setEditableLatexContent(draft.editableLatexContent)
     setAtsScore(draft.atsScore)
+    setAtsNlpAnalysis(draft.atsNlpAnalysis)
+    setAtsRuntimeSpellMetrics(draft.atsRuntimeSpellMetrics)
     setHasLoadedAIInsights(
       Boolean(draft.mode === TRACKED_RUN_MODE.ATS_SCORE && draft.atsScore)
     )
@@ -1267,7 +1298,9 @@ export default function AppShell({ initialMode }: { initialMode?: AppMode }) {
     setIsWorkspaceRestoreReady(true)
   }, [
     session?.user?.id,
+    setAtsNlpAnalysis,
     setAtsScore,
+    setAtsRuntimeSpellMetrics,
     setEditableLatexContent,
     setError,
     setExtraInstructions,
@@ -1300,8 +1333,12 @@ export default function AppShell({ initialMode }: { initialMode?: AppMode }) {
       latexContent,
       editableLatexContent,
       atsScore,
+      atsNlpAnalysis,
+      atsRuntimeSpellMetrics,
     })
   }, [
+    atsNlpAnalysis,
+    atsRuntimeSpellMetrics,
     atsScore,
     editableLatexContent,
     extraInstructions,
@@ -1364,7 +1401,43 @@ export default function AppShell({ initialMode }: { initialMode?: AppMode }) {
     }
   }
 
+  const loadFrozenATSAnalysis = useCallback(
+    async (input: { resumeContent: string }) => {
+      const [spellResponse, nlpResponse] = await Promise.all([
+        fetch("/api/ats-spell-check", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content: input.resumeContent }),
+        }).catch(() => null),
+        fetch("/api/ats-nlp-analysis", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            resumeContent: input.resumeContent,
+          }),
+        }).catch(() => null),
+      ])
+
+      const [spellMetrics, nlpAnalysis] = await Promise.all([
+        spellResponse?.ok
+          ? (spellResponse.json() as Promise<RuntimeSpellCheckMetrics>)
+          : Promise.resolve(null),
+        nlpResponse?.ok
+          ? (nlpResponse.json() as Promise<ATSNLPAnalysis>)
+          : Promise.resolve(null),
+      ])
+
+      return {
+        spellMetrics,
+        nlpAnalysis,
+      }
+    },
+    []
+  )
+
   const handleGenerate = async (formData: FormData) => {
+    invalidateATSRequests()
+
     if (isAuthenticated && isPlanLoading) {
       setAuthMessage("Checking your subscription plan...")
       return
@@ -1391,7 +1464,6 @@ export default function AppShell({ initialMode }: { initialMode?: AppMode }) {
     setHasLoadedAIInsights(false)
     setError(null)
     setStatusMessage("Preparing request...")
-    savedAtsRunIdRef.current = null
 
     try {
       const jd = (formData.get("jobDescription") as string | null)?.trim() || ""
@@ -1549,11 +1621,16 @@ export default function AppShell({ initialMode }: { initialMode?: AppMode }) {
         throw new Error("Resume content is required.")
       }
 
-      const data = await atsServiceClient.score({
-        jobDescription: jd,
-        resumeContent: resume,
-        extractionArtifacts: resumeArtifacts,
-      })
+      const [data, frozenAnalysis] = await Promise.all([
+        atsServiceClient.score({
+          jobDescription: jd,
+          resumeContent: resume,
+          extractionArtifacts: resumeArtifacts,
+        }),
+        loadFrozenATSAnalysis({
+          resumeContent: resume,
+        }),
+      ])
       const input = {
         jobDescription: jd,
         resumeContent: resume,
@@ -1568,7 +1645,13 @@ export default function AppShell({ initialMode }: { initialMode?: AppMode }) {
         )
       }
 
+      if (atsRequestIdRef.current !== requestId) {
+        return
+      }
+
       setAtsScore(data)
+      setAtsRuntimeSpellMetrics(frozenAnalysis.spellMetrics)
+      setAtsNlpAnalysis(frozenAnalysis.nlpAnalysis)
 
       if (session?.user?.id) {
         const savedRunId = await saveTrackedRun({
@@ -1581,6 +1664,10 @@ export default function AppShell({ initialMode }: { initialMode?: AppMode }) {
           extraInstructions: additional,
           atsScore: data,
         })
+
+        if (atsRequestIdRef.current !== requestId) {
+          return
+        }
 
         savedAtsRunIdRef.current = savedRunId
 
@@ -1813,6 +1900,7 @@ export default function AppShell({ initialMode }: { initialMode?: AppMode }) {
 
   const handleLoadRunFromDashboard = useCallback(
     (run: TrackedRunRecord) => {
+      invalidateATSRequests()
       setMode(run.mode)
       setJobDescription(run.job_description ?? "")
       setResumeContent(run.resume_content)
@@ -1829,10 +1917,8 @@ export default function AppShell({ initialMode }: { initialMode?: AppMode }) {
       setAtsScore(
         run.mode === TRACKED_RUN_MODE.ATS_SCORE ? run.ats_score : null
       )
-      setHasLoadedAIInsights(
-        Boolean(run.mode === TRACKED_RUN_MODE.ATS_SCORE && run.ats_score)
-      )
-      setIsLoadingInsights(false)
+      setAtsNlpAnalysis(null)
+      setAtsRuntimeSpellMetrics(null)
       setIsGenerating(false)
       setIsScoring(false)
       setStatusMessage("")
@@ -1851,13 +1937,14 @@ export default function AppShell({ initialMode }: { initialMode?: AppMode }) {
       setResumeArtifacts,
       setExtraInstructions,
       setLatexContent,
+      setAtsNlpAnalysis,
       setAtsScore,
-      setHasLoadedAIInsights,
-      setIsLoadingInsights,
+      setAtsRuntimeSpellMetrics,
       setIsGenerating,
       setIsScoring,
       setStatusMessage,
       setError,
+      invalidateATSRequests,
     ]
   )
 
@@ -1902,10 +1989,12 @@ export default function AppShell({ initialMode }: { initialMode?: AppMode }) {
   ])
 
   const handleRescoreCV = () => {
+    invalidateATSRequests()
     setAtsScore(null)
-    setHasLoadedAIInsights(false)
-    setIsLoadingInsights(false)
+    setAtsNlpAnalysis(null)
+    setAtsRuntimeSpellMetrics(null)
     setIsScoring(false)
+    setJobDescription("")
     setResumeContent("")
     setResumeFileName("")
     setResumeFileMimeType("")
@@ -1913,7 +2002,6 @@ export default function AppShell({ initialMode }: { initialMode?: AppMode }) {
     setResumeArtifacts(null)
     setStatusMessage("")
     setError(null)
-    savedAtsRunIdRef.current = null
   }
 
   const handleDeleteRun = async (runId: string) => {
@@ -2191,6 +2279,8 @@ export default function AppShell({ initialMode }: { initialMode?: AppMode }) {
 
   const atsProps: ATSScorePanelProps = {
     scoreData: atsScore,
+    runtimeSpellMetrics: atsRuntimeSpellMetrics,
+    nlpAnalysis: atsNlpAnalysis,
     resumeContent,
     jobDescription,
     resumeFileName,
@@ -2206,6 +2296,8 @@ export default function AppShell({ initialMode }: { initialMode?: AppMode }) {
     onResumeFileMimeTypeChange: setResumeFileMimeType,
     onResumeFileDataUrlChange: setResumeFileDataUrl,
     onResumeArtifactsChange: setResumeArtifacts,
+    onRuntimeSpellMetricsChange: setAtsRuntimeSpellMetrics,
+    onNlpAnalysisChange: setAtsNlpAnalysis,
     onGetATSScore: () => {
       const formData = new FormData()
       formData.append("jobDescription", jobDescription)

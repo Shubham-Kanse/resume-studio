@@ -13,6 +13,7 @@ export async function POST(request: NextRequest) {
     key: "ats-score",
     limit: 20,
     windowMs: 60_000,
+    requireRemoteInProduction: true,
   })
   if (rateLimitResponse) return rateLimitResponse
 

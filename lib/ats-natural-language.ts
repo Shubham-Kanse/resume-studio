@@ -10,11 +10,6 @@ type WordTokenizerCtor = new () => TokenizerLike
 type PorterStemmerLike = {
   stem: (token: string) => string
 }
-type TfIdfLike = {
-  addDocument: (document: string) => void
-  tfidf: (term: string, index: number) => number
-}
-type TfIdfCtor = new () => TfIdfLike
 type JaroWinklerDistanceLike = (left: string, right: string) => number
 type NgramsLike = {
   ngrams: (sequence: string[], size: number) => string[][]
@@ -26,9 +21,6 @@ type StopwordsLike = {
 const ngramsModule = require("natural/lib/natural/ngrams/ngrams") as NgramsLike
 const PorterStemmer =
   require("natural/lib/natural/stemmers/porter_stemmer") as PorterStemmerLike
-const tfidfModule = require("natural/lib/natural/tfidf/tfidf") as
-  | { TfIdf?: TfIdfCtor; default?: TfIdfCtor }
-  | TfIdfCtor
 const tokenizerModule =
   require("natural/lib/natural/tokenizers/regexp_tokenizer") as
     | { WordTokenizer?: WordTokenizerCtor; default?: WordTokenizerCtor }
@@ -38,20 +30,15 @@ const JaroWinklerDistance =
 const stopwordsModule =
   require("natural/lib/natural/util/stopwords") as StopwordsLike
 
-const TfIdfCtorResolved =
-  typeof tfidfModule === "function"
-    ? tfidfModule
-    : tfidfModule.TfIdf || tfidfModule.default
 const WordTokenizerCtorResolved =
   typeof tokenizerModule === "function"
     ? tokenizerModule
     : tokenizerModule.WordTokenizer || tokenizerModule.default
 
-if (!TfIdfCtorResolved || !WordTokenizerCtorResolved) {
+if (!WordTokenizerCtorResolved) {
   throw new Error("Failed to initialize natural NLP utilities")
 }
 
-const SafeTfIdfCtor = TfIdfCtorResolved
 const SafeWordTokenizerCtor = WordTokenizerCtorResolved
 
 const tokenizer = new SafeWordTokenizerCtor()
@@ -146,32 +133,106 @@ export function rankTermsByTfIdf(
     limit?: number
     minLength?: number
     stopwords?: Set<string>
+    corpusDocuments?: string[]
   }
 ) {
   if (!document.trim()) return []
 
-  const tfidf = new SafeTfIdfCtor()
-  tfidf.addDocument(document)
+  const minLength = options?.minLength ?? 3
+  const stopwords = options?.stopwords
+  const targetTokens = tokenizeNaturalText(document, {
+    minLength,
+    stopwords,
+    excludeStopwords: true,
+  })
+  if (targetTokens.length === 0) return []
 
-  const tokens = unique(
-    tokenizeNaturalText(document, {
-      minLength: options?.minLength ?? 3,
-      stopwords: options?.stopwords,
-      excludeStopwords: true,
+  const corpusTokenDocs = unique([
+    targetTokens.join(" "),
+    ...(options?.corpusDocuments ?? [])
+      .map((entry) =>
+        tokenizeNaturalText(entry, {
+          minLength,
+          stopwords,
+          excludeStopwords: true,
+        })
+      )
+      .filter((tokens) => tokens.length > 0)
+      .map((tokens) => tokens.join(" ")),
+  ]).map((entry) => entry.split(" ").filter(Boolean))
+
+  const documentCount = Math.max(1, corpusTokenDocs.length)
+  const avgDocumentLength =
+    corpusTokenDocs.reduce((sum, tokens) => sum + tokens.length, 0) /
+    documentCount
+  const targetLength = targetTokens.length
+  const tokenCounts = new Map<string, number>()
+
+  for (const token of targetTokens) {
+    tokenCounts.set(token, (tokenCounts.get(token) ?? 0) + 1)
+  }
+
+  const documentFrequencies = new Map<string, number>()
+  for (const tokens of corpusTokenDocs) {
+    const seen = new Set(tokens)
+    for (const token of seen) {
+      documentFrequencies.set(token, (documentFrequencies.get(token) ?? 0) + 1)
+    }
+  }
+
+  const k1 = 1.2
+  const b = 0.75
+
+  return unique(targetTokens)
+    .map((token) => {
+      const termFrequency = tokenCounts.get(token) ?? 0
+      const documentFrequency = documentFrequencies.get(token) ?? 0
+      const idf = Math.log(
+        1 +
+          (documentCount - documentFrequency + 0.5) / (documentFrequency + 0.5)
+      )
+      const normalization =
+        termFrequency +
+        k1 * (1 - b + (b * targetLength) / Math.max(1, avgDocumentLength || 1))
+      const score = idf * ((termFrequency * (k1 + 1)) / normalization)
+
+      return {
+        token,
+        stem: stemNaturalToken(token),
+        score,
+      }
     })
-  )
-
-  return tokens
-    .map((token) => ({
-      token,
-      stem: stemNaturalToken(token),
-      score: tfidf.tfidf(token, 0),
-    }))
     .sort(
       (left, right) =>
         right.score - left.score || left.token.localeCompare(right.token)
     )
     .slice(0, options?.limit ?? 20)
+}
+
+export function buildNaturalCorpusDocuments(
+  text: string,
+  options?: {
+    minLength?: number
+    stopwords?: Set<string>
+    maxDocuments?: number
+  }
+) {
+  const minLength = options?.minLength ?? 3
+  const stopwords = options?.stopwords
+
+  return unique(
+    text
+      .split(/\n\s*\n+|\n|[.!?]+/g)
+      .map((chunk) =>
+        tokenizeNaturalText(chunk, {
+          minLength,
+          stopwords,
+          excludeStopwords: true,
+        }).join(" ")
+      )
+      .map((chunk) => chunk.trim())
+      .filter(Boolean)
+  ).slice(0, options?.maxDocuments ?? 48)
 }
 
 function getMaxWindowSimilarity(lineTokens: string[], termTokens: string[]) {

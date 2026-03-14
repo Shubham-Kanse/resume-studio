@@ -1,4 +1,5 @@
 import {
+  buildNaturalCorpusDocuments,
   NATURAL_STOPWORDS,
   findNaturalTermEvidence,
   getNaturalSimilarity,
@@ -3031,6 +3032,15 @@ function buildKeywordAnalysis(
     {
       limit: 24,
       stopwords,
+      corpusDocuments: [
+        jd.title || "",
+        jd.titleTerms.join(" "),
+        jd.requiredTerms.join(" "),
+        jd.preferredTerms.join(" "),
+        jd.cultureTerms.join(" "),
+        jd.responsibilityTerms.join(" "),
+        ...buildNaturalCorpusDocuments(resumeContent),
+      ],
     }
   ).map(({ token }) => token)
 
@@ -3706,7 +3716,12 @@ function calibrateScores(params: {
       )
     : null
 
-  let overallScore = resumeQualityScore
+  let overallScore = hasJD
+    ? clamp(
+        resumeQualityScore * 0.42 +
+          (targetRoleScore ?? resumeQualityScore) * 0.58
+      )
+    : resumeQualityScore
 
   const severeParseability = formattingScore < 55
   const missingCoreContact = !contact.email || !contact.phone
@@ -3743,6 +3758,8 @@ function buildJobMatchArtifacts(params: {
   const jdAnalysis = analyzeJobDescription(params.jobDescription)
   if (!jdAnalysis) {
     return {
+      jdAnalysis: null as JDAnalysis | null,
+      keywordScore: null as number | null,
       targetRoleScore: null,
       keywordAnalysis: null as KeywordAnalysis | null,
       qualification: createEmptyQualificationAlignment(),
@@ -3756,6 +3773,9 @@ function buildJobMatchArtifacts(params: {
     params.resumeContent,
     params.sections
   )
+  const keywordScore = keywordAnalysis
+    ? scoreKeywordMatch(keywordAnalysis, jdAnalysis, params.lexicalCoverage)
+    : null
   const qualification = inferQualificationAlignment(
     jdAnalysis,
     params.educationText,
@@ -3777,9 +3797,7 @@ function buildJobMatchArtifacts(params: {
     skillsScore: params.skillsScore,
     structureScore: 0,
     educationScore: params.educationScore,
-    keywordScore: keywordAnalysis
-      ? scoreKeywordMatch(keywordAnalysis, jdAnalysis, params.lexicalCoverage)
-      : null,
+    keywordScore,
     qualificationScore: qualification.score,
     missingRequiredSectionCount: 0,
     contact: {
@@ -3795,6 +3813,8 @@ function buildJobMatchArtifacts(params: {
   }).targetRoleScore
 
   return {
+    jdAnalysis,
+    keywordScore,
     targetRoleScore,
     keywordAnalysis,
     qualification,
@@ -4942,29 +4962,10 @@ export function scoreResumeDeterministically(input: {
     structureSignals
   )
   const educationScore = scoreEducation(educationText)
-  const qualification = createEmptyQualificationAlignment()
-  const keywordAnalysis = null
-  const keywordScore = null
-
   const missingSections = REQUIRED_SECTION_KEYS.filter(
     (key) => !sections[key]
   ).map((key) => titleCase(key))
   const missingOptionalSections: string[] = []
-  const calibratedScores = calibrateScores({
-    hasJD: false,
-    jdAnalysis: null,
-    formattingScore: formatting.score,
-    contentQualityScore,
-    summaryScore,
-    skillsScore,
-    structureScore,
-    educationScore,
-    keywordScore,
-    qualificationScore: 0,
-    missingRequiredSectionCount: missingSections.length,
-    contact,
-    qualification,
-  })
 
   const jobMatchArtifacts = buildJobMatchArtifacts({
     jobDescription,
@@ -4982,6 +4983,26 @@ export function scoreResumeDeterministically(input: {
     summaryScore,
     skillsScore,
     educationScore,
+  })
+  const qualification = hasJD
+    ? jobMatchArtifacts.qualification
+    : createEmptyQualificationAlignment()
+  const keywordAnalysis = hasJD ? jobMatchArtifacts.keywordAnalysis : null
+  const keywordScore = hasJD ? jobMatchArtifacts.keywordScore : null
+  const calibratedScores = calibrateScores({
+    hasJD,
+    jdAnalysis: jobMatchArtifacts.jdAnalysis,
+    formattingScore: formatting.score,
+    contentQualityScore,
+    summaryScore,
+    skillsScore,
+    structureScore,
+    educationScore,
+    keywordScore,
+    qualificationScore: qualification.score,
+    missingRequiredSectionCount: missingSections.length,
+    contact,
+    qualification,
   })
 
   const derived = buildIssuesAndRecommendations({
@@ -5041,12 +5062,13 @@ export function scoreResumeDeterministically(input: {
   })
 
   return {
-    analysisMode: "resume-only",
+    analysisMode: hasJD ? "resume-with-jd" : "resume-only",
     resumeQualityScore: calibratedScores.resumeQualityScore,
     targetRoleScore: jobMatchArtifacts.targetRoleScore,
     overallScore: calibratedScores.overallScore,
     categoryScores: {
-      keywordMatch: null,
+      keywordMatch:
+        keywordScore !== null ? { score: keywordScore, maxScore: 100 } : null,
       formatting: { score: formatting.score, maxScore: 100 },
       contentQuality: { score: contentQualityScore, maxScore: 100 },
       professionalSummary: { score: summaryScore, maxScore: 100 },

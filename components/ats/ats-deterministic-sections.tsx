@@ -2135,9 +2135,8 @@ function buildSectionContent(
     },
     "spell-check": {
       title: "Analysis",
-      summary: runtimeSpellMetrics
-        ? "I checked the resume with a live dictionary-backed spell checker and surfaced the exact misspellings that should be fixed first."
-        : "I checked the resume against a deterministic spelling list and surfaced the exact misspellings that should be fixed first.",
+      summary:
+        "Please review the spellings below and confirm whether any are incorrect.",
       bullets:
         spellMetrics.issues.length > 0
           ? spellMetrics.issues.slice(0, 6).map((issue) => ({
@@ -2161,17 +2160,7 @@ function buildSectionContent(
         value: `${issue.count}`,
         tone: "danger" as const,
       })),
-      details: [
-        runtimeSpellMetrics
-          ? "This pass uses a live dictionary-backed spell checker, so it can catch real misspellings beyond the original static list."
-          : "This pass is deterministic, so it catches common errors and suspicious terms rather than acting like a full dictionary.",
-        "The most important errors to fix first are the ones in headings, titles, technology names, and outcome bullets.",
-        `I detected ${spellMetrics.totalMisspellingCount} spelling issue${spellMetrics.totalMisspellingCount === 1 ? "" : "s"} from ${
-          runtimeSpellMetrics
-            ? "the runtime spell checker"
-            : "the deterministic list"
-        }.`,
-      ],
+      details: [],
     },
   }
 
@@ -2269,6 +2258,7 @@ function buildSectionContent(
   }
 
   const feedbackBullets = feedbackBySection[sectionId]
+  const hideDetailsForSpellCheck = sectionId === "spell-check"
 
   return {
     title: base.title,
@@ -2279,20 +2269,24 @@ function buildSectionContent(
       summary:
         "Here is how recruiters and ATS reviewers usually think about this area in the current market. I’m keeping this grounded in common screening behavior rather than generic advice.",
       bullets: base.recruiter,
-      details: [
-        "The real benchmark here is whether this section helps a recruiter decide faster and with more confidence.",
-        "When a section is below market standard, recruiters rarely articulate it explicitly. They simply keep moving to the next profile.",
-      ],
+      details: hideDetailsForSpellCheck
+        ? []
+        : [
+            "The real benchmark here is whether this section helps a recruiter decide faster and with more confidence.",
+            "When a section is below market standard, recruiters rarely articulate it explicitly. They simply keep moving to the next profile.",
+          ],
     },
     feedback: {
       title: "Feedback",
       summary:
         "Here is the clearest next move I would make if I were tightening this section right now. Think of this as practical editing guidance, not abstract theory.",
       bullets: feedbackBullets,
-      details: [
-        "The fastest wins usually come from fixing repeated weak patterns before polishing wording.",
-        "If you only make one pass, start with the highest-visibility lines in the latest and most relevant role.",
-      ],
+      details: hideDetailsForSpellCheck
+        ? []
+        : [
+            "The fastest wins usually come from fixing repeated weak patterns before polishing wording.",
+            "If you only make one pass, start with the highest-visibility lines in the latest and most relevant role.",
+          ],
     },
   }
 }

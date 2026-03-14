@@ -17,6 +17,7 @@ export async function POST(req: NextRequest) {
     key: "extract-resume",
     limit: 20,
     windowMs: 60_000,
+    requireRemoteInProduction: true,
   })
   if (rateLimitResponse) return rateLimitResponse
 

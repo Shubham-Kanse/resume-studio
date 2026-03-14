@@ -22,6 +22,7 @@ import {
   X,
 } from "lucide-react"
 
+import { getATSOverviewDisplayScores } from "@/components/ats/ats-panel-sections"
 import { Button } from "@/components/ui/button"
 import { extractTrackedRunFileName } from "@/lib/tracked-runs"
 import type { TrackedRunRecord } from "@/lib/tracked-runs"
@@ -59,6 +60,13 @@ function initialsFromUser(name: string | null, email: string | null) {
 function displayText(text: string | null | undefined) {
   const value = (text || "").trim()
   return value || "Not available"
+}
+
+function getTrackedRunDisplayAtsScore(run: TrackedRunRecord) {
+  if (!run.ats_score) return null
+
+  return getATSOverviewDisplayScores(run.ats_score, run.resume_content)
+    .resumeScore
 }
 
 function DashboardPanelComponent({
@@ -120,17 +128,26 @@ function DashboardPanelComponent({
     null
   const generatedRuns = historyItems.filter((item) => item.mode === "generate")
   const atsRuns = historyItems.filter((item) => item.mode === "ats-score")
+  const scoredAtsRuns = atsRuns.filter((item) => item.ats_score)
   const selectedFileName = selectedRun
     ? selectedRun.resume_file_name ||
       extractTrackedRunFileName(selectedRun.label)
     : null
   const avgAtsScore =
-    atsRuns.length > 0
+    scoredAtsRuns.length > 0
       ? Math.round(
-          atsRuns.reduce(
-            (sum, item) => sum + (item.ats_score?.overallScore ?? 0),
-            0
-          ) / atsRuns.length
+          (() => {
+            const resolvedScores = scoredAtsRuns
+              .map((item) => getTrackedRunDisplayAtsScore(item))
+              .filter((score): score is number => score !== null)
+
+            if (resolvedScores.length === 0) return 0
+
+            return (
+              resolvedScores.reduce((sum, score) => sum + score, 0) /
+              resolvedScores.length
+            )
+          })()
         )
       : null
 
@@ -411,8 +428,9 @@ function DashboardPanelComponent({
                               {formatDistanceToNow(new Date(run.created_at), {
                                 addSuffix: true,
                               })}
-                              {run.mode === "ats-score" && run.ats_score
-                                ? ` • ATS ${run.ats_score.overallScore}`
+                              {run.mode === "ats-score" &&
+                              getTrackedRunDisplayAtsScore(run) !== null
+                                ? ` • ATS ${getTrackedRunDisplayAtsScore(run)}`
                                 : ""}
                             </p>
                           </div>
@@ -505,7 +523,7 @@ function DashboardPanelComponent({
                     </span>
                     {selectedRun.ats_score ? (
                       <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-1 font-medium text-primary">
-                        ATS {selectedRun.ats_score.overallScore}
+                        ATS {getTrackedRunDisplayAtsScore(selectedRun) ?? "--"}
                       </span>
                     ) : null}
                   </div>
@@ -650,21 +668,13 @@ function DashboardPanelComponent({
 
                   {selectedRun.ats_score ? (
                     <div className="space-y-4">
-                      <div className="grid gap-4 md:grid-cols-3">
+                      <div className="grid gap-4 md:grid-cols-2">
                         <div className="rounded-2xl border border-white/8 bg-black/10 p-4">
                           <div className="text-xs uppercase tracking-[0.18em] text-white/40">
-                            Overall
+                            ATS Score
                           </div>
                           <div className="mt-3 text-3xl font-semibold text-foreground">
-                            {selectedRun.ats_score.overallScore}
-                          </div>
-                        </div>
-                        <div className="rounded-2xl border border-white/8 bg-black/10 p-4">
-                          <div className="text-xs uppercase tracking-[0.18em] text-white/40">
-                            Resume ATS
-                          </div>
-                          <div className="mt-3 text-3xl font-semibold text-foreground">
-                            {selectedRun.ats_score.resumeQualityScore}
+                            {getTrackedRunDisplayAtsScore(selectedRun) ?? "--"}
                           </div>
                         </div>
                         <div className="rounded-2xl border border-white/8 bg-black/10 p-4">

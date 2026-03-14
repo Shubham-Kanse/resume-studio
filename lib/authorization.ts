@@ -71,7 +71,7 @@ function resolveUserRole(user: User | null | undefined): AppRole {
     return APP_ROLE.GUEST
   }
 
-  const metadataRole = user.user_metadata?.role
+  const metadataRole = user.app_metadata?.role
   return isAppRole(metadataRole) ? metadataRole : APP_ROLE.MEMBER
 }
 

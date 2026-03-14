@@ -111,9 +111,12 @@ test("deterministic ATS scorer exposes stable evidence for a strong aligned resu
     jobDescription: jd,
   })
 
-  assert.equal(result.analysisMode, "resume-only")
-  assert.equal(result.overallScore, result.resumeQualityScore)
+  assert.equal(result.analysisMode, "resume-with-jd")
+  assert.equal(result.resumeQualityScore, 59)
+  assert.equal(result.targetRoleScore, 81)
+  assert.equal(result.overallScore, 72)
   assert.ok((result.targetRoleScore ?? 0) >= 70)
+  assert.equal(result.categoryScores.keywordMatch?.score, 100)
   assert.ok(
     result.evidence.requiredSectionsPresent.includes("Professional Summary")
   )
@@ -348,29 +351,141 @@ test("resume quality category scores stay stable when a JD is added", () => {
     resumeOnly.categoryScores.structure?.score
   )
   assert.equal(withJD.resumeQualityScore, resumeOnly.resumeQualityScore)
-  assert.equal(withJD.overallScore, resumeOnly.overallScore)
+  assert.notEqual(withJD.overallScore, resumeOnly.overallScore)
+  assert.equal(withJD.analysisMode, "resume-with-jd")
+  assert.ok((withJD.targetRoleScore ?? 0) < withJD.resumeQualityScore)
   assert.deepEqual(withJD.evidence.missingOptionalSections, [])
-  assert.deepEqual(
-    withJD.keyFindings.strengths,
-    resumeOnly.keyFindings.strengths
-  )
-  assert.deepEqual(
-    withJD.keyFindings.weaknesses,
-    resumeOnly.keyFindings.weaknesses
-  )
-  assert.deepEqual(
-    withJD.sectionReviews.map((section) => ({
-      id: section.id,
-      score: section.score,
-      status: section.status,
-    })),
-    resumeOnly.sectionReviews.map((section) => ({
-      id: section.id,
-      score: section.score,
-      status: section.status,
-    }))
-  )
   assert.ok(withJD.targetRoleScore !== null)
+})
+
+test("ATS score regression stays stable for curated resume and JD pairs", () => {
+  const scenarios = [
+    {
+      name: "aligned product manager",
+      resume: `
+      Jane Doe
+      jane@example.com | Dublin | linkedin.com/in/janedoe
+
+      Professional Summary
+      Senior product manager with 8 years leading B2B SaaS platforms, analytics, and cross-functional launches.
+
+      Work Experience
+      Product Manager | Acme | Jan 2020 - Present
+      - Led roadmap execution for analytics platform used by enterprise customers.
+      - Partnered with engineering and design to ship workflow automation features.
+      - Increased activation by 18% and reduced churn by 11%.
+
+      Skills
+      Product strategy, SQL, analytics, experimentation, stakeholder management, roadmap planning
+
+      Education
+      BSc Computer Science, 2017
+      `,
+      jd: `
+      Senior Product Manager
+      Requirements: product strategy, analytics, SQL, experimentation, stakeholder management, B2B SaaS.
+      `,
+      expected: {
+        resumeQualityScore: 59,
+        targetRoleScore: 81,
+        overallScore: 72,
+        keywordMatchScore: 100,
+      },
+    },
+    {
+      name: "misaligned backend role",
+      resume: `
+      Jane Doe
+      jane@example.com | Dublin, Ireland | linkedin.com/in/janedoe
+
+      Professional Summary
+      Software engineer with 6 years building SaaS products using TypeScript, React, Node.js, SQL, and AWS.
+
+      Work Experience
+      Senior Software Engineer | Acme | Jan 2021 - Present
+      - Built workflow automation tools in React and Node.js, reducing support time by 24%.
+      - Improved reporting pipelines with SQL and AWS, cutting dashboard latency by 38%.
+
+      Skills
+      Languages: TypeScript, JavaScript, SQL
+      Frameworks: React, Next.js, Node.js
+      Cloud: AWS, Docker
+
+      Education
+      BSc Computer Science, University College Dublin, 2019
+      `,
+      jd: `
+      Staff Backend Engineer
+      Requirements: Go, Kubernetes, distributed systems, PostgreSQL, mentoring, system design.
+      `,
+      expected: {
+        resumeQualityScore: 77,
+        targetRoleScore: 58,
+        overallScore: 66,
+        keywordMatchScore: 24,
+      },
+    },
+    {
+      name: "semantically aligned platform role",
+      resume: `
+      Jane Doe
+      jane@example.com | Dublin | linkedin.com/in/janedoe
+
+      Summary
+      Platform engineer with experience designing distributed systems and mentoring teams.
+
+      Experience
+      Senior Platform Engineer | Acme | Jan 2020 - Present
+      - Built Kubernetes-based deployment workflows for multi-service infrastructure.
+      - Led distributed system design reviews and mentored backend engineers.
+
+      Skills
+      Kubernetes, platform engineering, system design, mentoring
+
+      Education
+      BSc Computer Science, 2018
+      `,
+      jd: `
+      Senior Platform Engineer
+      Requirements: Kubernets, distributed systems, mentor engineers, system design.
+      `,
+      expected: {
+        resumeQualityScore: 53,
+        targetRoleScore: 76,
+        overallScore: 66,
+        keywordMatchScore: 100,
+      },
+    },
+  ]
+
+  for (const scenario of scenarios) {
+    const result = scoreResumeDeterministically({
+      resumeContent: scenario.resume,
+      jobDescription: scenario.jd,
+    })
+
+    assert.equal(result.analysisMode, "resume-with-jd", scenario.name)
+    assert.equal(
+      result.resumeQualityScore,
+      scenario.expected.resumeQualityScore,
+      scenario.name
+    )
+    assert.equal(
+      result.targetRoleScore,
+      scenario.expected.targetRoleScore,
+      scenario.name
+    )
+    assert.equal(
+      result.overallScore,
+      scenario.expected.overallScore,
+      scenario.name
+    )
+    assert.equal(
+      result.categoryScores.keywordMatch?.score,
+      scenario.expected.keywordMatchScore,
+      scenario.name
+    )
+  }
 })
 
 test("ATS NLP analysis still returns resume-only panels when job-match analysis fails", () => {
