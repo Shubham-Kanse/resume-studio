@@ -249,6 +249,7 @@ export async function scoreResumeWithInsights(
     {
       analysisMode: deterministic.analysisMode,
       resumeQualityScore: deterministic.resumeQualityScore,
+      standaloneResumeScore: deterministic.standaloneResumeScore,
       targetRoleScore: deterministic.targetRoleScore,
       overallScore: deterministic.overallScore,
       categoryScores: deterministic.categoryScores,

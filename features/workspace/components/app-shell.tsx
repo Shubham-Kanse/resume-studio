@@ -25,6 +25,7 @@ import {
   UserRound,
 } from "lucide-react"
 
+import { computeOverviewStandaloneScore } from "@/components/ats/ats-panel-sections"
 import { ErrorBoundary } from "@/components/error-boundary"
 import { Button } from "@/components/ui/button"
 import {
@@ -57,6 +58,7 @@ import {
   coerceAppMode,
 } from "@/features/workspace/workspace-mode"
 import { trackEvent } from "@/lib/analytics"
+import { clearATSAnalysisCaches } from "@/lib/ats-analysis-cache"
 import type { ATSNLPAnalysis } from "@/lib/ats-nlp-analysis-types"
 import type { RuntimeSpellCheckMetrics } from "@/lib/ats-runtime-spell-check"
 import {
@@ -951,6 +953,7 @@ export default function AppShell({ initialMode }: { initialMode?: AppMode }) {
     updateJobApplication,
     deleteJobApplication,
     clearCachedRecords,
+    refreshHistory,
   } = useWorkspacePersistence({
     session,
     supabase,
@@ -1596,6 +1599,7 @@ export default function AppShell({ initialMode }: { initialMode?: AppMode }) {
   }
 
   const handleATSScore = async (formData: FormData) => {
+    clearATSAnalysisCaches()
     scrollToOutputOnMobile()
     const requestId = atsRequestIdRef.current + 1
     atsRequestIdRef.current = requestId
@@ -1649,7 +1653,18 @@ export default function AppShell({ initialMode }: { initialMode?: AppMode }) {
         return
       }
 
-      setAtsScore(data)
+      const normalizedScore: ATSScoreResponse = {
+        ...data,
+        standaloneResumeScore: computeOverviewStandaloneScore({
+          scoreData: data,
+          resumeContent: resume,
+          runtimeSpellMetrics: frozenAnalysis.spellMetrics,
+          // Keep the saved standalone score aligned with the
+          // exact Overview metric computation shown in the ATS panel.
+          nlpAnalysis: null,
+        }),
+      }
+
       setAtsRuntimeSpellMetrics(frozenAnalysis.spellMetrics)
       setAtsNlpAnalysis(frozenAnalysis.nlpAnalysis)
 
@@ -1662,7 +1677,7 @@ export default function AppShell({ initialMode }: { initialMode?: AppMode }) {
           sourceFileMimeType: resumeFileMimeType,
           sourceFileDataUrl: resumeFileDataUrl,
           extraInstructions: additional,
-          atsScore: data,
+          atsScore: normalizedScore,
         })
 
         if (atsRequestIdRef.current !== requestId) {
@@ -1672,9 +1687,12 @@ export default function AppShell({ initialMode }: { initialMode?: AppMode }) {
         savedAtsRunIdRef.current = savedRunId
 
         if (savedRunId) {
+          await refreshHistory()
           setAuthMessage("ATS score saved to your account.")
         }
       }
+
+      setAtsScore(normalizedScore)
 
       if (
         ATS_AI_INSIGHTS_ENABLED &&
@@ -1900,6 +1918,7 @@ export default function AppShell({ initialMode }: { initialMode?: AppMode }) {
 
   const handleLoadRunFromDashboard = useCallback(
     (run: TrackedRunRecord) => {
+      clearATSAnalysisCaches()
       invalidateATSRequests()
       setMode(run.mode)
       setJobDescription(run.job_description ?? "")
@@ -1989,6 +2008,7 @@ export default function AppShell({ initialMode }: { initialMode?: AppMode }) {
   ])
 
   const handleRescoreCV = () => {
+    clearATSAnalysisCaches()
     invalidateATSRequests()
     setAtsScore(null)
     setAtsNlpAnalysis(null)

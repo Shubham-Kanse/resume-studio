@@ -5004,6 +5004,23 @@ export function scoreResumeDeterministically(input: {
     contact,
     qualification,
   })
+  const standaloneResumeScores = hasJD
+    ? calibrateScores({
+        hasJD: false,
+        jdAnalysis: null,
+        formattingScore: formatting.score,
+        contentQualityScore,
+        summaryScore,
+        skillsScore,
+        structureScore,
+        educationScore,
+        keywordScore: null,
+        qualificationScore: 0,
+        missingRequiredSectionCount: missingSections.length,
+        contact,
+        qualification: createEmptyQualificationAlignment(),
+      })
+    : calibratedScores
 
   const derived = buildIssuesAndRecommendations({
     hasJD,
@@ -5064,6 +5081,7 @@ export function scoreResumeDeterministically(input: {
   return {
     analysisMode: hasJD ? "resume-with-jd" : "resume-only",
     resumeQualityScore: calibratedScores.resumeQualityScore,
+    standaloneResumeScore: standaloneResumeScores.overallScore,
     targetRoleScore: jobMatchArtifacts.targetRoleScore,
     overallScore: calibratedScores.overallScore,
     categoryScores: {

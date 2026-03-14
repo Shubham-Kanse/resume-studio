@@ -633,14 +633,29 @@ function buildOverviewMetrics(
       note: "Built from the section scores that directly evaluate bullet construction.",
     },
   ]
+  const explicitOverallScore = clampScore(
+    metrics.reduce((sum, metric) => sum + metric.score, 0) /
+      Math.max(1, metrics.length)
+  )
 
   return {
     metrics,
-    overallScore: average(
-      metrics.map((metric) => metric.score),
-      data.overallScore
-    ),
+    overallScore: explicitOverallScore,
   }
+}
+
+export function computeOverviewStandaloneScore(params: {
+  scoreData: ATSScoreResponse
+  resumeContent: string
+  runtimeSpellMetrics?: RuntimeSpellCheckMetrics | null
+  nlpAnalysis?: ATSNLPAnalysis | null
+}) {
+  return buildOverviewMetrics(
+    params.scoreData,
+    params.resumeContent,
+    params.runtimeSpellMetrics ?? null,
+    params.nlpAnalysis ?? null
+  ).overallScore
 }
 
 export function getATSOverviewDisplayScores(
@@ -655,10 +670,7 @@ export function getATSOverviewDisplayScores(
     nlpAnalysis ?? null
   )
 
-  const resumeScore =
-    scoreData.analysisMode === "resume-with-jd"
-      ? scoreData.resumeQualityScore
-      : derivedOverviewScore
+  const resumeScore = scoreData.standaloneResumeScore ?? scoreData.overallScore
 
   return {
     resumeScore,
@@ -814,14 +826,12 @@ function ATSOverviewSection({
   resumeContent,
   spellMetrics,
 }: ATSSectionRendererProps) {
-  const { metrics, overallScore: derivedOverviewScore } = useMemo(
+  const { metrics } = useMemo(
     () => buildOverviewMetrics(scoreData, resumeContent, spellMetrics, null),
     [resumeContent, scoreData, spellMetrics]
   )
   const hasTargetMyCVScore = scoreData.targetRoleScore !== null
-  const resumeScore = hasTargetMyCVScore
-    ? scoreData.resumeQualityScore
-    : derivedOverviewScore
+  const resumeScore = scoreData.standaloneResumeScore ?? scoreData.overallScore
   const overviewSummary = (() => {
     const score = hasTargetMyCVScore
       ? scoreData.targetRoleScore || 0

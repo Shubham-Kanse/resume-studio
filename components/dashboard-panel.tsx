@@ -22,7 +22,6 @@ import {
   X,
 } from "lucide-react"
 
-import { getATSOverviewDisplayScores } from "@/components/ats/ats-panel-sections"
 import { Button } from "@/components/ui/button"
 import { extractTrackedRunFileName } from "@/lib/tracked-runs"
 import type { TrackedRunRecord } from "@/lib/tracked-runs"
@@ -65,8 +64,13 @@ function displayText(text: string | null | undefined) {
 function getTrackedRunDisplayAtsScore(run: TrackedRunRecord) {
   if (!run.ats_score) return null
 
-  return getATSOverviewDisplayScores(run.ats_score, run.resume_content)
-    .resumeScore
+  if (run.ats_score.analysisMode === "resume-with-jd") {
+    return (
+      run.ats_score.standaloneResumeScore ?? run.ats_score.resumeQualityScore
+    )
+  }
+
+  return run.ats_score.standaloneResumeScore ?? run.ats_score.overallScore
 }
 
 function DashboardPanelComponent({

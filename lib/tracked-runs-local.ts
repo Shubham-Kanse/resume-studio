@@ -4,6 +4,11 @@ import type { ATSScoreResponse } from "@/types/ats"
 
 const STORAGE_PREFIX = "resume-studio-tracked-runs"
 
+function cloneAtsScore(score: ATSScoreResponse | null | undefined) {
+  if (!score) return null
+  return JSON.parse(JSON.stringify(score)) as ATSScoreResponse
+}
+
 function storageKey(userId: string) {
   return `${STORAGE_PREFIX}:${userId}`
 }
@@ -164,7 +169,7 @@ export function createLocalTrackedRunRecord(
       ? input.extraInstructions.trim()
       : null,
     latex_content: input.latexContent ?? null,
-    ats_score: input.atsScore ?? null,
+    ats_score: cloneAtsScore(input.atsScore),
     created_at: now,
     updated_at: now,
   }
@@ -183,7 +188,7 @@ export function updateTrackedRunScoreLocally(
     changed = true
     return {
       ...record,
-      ats_score: score,
+      ats_score: cloneAtsScore(score),
       updated_at: updatedAt,
     }
   })

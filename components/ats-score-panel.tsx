@@ -15,6 +15,10 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useDocumentActions } from "@/hooks/use-document-actions"
+import {
+  nlpAnalysisCache,
+  runtimeSpellMetricsCache,
+} from "@/lib/ats-analysis-cache"
 import type { ATSNLPAnalysis } from "@/lib/ats-nlp-analysis-types"
 import type { RuntimeSpellCheckMetrics } from "@/lib/ats-runtime-spell-check"
 import type { DocumentArtifacts } from "@/lib/document-artifacts"
@@ -51,12 +55,6 @@ interface ATSScorePanelProps {
 
 const ATS_LOADING_STEP_DURATION_MS = 880
 const ATS_LOADING_FINISH_FADE_DELAY_MS = 260
-
-const runtimeSpellMetricsCache = new Map<
-  string,
-  Promise<RuntimeSpellCheckMetrics | null>
->()
-const nlpAnalysisCache = new Map<string, Promise<ATSNLPAnalysis | null>>()
 
 function ATSLoadingPanel({
   hasJobDescription,

@@ -1,6 +1,7 @@
 export interface ATSScoreResponse {
   analysisMode: "resume-only" | "resume-with-jd"
   resumeQualityScore: number
+  standaloneResumeScore?: number
   targetRoleScore: number | null
   overallScore: number
   categoryScores: {

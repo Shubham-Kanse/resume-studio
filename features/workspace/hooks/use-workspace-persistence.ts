@@ -313,19 +313,6 @@ export function useWorkspacePersistence({
       let resumeFilePath = initialFilePath
       let payloadFileDataUrl = initialFileDataUrl
 
-      const optimisticRecord: TrackedRunRecord = {
-        ...localRecord,
-        resume_file_path: initialFilePath,
-        resume_file_data_url: initialFileDataUrl,
-      }
-      const optimisticHistory = mergeTrackedRuns(
-        [optimisticRecord],
-        loadLocalTrackedRuns(session.user.id),
-        HISTORY_LIMIT
-      )
-      persistLocalTrackedRuns(session.user.id, optimisticHistory)
-      upsertHistoryRecord(optimisticRecord)
-
       if (supabase && initialFileDataUrl && isDataUrl(initialFileDataUrl)) {
         try {
           resumeFilePath = await uploadResumeDataUrl({
@@ -369,7 +356,19 @@ export function useWorkspacePersistence({
       }
 
       if (!supabase) {
-        return localRecord.id
+        const localOnlyRecord = {
+          ...localRecord,
+          resume_file_path: resumeFilePath,
+          resume_file_data_url: resumeFilePath ? null : payloadFileDataUrl,
+        }
+        const localOnlyHistory = mergeTrackedRuns(
+          [localOnlyRecord],
+          loadLocalTrackedRuns(session.user.id),
+          HISTORY_LIMIT
+        )
+        persistLocalTrackedRuns(session.user.id, localOnlyHistory)
+        upsertHistoryRecord(localOnlyRecord)
+        return localOnlyRecord.id
       }
 
       const { data, error: saveError } = await supabase
@@ -428,6 +427,11 @@ export function useWorkspacePersistence({
     },
     [session?.user?.id, setAuthMessage, supabase, upsertHistoryRecord]
   )
+
+  const refreshHistory = useCallback(async () => {
+    if (!session?.user?.id) return
+    await loadHistory(session.user.id)
+  }, [loadHistory, session?.user?.id])
 
   const updateTrackedRunScore = useCallback(
     async (runId: string, score: ATSScoreResponse) => {
@@ -838,5 +842,6 @@ export function useWorkspacePersistence({
     updateJobApplication,
     deleteJobApplication,
     clearCachedRecords,
+    refreshHistory,
   }
 }
