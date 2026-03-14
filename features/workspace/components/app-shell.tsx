@@ -553,20 +553,58 @@ const HomePanel = memo(function HomePanel({
         "justify-center overflow-visible px-5 py-8 sm:px-8 sm:py-10 lg:px-10"
       )}
     >
-      <div className="mx-auto flex w-full max-w-4xl flex-col items-start gap-8">
-        <div className="space-y-4">
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-black/20 px-3 py-1 text-[11px] uppercase tracking-[0.24em] text-white/60">
+      <div className="mx-auto flex w-full max-w-5xl flex-col items-start gap-8">
+        <div className="space-y-5">
+          <div className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-black/20 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-white/60">
             <FileCode2 className="h-3.5 w-3.5 text-primary" />
             Resume Studio
           </div>
-          <div className="space-y-3">
+          <div className="space-y-4">
             <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-white sm:text-4xl lg:text-5xl">
-              Build stronger applications from one workspace.
+              Land more interviews with clearer, ATS-safe resumes.
             </h1>
-            <p className="max-w-2xl text-sm leading-7 text-white/68 sm:text-base">
-              Resume Studio helps you generate tailored LaTeX resumes and review
-              ATS compatibility before you apply, while keeping account access
-              and the rest of the workspace available from the same UI.
+            <p className="max-w-3xl text-sm leading-7 text-white/68 sm:text-base">
+              Start with your current resume, see exactly what is costing score,
+              then generate or refine role-specific versions without switching
+              tools.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid w-full gap-4 md:grid-cols-3">
+          <div className="rounded-[22px] border border-white/10 bg-black/20 p-4 backdrop-blur-sm">
+            <p className="text-xs uppercase tracking-[0.16em] text-white/45">
+              Step 1
+            </p>
+            <p className="mt-2 text-sm font-medium text-white">
+              Analyze your current resume
+            </p>
+            <p className="mt-2 text-sm leading-6 text-white/60">
+              Get section-wise issues, missing keywords, and exact score-loss
+              reasons.
+            </p>
+          </div>
+          <div className="rounded-[22px] border border-white/10 bg-black/20 p-4 backdrop-blur-sm">
+            <p className="text-xs uppercase tracking-[0.16em] text-white/45">
+              Step 2
+            </p>
+            <p className="mt-2 text-sm font-medium text-white">
+              Apply targeted fixes
+            </p>
+            <p className="mt-2 text-sm leading-6 text-white/60">
+              Rewrite only weak bullets and chronology gaps instead of editing
+              the whole document.
+            </p>
+          </div>
+          <div className="rounded-[22px] border border-white/10 bg-black/20 p-4 backdrop-blur-sm">
+            <p className="text-xs uppercase tracking-[0.16em] text-white/45">
+              Step 3
+            </p>
+            <p className="mt-2 text-sm font-medium text-white">
+              Track each application
+            </p>
+            <p className="mt-2 text-sm leading-6 text-white/60">
+              Keep ATS runs, generated versions, and job tracking in one place.
             </p>
           </div>
         </div>
@@ -576,46 +614,32 @@ const HomePanel = memo(function HomePanel({
             type="button"
             variant="cool"
             size="lg"
-            onClick={() => onModeChange(TRACKED_RUN_MODE.GENERATE)}
+            onClick={() => onModeChange(TRACKED_RUN_MODE.ATS_SCORE)}
             className="h-11 rounded-full px-6 text-sm"
           >
-            <FileCode2 className="h-4 w-4" />
-            Try LaTeX Generator
+            <Gauge className="h-4 w-4" />
+            Analyze Resume Now
           </Button>
           <Button
             type="button"
             variant="cool"
             size="lg"
-            onClick={() => onModeChange(TRACKED_RUN_MODE.ATS_SCORE)}
-            className="h-11 rounded-full px-6 text-sm"
+            onClick={() => onModeChange(TRACKED_RUN_MODE.GENERATE)}
+            className="h-11 rounded-full px-6 text-sm opacity-90"
           >
-            <Gauge className="h-4 w-4" />
-            Get ATS Score
+            <FileCode2 className="h-4 w-4" />
+            Build LaTeX Resume
           </Button>
-        </div>
-
-        <div className="grid w-full gap-4 md:grid-cols-3">
-          <div className="rounded-[22px] border border-white/10 bg-black/18 p-4 backdrop-blur-sm">
-            <p className="text-sm font-medium text-white">Tailored output</p>
-            <p className="mt-2 text-sm leading-6 text-white/58">
-              Generate role-specific LaTeX resumes without leaving the app.
-            </p>
-          </div>
-          <div className="rounded-[22px] border border-white/10 bg-black/18 p-4 backdrop-blur-sm">
-            <p className="text-sm font-medium text-white">ATS review</p>
-            <p className="mt-2 text-sm leading-6 text-white/58">
-              Check structure and keyword alignment before submitting.
-            </p>
-          </div>
-          <div className="rounded-[22px] border border-white/10 bg-black/18 p-4 backdrop-blur-sm">
-            <p className="text-sm font-medium text-white">
-              Dashboard and tracking
-            </p>
-            <p className="mt-2 text-sm leading-6 text-white/58">
-              Review saved runs in the dashboard and stay on top of your
-              applications with the built-in job tracker.
-            </p>
-          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="lg"
+            onClick={() => onModeChange(APP_MODE.DASHBOARD)}
+            className="h-11 rounded-full border border-white/12 bg-black/20 px-6 text-sm text-white/80 hover:bg-white/[0.06] hover:text-white"
+          >
+            <LayoutDashboard className="h-4 w-4" />
+            Open Dashboard
+          </Button>
         </div>
       </div>
     </div>

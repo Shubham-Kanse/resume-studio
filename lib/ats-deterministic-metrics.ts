@@ -347,6 +347,7 @@ export function getDateOrderMetrics(text: string) {
   )
 
   const chronologyIssues: DateOrderIssue[] = []
+  const chronologyIssueKeys = new Set<string>()
   const groups = new Map<string, typeof entries>()
 
   for (const entry of entries) {
@@ -363,11 +364,22 @@ export function getDateOrderMetrics(text: string) {
 
     for (const current of sectionEntries.slice(1)) {
       if (current.latestSortValue > previous.latestSortValue) {
-        chronologyIssues.push({
+        const issue: DateOrderIssue = {
           section: formatSectionLabel(section),
           currentLine: current.line,
           previousLine: previous.line,
-        })
+        }
+        const key = `${issue.section.toLowerCase()}::${issue.currentLine
+          .trim()
+          .replace(/\s+/g, " ")
+          .toLowerCase()}::${issue.previousLine
+          .trim()
+          .replace(/\s+/g, " ")
+          .toLowerCase()}`
+        if (!chronologyIssueKeys.has(key)) {
+          chronologyIssueKeys.add(key)
+          chronologyIssues.push(issue)
+        }
       }
       previous = current
     }
@@ -520,11 +532,44 @@ export function getConsistencyMetrics(text: string) {
     })
   }
 
-  for (const issue of dateMetrics.chronologyIssues.slice(0, 3)) {
+  const chronologyIssueMap = new Map<
+    string,
+    {
+      section: string
+      examples: DateOrderIssue[]
+    }
+  >()
+
+  for (const issue of dateMetrics.chronologyIssues) {
+    const key = `${issue.section}::${issue.currentLine}::${issue.previousLine}`
+    if (chronologyIssueMap.has(key)) continue
+    chronologyIssueMap.set(key, {
+      section: issue.section,
+      examples: [issue],
+    })
+  }
+
+  const chronologyBySection = new Map<string, DateOrderIssue[]>()
+  for (const { section, examples } of chronologyIssueMap.values()) {
+    const current = chronologyBySection.get(section) ?? []
+    current.push(...examples)
+    chronologyBySection.set(section, current)
+  }
+
+  for (const [section, sectionIssues] of Array.from(
+    chronologyBySection.entries()
+  ).slice(0, 3)) {
+    const primary = sectionIssues[0]
+    if (!primary) continue
+    const extraCount = Math.max(0, sectionIssues.length - 1)
     issues.push({
       category: "chronology",
-      label: `${issue.section} chronology issue`,
-      detail: `"${issue.currentLine}" appears below "${issue.previousLine}" even though it looks more recent.`,
+      label: `${section} chronology issue${sectionIssues.length > 1 ? "s" : ""}`,
+      detail:
+        `"${primary.currentLine}" appears below "${primary.previousLine}" even though it looks more recent.` +
+        (extraCount > 0
+          ? ` Plus ${extraCount} more chronology mismatch${extraCount === 1 ? "" : "es"} in ${section}.`
+          : ""),
     })
   }
 

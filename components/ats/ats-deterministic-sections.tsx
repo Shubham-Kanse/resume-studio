@@ -1073,9 +1073,9 @@ function renderBlock(
 
       {block.highlights && block.highlights.length > 0 ? (
         <div className="mt-4 flex flex-wrap gap-2">
-          {block.highlights.map((item) => (
+          {block.highlights.map((item, index) => (
             <span
-              key={`${item.label}-${item.value}`}
+              key={`${item.label}-${item.value}-${index}`}
               className={
                 item.tone === "danger"
                   ? "rounded-full border border-red-500/20 bg-red-500/10 px-3 py-1 text-xs text-red-100"
@@ -1107,11 +1107,11 @@ function renderBlock(
       ) : null}
 
       <ul className="mt-4 space-y-3">
-        {block.bullets.map((bullet) => {
+        {block.bullets.map((bullet, index) => {
           if (typeof bullet === "string") {
             return (
               <li
-                key={bullet}
+                key={`${bullet}-${index}`}
                 className="rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 text-sm leading-6 text-muted-foreground"
               >
                 {bullet}
@@ -1121,7 +1121,7 @@ function renderBlock(
 
           return (
             <li
-              key={bullet.label}
+              key={`${bullet.label}-${index}`}
               className={`
                 rounded-2xl border px-4 py-3 text-sm leading-6
                 ${
@@ -1143,11 +1143,11 @@ function renderBlock(
             More Details
           </div>
           <ul className="mt-3 space-y-2">
-            {block.details.map((detail) => {
+            {block.details.map((detail, index) => {
               if (typeof detail === "string") {
                 return (
                   <li
-                    key={detail}
+                    key={`${detail}-${index}`}
                     className="text-sm leading-6 text-muted-foreground"
                   >
                     {detail}
@@ -1156,7 +1156,7 @@ function renderBlock(
               }
 
               return (
-                <li key={`${detail.targetSection}-${detail.label}`}>
+                <li key={`${detail.targetSection}-${detail.label}-${index}`}>
                   <button
                     type="button"
                     onClick={() => onSelectSection?.(detail.targetSection)}
@@ -1222,6 +1222,40 @@ function groupIssuesByLine<
   }
 
   return [...grouped.values()]
+}
+
+function summarizeChronologyBySection(
+  issues: Array<{ section: string; currentLine: string; previousLine: string }>
+) {
+  const grouped = new Map<
+    string,
+    {
+      section: string
+      count: number
+      example: { currentLine: string; previousLine: string }
+    }
+  >()
+
+  for (const issue of issues) {
+    const current = grouped.get(issue.section)
+    if (!current) {
+      grouped.set(issue.section, {
+        section: issue.section,
+        count: 1,
+        example: {
+          currentLine: issue.currentLine,
+          previousLine: issue.previousLine,
+        },
+      })
+      continue
+    }
+
+    current.count += 1
+  }
+
+  return Array.from(grouped.values()).sort(
+    (left, right) => right.count - left.count
+  )
 }
 
 function getJobMatchSummary(score: number) {
@@ -2403,6 +2437,26 @@ function buildSectionContent(
       title: "Analysis",
       summary:
         "I checked two things here: whether your date formats stay consistent, and whether dated entries remain in reverse chronology within each section.",
+      highlights: (() => {
+        const chronologySummary = summarizeChronologyBySection(
+          dateMetrics.chronologyIssues
+        )
+
+        return [
+          ...(dateMetrics.formatTypes.length > 1
+            ? dateMetrics.formatTypes.map((type) => ({
+                label: type.replaceAll("_", " "),
+                value: "format",
+                tone: "danger" as const,
+              }))
+            : []),
+          ...chronologySummary.slice(0, 4).map((entry) => ({
+            label: `${entry.section} order`,
+            value: `${entry.count}`,
+            tone: "danger" as const,
+          })),
+        ]
+      })(),
       bullets: [
         dateMetrics.formatTypes.length > 1
           ? `I found ${dateMetrics.formatTypes.length} different date formats, which weakens consistency.`
@@ -2411,29 +2465,17 @@ function buildSectionContent(
           ? `I found ${dateMetrics.chronologyIssues.length} chronology issue${dateMetrics.chronologyIssues.length === 1 ? "" : "s"} where a more recent entry appears below an older one.`
           : "The dated sections I checked appear to stay in reverse chronology.",
       ],
-      highlights: [
-        ...(dateMetrics.formatTypes.length > 1
-          ? dateMetrics.formatTypes.map((type) => ({
-              label: type.replaceAll("_", " "),
-              value: "format",
-              tone: "danger" as const,
-            }))
-          : []),
-        ...dateMetrics.chronologyIssues.slice(0, 4).map((issue) => ({
-          label: issue.section,
-          value: "order",
-          tone: "danger" as const,
-        })),
-      ],
       details: [
         "Chronology problems slow recruiters down because they have to reconstruct the timeline manually.",
         "The standard expectation is reverse-chronological ordering with one stable date format.",
-        ...dateMetrics.chronologyIssues
+        ...summarizeChronologyBySection(dateMetrics.chronologyIssues)
           .slice(0, 3)
-          .map(
-            (issue) =>
-              `${issue.section}: "${issue.currentLine}" appears below "${issue.previousLine}" even though it looks more recent.`
-          ),
+          .map((entry) => {
+            const extra = Math.max(0, entry.count - 1)
+            return `${entry.section}: "${entry.example.currentLine}" appears below "${entry.example.previousLine}" even though it looks more recent.${
+              extra > 0 ? ` Plus ${extra} more in this section.` : ""
+            }`
+          }),
       ],
     },
     "spell-check": {
