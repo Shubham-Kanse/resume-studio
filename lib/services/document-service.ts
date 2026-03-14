@@ -102,6 +102,19 @@ function looksLikeParagraphContinuation(line: string) {
   return tokenCount > 0 && tokenCount <= 5 && !/[.!?]$/.test(normalized)
 }
 
+async function importOptionalModule<T = unknown>(
+  moduleName: string
+): Promise<T | null> {
+  try {
+    const dynamicImporter = new Function("name", "return import(name)") as (
+      name: string
+    ) => Promise<T>
+    return await dynamicImporter(moduleName)
+  } catch {
+    return null
+  }
+}
+
 export function normalizeExtractedText(value: string) {
   const unicodeNormalized = normalizeUnicodeText(value)
     .replace(/([A-Za-z])-\n\s*([a-z])/g, "$1$2")
@@ -557,7 +570,10 @@ async function extractPdfWithPortableOcr(
 ): Promise<PdfExtractionCandidate | null> {
   try {
     const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs")
-    const canvasModule = await import("@napi-rs/canvas")
+    const canvasModule = await importOptionalModule<{
+      createCanvas?: Function
+    }>("@napi-rs/canvas")
+    if (!canvasModule) return null
     const transformers = await import("@xenova/transformers")
     const loadingTask = pdfjsLib.getDocument({
       data: new Uint8Array(buffer.slice(0)),
