@@ -38,6 +38,7 @@ test("ATS score route returns a scored response for valid payloads", async () =>
 
   assert.equal(response.status, 200)
   assert.equal(typeof body.overallScore, "number")
-  assert.equal(body.analysisMode, "resume-only")
+  assert.equal(body.analysisMode, "resume-with-jd")
+  assert.equal(typeof body.standaloneResumeScore, "number")
   assert.ok(Array.isArray(body.sectionReviews))
 })
