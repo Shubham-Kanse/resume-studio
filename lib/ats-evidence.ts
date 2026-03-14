@@ -28,5 +28,32 @@ export function buildEvidenceSummary(
     parseabilityIssues: result.atsCompatibility.issues,
     parseabilityWarnings: result.atsCompatibility.warnings,
     keywordCoverageBySection: result.keywordAnalysis?.coverageBySection ?? null,
+    advancedSignals: result.evidence.advancedSignals
+      ? {
+          timeline: {
+            overlaps: result.evidence.advancedSignals.timeline.overlaps.length,
+            significantGaps:
+              result.evidence.advancedSignals.timeline.significantGaps.length,
+            explainedGaps:
+              result.evidence.advancedSignals.timeline.explainedGaps,
+          },
+          writing: {
+            tenseIssues: result.evidence.advancedSignals.tense.issues.length,
+            terminologyDrift:
+              result.evidence.advancedSignals.terminology.driftTerms.length,
+            grammarIssues:
+              result.evidence.advancedSignals.grammar.issues.length,
+          },
+          credibility: {
+            uncoveredCoreSkills:
+              result.evidence.advancedSignals.skillEvidence.uncoveredCoreSkills
+                .length,
+            bulletEvidenceScore:
+              result.evidence.advancedSignals.bulletEvidence.averageScore,
+            weakMetrics: result.evidence.advancedSignals.metricQuality.weak,
+            strongMetrics: result.evidence.advancedSignals.metricQuality.strong,
+          },
+        }
+      : undefined,
   }
 }

@@ -541,3 +541,40 @@ test("quantifying impact uses semantic JD term matching for bullet evaluation", 
   assert.ok(topBullet.signals.keywordMatches.length > 0)
   assert.ok(topBullet.score >= 70)
 })
+
+test("advanced insights expose confidence, counterfactuals, and evidence graph without breaking core scores", () => {
+  const resume = `
+  Jane Doe
+  jane@example.com | Dublin | linkedin.com/in/janedoe
+
+  Professional Summary
+  Data analyst with 5 years building dashboards and reporting workflows.
+
+  Work Experience
+  Data Analyst | Acme | Jan 2020 - Present
+  - Built Power BI dashboards for stakeholder reporting.
+  - Improved SQL query performance by 32% across weekly reports.
+
+  Skills
+  SQL, Power BI, Python, stakeholder management, reporting
+
+  Education
+  BSc Computer Science, 2019
+  `
+
+  const jd = `
+  Senior Data Analyst
+  Requirements: SQL, Power BI, Python, stakeholder management, dashboard reporting, experimentation.
+  `
+
+  const result = scoreResumeDeterministically({
+    resumeContent: resume,
+    jobDescription: jd,
+  })
+
+  assert.ok(result.advancedInsights)
+  assert.ok((result.advancedInsights?.confidence.score || 0) > 0)
+  assert.ok((result.advancedInsights?.counterfactuals.length || 0) > 0)
+  assert.ok((result.advancedInsights?.evidenceGraph.length || 0) > 0)
+  assert.ok(result.evidence.advancedSignals)
+})

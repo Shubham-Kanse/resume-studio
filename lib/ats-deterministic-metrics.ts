@@ -474,7 +474,21 @@ export function getConsistencyMetrics(text: string) {
   const punctuationStyles = Object.values(punctuationCounts).filter(
     (count) => count > 0
   )
-  if (extractedBullets.length >= 3 && punctuationStyles.length > 1) {
+  const punctuationStyleCounts = Object.values(punctuationCounts)
+    .filter((count) => count > 0)
+    .sort((a, b) => b - a)
+  const dominantPunctuationCount = punctuationStyleCounts[0] ?? 0
+  const minorityPunctuationCount =
+    extractedBullets.length - dominantPunctuationCount
+  const hasMaterialPunctuationVariance =
+    minorityPunctuationCount >= 3 &&
+    minorityPunctuationCount / Math.max(1, extractedBullets.length) >= 0.2
+
+  if (
+    extractedBullets.length >= 3 &&
+    punctuationStyles.length > 1 &&
+    hasMaterialPunctuationVariance
+  ) {
     const punctuationParts = [
       punctuationCounts.period > 0
         ? `${punctuationCounts.period} end with periods`
@@ -561,7 +575,6 @@ export function getSectionMetrics(
   const orderIssues: SectionIssue[] = []
   const summaryIndex = detectedOrder.indexOf("professionalSummary")
   const workIndex = detectedOrder.indexOf("workExperience")
-  const skillsIndex = detectedOrder.indexOf("skills")
   const educationIndex = detectedOrder.indexOf("education")
 
   if (summaryIndex !== -1 && workIndex !== -1 && summaryIndex > workIndex) {
@@ -570,15 +583,6 @@ export function getSectionMetrics(
       label: "Summary order",
       detail:
         "Professional Summary appears below Work Experience. Move the summary above experience so role positioning is visible earlier.",
-    })
-  }
-
-  if (skillsIndex !== -1 && workIndex !== -1 && skillsIndex < workIndex) {
-    orderIssues.push({
-      category: "order",
-      label: "Skills order",
-      detail:
-        "Skills appears above Work Experience. Keep skills after the summary and primary experience unless there is a strong reason not to.",
     })
   }
 

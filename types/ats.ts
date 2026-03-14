@@ -26,6 +26,17 @@ export interface ATSScoreResponse {
     parseability: number
     issues: string[]
     warnings: string[]
+    pageRiskMap?: Array<{
+      page: number
+      risk: number
+      signals: string[]
+    }>
+    flagConfidence?: Array<{
+      flag: string
+      present: boolean
+      confidence: number
+      detail: string
+    }>
   }
   keywordAnalysis: {
     totalKeywordsInJD: number
@@ -87,8 +98,59 @@ export interface ATSScoreResponse {
       projects: string[]
       certifications: string[]
     } | null
+    advancedSignals?: {
+      timeline: {
+        overlaps: number
+        significantGaps: number
+        explainedGaps?: number
+      }
+      writing: {
+        tenseIssues: number
+        terminologyDrift: number
+        grammarIssues?: number
+      }
+      credibility: {
+        uncoveredCoreSkills: number
+        bulletEvidenceScore?: number
+        weakMetrics?: number
+        strongMetrics?: number
+      }
+    }
   }
   debugAnalysis: ATSDebugSection[]
+  advancedInsights?: ATSAdvancedInsights
+}
+
+export interface ATSAdvancedInsights {
+  confidence: {
+    score: number
+    uncertaintyBand: {
+      lower: number
+      upper: number
+      delta: number
+    }
+    contributors: Array<{
+      label: string
+      impact: "high" | "medium" | "low"
+      detail: string
+    }>
+  }
+  benchmark: {
+    mode: "heuristic-role-family"
+    percentile: number
+    cohort: string
+    comparedAgainst: string[]
+  }
+  counterfactuals: Array<{
+    action: string
+    estimatedScoreLift: number
+    rationale: string
+  }>
+  evidenceGraph: Array<{
+    skill: string
+    evidenceBullets: string[]
+    matchedResponsibilities: string[]
+  }>
 }
 
 export interface ATSDebugSection {

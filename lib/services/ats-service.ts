@@ -39,6 +39,10 @@ export const atsScoreSchema = z.object({
     .min(1, "Resume content is required.")
     .max(60000, "Resume content is too long."),
   extractionArtifacts: documentArtifactsSchema.nullish().default(null),
+  resumeProfileMode: z
+    .enum(["auto", "chronological", "functional", "hybrid"])
+    .optional()
+    .default("auto"),
 })
 
 type NarrativeSectionReview = Pick<

@@ -489,6 +489,93 @@ function scoreBulletLength(wordCount: number | null) {
   return clampScore(100 - (wordCount - 28) * 6)
 }
 
+const FEEDBACK_PRIORITY_PATTERNS: Array<{ pattern: RegExp; weight: number }> = [
+  { pattern: /\b(missing|not detected|critical|blocker)\b/i, weight: 14 },
+  { pattern: /\b(quantif|metric|outcome|result)\b/i, weight: 12 },
+  { pattern: /\b(keyword|required terms?|alignment|match)\b/i, weight: 11 },
+  { pattern: /\b(experience|bullet|action|star|impact)\b/i, weight: 10 },
+  { pattern: /\b(date|timeline|chronology|gap|overlap)\b/i, weight: 9 },
+  { pattern: /\b(parse|ats|header|section|format)\b/i, weight: 8 },
+  { pattern: /\b(skill|evidence|coverage|traceability)\b/i, weight: 8 },
+]
+
+const FEEDBACK_EMPHASIS_TERMS = [
+  "missing",
+  "critical",
+  "quantified",
+  "metric",
+  "outcome",
+  "required",
+  "keyword",
+  "experience",
+  "bullet",
+  "date",
+  "timeline",
+  "gap",
+  "overlap",
+  "parseability",
+  "ATS",
+  "skills",
+  "evidence",
+  "action",
+]
+
+function scoreFeedbackLine(text: string) {
+  return FEEDBACK_PRIORITY_PATTERNS.reduce((score, rule) => {
+    return rule.pattern.test(text) ? score + rule.weight : score
+  }, 1)
+}
+
+function dedupeFeedbackLines(lines: string[]) {
+  const seen = new Set<string>()
+  return lines.filter((line) => {
+    const key = line.toLowerCase().replace(/\s+/g, " ").trim()
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+function pickTopFeedback(lines: string[], limit: number) {
+  return dedupeFeedbackLines(lines)
+    .map((line) => ({ line, score: scoreFeedbackLine(line) }))
+    .sort((left, right) => right.score - left.score)
+    .slice(0, limit)
+    .map((item) => item.line)
+}
+
+function buildSectionFeedback(section: ATSSectionReview) {
+  return {
+    blockers: pickTopFeedback(section.gaps, 3),
+    fixes: pickTopFeedback(section.actions, 3),
+    keep: pickTopFeedback(section.whatWorks, 2),
+  }
+}
+
+function renderHighlightedText(text: string) {
+  if (!text.trim()) return text
+  const escapedTerms = FEEDBACK_EMPHASIS_TERMS.map((term) =>
+    term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  )
+  const regex = new RegExp(`\\b(${escapedTerms.join("|")})\\b`, "gi")
+  const parts = text.split(regex)
+
+  return parts.map((part, index) => {
+    const isMatch = FEEDBACK_EMPHASIS_TERMS.some(
+      (term) => term.toLowerCase() === part.toLowerCase()
+    )
+    if (!isMatch) return <span key={`${part}-${index}`}>{part}</span>
+    return (
+      <span
+        key={`${part}-${index}`}
+        className="rounded bg-primary/20 px-1 py-0.5 text-primary"
+      >
+        {part}
+      </span>
+    )
+  })
+}
+
 function average(scores: Array<number | null | undefined>, fallback: number) {
   const filtered = scores.filter(
     (score): score is number =>
@@ -924,6 +1011,7 @@ function ATSBreakdownSection({ scoreData }: ATSSectionRendererProps) {
   const [expandedMetric, setExpandedMetric] = useState<string | null>(
     scoreData.sectionReviews[0]?.id ?? null
   )
+  const [showDetailedDiagnostics, setShowDetailedDiagnostics] = useState(false)
 
   return (
     <div className="space-y-4">
@@ -936,8 +1024,23 @@ function ATSBreakdownSection({ scoreData }: ATSSectionRendererProps) {
       </div>
 
       <div className="space-y-3">
+        <div className="flex items-center justify-end">
+          <button
+            type="button"
+            onClick={() => setShowDetailedDiagnostics((value) => !value)}
+            className={cn(
+              "rounded-full border px-3 py-1.5 text-xs uppercase tracking-[0.16em] transition-colors",
+              showDetailedDiagnostics
+                ? "border-primary/35 bg-primary/10 text-primary"
+                : "border-white/12 text-muted-foreground hover:text-foreground"
+            )}
+          >
+            {showDetailedDiagnostics ? "Detailed View On" : "Detailed View Off"}
+          </button>
+        </div>
         {scoreData.sectionReviews.map((section) => {
           const isExpanded = expandedMetric === section.id
+          const curated = buildSectionFeedback(section)
 
           return (
             <div
@@ -985,51 +1088,106 @@ function ATSBreakdownSection({ scoreData }: ATSSectionRendererProps) {
                 <div className="border-t border-white/8 px-4 py-4">
                   <div className="grid gap-4 xl:grid-cols-3">
                     <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
-                      <div className="text-xs uppercase tracking-[0.18em] text-primary">
-                        What Works
+                      <div className="text-xs uppercase tracking-[0.18em] text-red-200">
+                        Top Blockers
                       </div>
                       <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-                        {section.whatWorks.length > 0 ? (
-                          section.whatWorks.map((item) => (
-                            <li key={item}>{item}</li>
+                        {curated.blockers.length > 0 ? (
+                          curated.blockers.map((item) => (
+                            <li key={item}>{renderHighlightedText(item)}</li>
                           ))
                         ) : (
-                          <li>No strengths captured for this section yet.</li>
-                        )}
-                      </ul>
-                    </div>
-
-                    <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
-                      <div className="text-xs uppercase tracking-[0.18em] text-orange-200">
-                        Gaps
-                      </div>
-                      <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-                        {section.gaps.length > 0 ? (
-                          section.gaps.map((item) => <li key={item}>{item}</li>)
-                        ) : (
-                          <li>No major gaps were recorded for this section.</li>
+                          <li>No material blockers in this section.</li>
                         )}
                       </ul>
                     </div>
 
                     <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
                       <div className="text-xs uppercase tracking-[0.18em] text-primary">
-                        How To Improve
+                        Best Fixes
                       </div>
                       <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-                        {section.actions.length > 0 ? (
-                          section.actions.map((item) => (
-                            <li key={item}>{item}</li>
+                        {curated.fixes.length > 0 ? (
+                          curated.fixes.map((item) => (
+                            <li key={item}>{renderHighlightedText(item)}</li>
                           ))
                         ) : (
-                          <li>
-                            No follow-up actions were generated for this
-                            section.
-                          </li>
+                          <li>No high-priority fixes were generated.</li>
+                        )}
+                      </ul>
+                    </div>
+
+                    <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
+                      <div className="text-xs uppercase tracking-[0.18em] text-emerald-200">
+                        Keep Doing
+                      </div>
+                      <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
+                        {curated.keep.length > 0 ? (
+                          curated.keep.map((item) => (
+                            <li key={item}>{renderHighlightedText(item)}</li>
+                          ))
+                        ) : (
+                          <li>No explicit section strengths captured yet.</li>
                         )}
                       </ul>
                     </div>
                   </div>
+
+                  {showDetailedDiagnostics ? (
+                    <div className="mt-4 rounded-2xl border border-white/8 bg-black/15 p-4">
+                      <div className="text-xs uppercase tracking-[0.18em] text-white/55">
+                        Detailed Diagnostics
+                      </div>
+                      <div className="mt-4 grid gap-4 xl:grid-cols-3">
+                        <div>
+                          <div className="text-[11px] uppercase tracking-[0.16em] text-white/45">
+                            What Works
+                          </div>
+                          <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
+                            {section.whatWorks.length > 0 ? (
+                              section.whatWorks.map((item) => (
+                                <li key={item}>{item}</li>
+                              ))
+                            ) : (
+                              <li>
+                                No strengths captured for this section yet.
+                              </li>
+                            )}
+                          </ul>
+                        </div>
+                        <div>
+                          <div className="text-[11px] uppercase tracking-[0.16em] text-white/45">
+                            Gaps
+                          </div>
+                          <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
+                            {section.gaps.length > 0 ? (
+                              section.gaps.map((item) => (
+                                <li key={item}>{item}</li>
+                              ))
+                            ) : (
+                              <li>
+                                No major gaps were recorded for this section.
+                              </li>
+                            )}
+                          </ul>
+                        </div>
+                        <div>
+                          <div className="text-[11px] uppercase tracking-[0.16em] text-white/45">
+                            Actions
+                          </div>
+                          <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
+                            {section.actions.length > 0 ? (
+                              section.actions.map((item) => (
+                                <li key={item}>{item}</li>
+                              ))
+                            ) : (
+                              <li>No follow-up actions were generated.</li>
+                            )}
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
             </div>

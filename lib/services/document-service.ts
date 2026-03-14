@@ -1,5 +1,11 @@
+import { execFile } from "node:child_process"
+import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises"
+import os from "node:os"
+import path from "node:path"
+import { promisify } from "node:util"
 import { z } from "zod"
 
+import { tokenizeNaturalText } from "@/lib/ats-natural-language"
 import {
   documentArtifactsSchema,
   type DocumentArtifacts,
@@ -9,6 +15,7 @@ import { AppError } from "@/lib/errors"
 import { compileLatexDocument } from "@/lib/latex-compiler"
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+const execFileAsync = promisify(execFile)
 
 export const latexToPdfSchema = z.object({
   latex: z
@@ -28,12 +35,114 @@ export const extractResumeSchema = z.object({
     .max(MAX_UPLOAD_BYTES, "Resume file is too large. Use a file under 10MB."),
 })
 
-function normalizeExtractedText(value: string) {
+const PDF_BULLET_PREFIX = /^[-*•▪◦●]\s+/
+const PDF_NUMBERED_PREFIX = /^\d+[.)]\s+/
+
+function normalizeUnicodeText(value: string) {
   return value
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-    .join("\n")
+    .normalize("NFKC")
+    .replace(/\r\n?/g, "\n")
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .replace(/\u00AD/g, "")
+    .replace(/\u00A0/g, " ")
+    .replace(/[ \t]+\n/g, "\n")
+}
+
+function normalizeLineText(value: string) {
+  return value
+    .replace(/\s+/g, " ")
+    .replace(/\s+([,.;:!?%])/g, "$1")
+    .trim()
+}
+
+function isLikelySectionLikeLine(line: string) {
+  const normalized = line.trim()
+  if (!normalized) return false
+  if (
+    PDF_BULLET_PREFIX.test(normalized) ||
+    PDF_NUMBERED_PREFIX.test(normalized)
+  )
+    return false
+  if (normalized.length > 90) return false
+
+  const words = normalized.split(/\s+/).filter(Boolean)
+  if (words.length === 0 || words.length > 8) return false
+  if (/[:|]$/.test(normalized)) return true
+
+  const lettersOnly = normalized.replace(/[^A-Za-z]/g, "")
+  if (lettersOnly.length === 0) return false
+  const uppercaseRatio =
+    normalized.replace(/[^A-Z]/g, "").length / lettersOnly.length
+
+  return uppercaseRatio >= 0.7
+}
+
+function looksLikeParagraphContinuation(line: string) {
+  const normalized = line.trim()
+  if (!normalized) return false
+  if (
+    PDF_BULLET_PREFIX.test(normalized) ||
+    PDF_NUMBERED_PREFIX.test(normalized)
+  )
+    return false
+
+  const firstChar = normalized.charAt(0)
+  if (/[a-z(]/.test(firstChar)) return true
+  if (
+    /^\d/.test(firstChar) &&
+    /\b(?:%|ms|sec|seconds?|minutes?|hours?)\b/i.test(normalized)
+  ) {
+    return true
+  }
+
+  const tokenCount = tokenizeNaturalText(normalized, {
+    minLength: 1,
+    excludeStopwords: false,
+  }).length
+  return tokenCount > 0 && tokenCount <= 5 && !/[.!?]$/.test(normalized)
+}
+
+export function normalizeExtractedText(value: string) {
+  const unicodeNormalized = normalizeUnicodeText(value)
+    .replace(/([A-Za-z])-\n\s*([a-z])/g, "$1$2")
+    .replace(/\n{3,}/g, "\n\n")
+
+  const mergedLines: string[] = []
+  let current: string | null = null
+
+  for (const rawLine of unicodeNormalized.split("\n")) {
+    const line = normalizeLineText(rawLine)
+    if (!line) continue
+
+    if (!current) {
+      current = line
+      continue
+    }
+
+    const currentEndsSentence = /[.!?;:]$/.test(current)
+    const currentTokenCount = tokenizeNaturalText(current, {
+      minLength: 1,
+      excludeStopwords: false,
+    }).length
+    const shouldMerge =
+      currentTokenCount >= 4 &&
+      !currentEndsSentence &&
+      !isLikelySectionLikeLine(current) &&
+      !isLikelySectionLikeLine(line) &&
+      looksLikeParagraphContinuation(line)
+
+    if (shouldMerge) {
+      current = normalizeLineText(`${current} ${line}`)
+      continue
+    }
+
+    mergedLines.push(current)
+    current = line
+  }
+
+  if (current) mergedLines.push(current)
+
+  return mergedLines.join("\n")
 }
 
 function decodeHtmlEntities(value: string) {
@@ -181,6 +290,35 @@ export function buildWordArtifacts(params: {
       hasMultiColumnEvidence,
       readingOrderRisk,
       averageBlocksPerPage: blocks.length,
+      pageRiskMap: [
+        {
+          page: 1,
+          risk: readingOrderRisk,
+          signals: [
+            ...(hasTableEvidence ? ["table-evidence"] : []),
+            ...(hasMultiColumnEvidence ? ["multi-column-evidence"] : []),
+            ...(hasHeaderFooterEvidence ? ["header-footer-evidence"] : []),
+          ],
+        },
+      ],
+      flagConfidence: [
+        {
+          flag: "table-evidence",
+          present: hasTableEvidence,
+          confidence: hasTableEvidence ? 0.88 : 0.74,
+          detail: hasTableEvidence
+            ? "Word HTML contains table elements or table-like blocks."
+            : "No dominant table signal in Word extraction.",
+        },
+        {
+          flag: "multi-column-evidence",
+          present: hasMultiColumnEvidence,
+          confidence: hasMultiColumnEvidence ? 0.84 : 0.7,
+          detail: hasMultiColumnEvidence
+            ? "Word HTML includes column or table layout indicators."
+            : "No strong multi-column signal from Word HTML.",
+        },
+      ],
     },
     blocks,
   })
@@ -188,7 +326,8 @@ export function buildWordArtifacts(params: {
 
 function classifyBlockKind(text: string): DocumentBlock["kind"] {
   if (/@|linkedin\.com|github\.com|https?:\/\//i.test(text)) return "contact"
-  if (/^\s*[-*•]\s+/.test(text)) return "bullet"
+  if (/^\s*[-*•▪◦●]\s+/.test(text)) return "bullet"
+  if (/^\s*\d+[.)]\s+/.test(text)) return "bullet"
   if (/\|.+\|/.test(text) || /\t/.test(text)) return "tableish"
   if (text.length <= 80 && /^[A-Z0-9][A-Za-z0-9 &/(),.+-]+:?$/.test(text))
     return "heading"
@@ -196,38 +335,438 @@ function classifyBlockKind(text: string): DocumentBlock["kind"] {
   return "other"
 }
 
-async function extractFromPDF(buffer: ArrayBuffer): Promise<DocumentArtifacts> {
+function estimatePdfReadingOrderRisk(lines: string[]) {
+  if (lines.length < 20) return 0
+
+  const wordCounts = lines.map(
+    (line) =>
+      tokenizeNaturalText(line, {
+        minLength: 1,
+        excludeStopwords: false,
+      }).length
+  )
+  const shortLines = wordCounts.filter(
+    (count) => count > 0 && count <= 3
+  ).length
+  const shortLineRatio = shortLines / Math.max(1, lines.length)
+  const longLines = wordCounts.filter((count) => count >= 8).length
+  const longLineRatio = longLines / Math.max(1, lines.length)
+
+  let alternatingTransitions = 0
+  for (let index = 1; index < wordCounts.length; index += 1) {
+    const previous = wordCounts[index - 1] || 0
+    const current = wordCounts[index] || 0
+    if ((previous <= 3 && current >= 8) || (previous >= 8 && current <= 3)) {
+      alternatingTransitions += 1
+    }
+  }
+  const alternationRatio =
+    alternatingTransitions / Math.max(1, wordCounts.length - 1)
+
+  let risk = 0
+  if (shortLineRatio >= 0.35 && longLineRatio >= 0.25) risk += 0.16
+  if (alternationRatio >= 0.45) risk += 0.14
+
+  return Math.min(0.6, Number(risk.toFixed(2)))
+}
+
+type PdfExtractionCandidate = {
+  source: "pdf-parse" | "pdfjs" | "ocr-fallback"
+  text: string
+  pageCount: number
+  pageLines: string[][]
+}
+
+type PdfExtractionScore = {
+  score: number
+  tokenContinuity: number
+  sectionDetectability: number
+  dateParseability: number
+}
+
+function scorePdfExtraction(text: string): PdfExtractionScore {
+  const lines = splitLines(text)
+  const tokens = tokenizeNaturalText(text, {
+    minLength: 1,
+    excludeStopwords: false,
+  })
+  const wordsPerLine =
+    lines.length > 0 ? tokens.length / Math.max(1, lines.length) : 0
+  const tokenContinuity = Math.max(
+    0,
+    Math.min(1, (wordsPerLine - 1.2) / Math.max(1, 7.5 - 1.2))
+  )
+
+  const sectionHeadings = lines.filter((line) =>
+    /^(summary|professional summary|experience|work experience|employment|skills|education|projects|certifications)\b[:\s]*$/i.test(
+      line
+    )
+  ).length
+  const sectionDetectability = Math.min(1, sectionHeadings / 5)
+
+  const dateMatches = (
+    text.match(
+      /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+\d{4}\b|\b\d{1,2}\/\d{4}\b|\b(?:19|20)\d{2}\s*(?:-|–|to)\s*(?:present|current|now|(?:19|20)\d{2})\b/gi
+    ) || []
+  ).length
+  const dateParseability = Math.min(1, dateMatches / 8)
+
+  const score = Number(
+    (
+      tokenContinuity * 0.5 +
+      sectionDetectability * 0.3 +
+      dateParseability * 0.2
+    ).toFixed(3)
+  )
+
+  return { score, tokenContinuity, sectionDetectability, dateParseability }
+}
+
+async function extractPdfWithPdfParse(
+  buffer: ArrayBuffer
+): Promise<PdfExtractionCandidate> {
   const pdfParse = (await import("pdf-parse-fork")).default
   const parsed = await pdfParse(Buffer.from(buffer))
-  const lines = splitLines(parsed.text || "")
-  const blocks: DocumentBlock[] = lines.slice(0, 250).map((line) => ({
-    page: 1,
-    text: line,
-    kind: classifyBlockKind(line),
-  }))
+  const text = normalizeExtractedText(parsed.text || "")
+  const lines = splitLines(text)
+  return {
+    source: "pdf-parse",
+    text,
+    pageCount: parsed.numpages || 1,
+    pageLines: [lines],
+  }
+}
 
-  const extractedText = normalizeExtractedText(parsed.text || "")
-  const artifacts = {
-    sourceType: "pdf" as const,
-    extractedText,
-    layout: {
-      pageCount: parsed.numpages || 1,
-      hasTableEvidence: lines.some(
-        (line) => (line.match(/\|/g) || []).length >= 2 || /\t/.test(line)
-      ),
-      hasHeaderFooterEvidence: lines.some((line) =>
-        /page\s+\d+|@|linkedin\.com|github\.com|https?:\/\//i.test(line)
-      ),
-      hasMultiColumnEvidence: false,
-      readingOrderRisk: 0,
-      averageBlocksPerPage: Number(
-        (blocks.length / Math.max(1, parsed.numpages || 1)).toFixed(1)
-      ),
-    },
-    blocks,
+async function extractPdfWithPdfJs(
+  buffer: ArrayBuffer
+): Promise<PdfExtractionCandidate> {
+  const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs")
+  const loadingTask = pdfjsLib.getDocument({
+    data: new Uint8Array(buffer.slice(0)),
+    useWorkerFetch: false,
+    isEvalSupported: false,
+  })
+  const pdfDoc = await loadingTask.promise
+  const pageLines: string[][] = []
+  const pageTexts: string[] = []
+
+  for (let pageNumber = 1; pageNumber <= pdfDoc.numPages; pageNumber += 1) {
+    const page = await pdfDoc.getPage(pageNumber)
+    const textContent = await page.getTextContent()
+    const items = (textContent.items || []) as Array<{
+      str?: string
+      transform?: number[]
+    }>
+    const lineBuckets = new Map<number, string[]>()
+
+    for (const item of items) {
+      const raw = (item.str || "").trim()
+      if (!raw) continue
+      const y =
+        Math.round(
+          (((item.transform || [])[5] as number | undefined) || 0) * 2
+        ) / 2
+      const bucket = lineBuckets.get(y) ?? []
+      bucket.push(raw)
+      lineBuckets.set(y, bucket)
+    }
+
+    const sortedLines = [...lineBuckets.entries()]
+      .sort((a, b) => b[0] - a[0])
+      .map(([, parts]) => normalizeLineText(parts.join(" ")))
+      .filter(Boolean)
+    pageLines.push(sortedLines)
+    pageTexts.push(sortedLines.join("\n"))
   }
 
-  return documentArtifactsSchema.parse(artifacts)
+  await pdfDoc.destroy()
+  const text = normalizeExtractedText(pageTexts.join("\n"))
+  return {
+    source: "pdfjs",
+    text,
+    pageCount: pdfDoc.numPages || 1,
+    pageLines,
+  }
+}
+
+async function canRunCommand(command: string) {
+  try {
+    await execFileAsync("which", [command])
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function extractPdfWithSystemOcr(
+  buffer: ArrayBuffer
+): Promise<PdfExtractionCandidate | null> {
+  const [hasPdftoppm, hasTesseract] = await Promise.all([
+    canRunCommand("pdftoppm"),
+    canRunCommand("tesseract"),
+  ])
+  if (!hasPdftoppm || !hasTesseract) return null
+
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "resume-ocr-"))
+  try {
+    const pdfPath = path.join(tempDir, "input.pdf")
+    await writeFile(pdfPath, Buffer.from(buffer))
+
+    const imagePrefix = path.join(tempDir, "page")
+    await execFileAsync("pdftoppm", ["-png", pdfPath, imagePrefix])
+
+    const files = (await readdir(tempDir))
+      .filter((file) => /^page-\d+\.png$/.test(file))
+      .sort((left, right) => {
+        const leftNum = Number(left.match(/\d+/)?.[0] || 0)
+        const rightNum = Number(right.match(/\d+/)?.[0] || 0)
+        return leftNum - rightNum
+      })
+    if (files.length === 0) return null
+
+    const pageLines: string[][] = []
+    for (const file of files) {
+      const imagePath = path.join(tempDir, file)
+      const { stdout } = await execFileAsync("tesseract", [
+        imagePath,
+        "stdout",
+        "-l",
+        "eng",
+        "--psm",
+        "6",
+      ])
+      pageLines.push(splitLines(normalizeExtractedText(stdout || "")))
+    }
+
+    const text = normalizeExtractedText(pageLines.flat().join("\n"))
+    return {
+      source: "ocr-fallback",
+      text,
+      pageCount: pageLines.length,
+      pageLines,
+    }
+  } catch {
+    return null
+  } finally {
+    await rm(tempDir, { recursive: true, force: true })
+  }
+}
+
+async function extractPdfWithPortableOcr(
+  buffer: ArrayBuffer
+): Promise<PdfExtractionCandidate | null> {
+  try {
+    const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs")
+    const canvasModule = await import("@napi-rs/canvas")
+    const transformers = await import("@xenova/transformers")
+    const loadingTask = pdfjsLib.getDocument({
+      data: new Uint8Array(buffer.slice(0)),
+      useWorkerFetch: false,
+      isEvalSupported: false,
+    })
+    const pdfDoc = await loadingTask.promise
+
+    // Keep OCR cost bounded and practical for resume parsing.
+    const maxPages = Math.min(pdfDoc.numPages || 1, 4)
+    const createCanvas =
+      (canvasModule as { createCanvas?: Function }).createCanvas || null
+    if (!createCanvas) {
+      await pdfDoc.destroy()
+      return null
+    }
+
+    const pipelineFactory =
+      (transformers as { pipeline?: Function }).pipeline || null
+    if (!pipelineFactory) {
+      await pdfDoc.destroy()
+      return null
+    }
+
+    const ocr = await pipelineFactory(
+      "image-to-text",
+      "Xenova/trocr-small-printed",
+      { quantized: true }
+    )
+
+    const pageLines: string[][] = []
+
+    for (let pageNumber = 1; pageNumber <= maxPages; pageNumber += 1) {
+      const page = await pdfDoc.getPage(pageNumber)
+      const viewport = page.getViewport({ scale: 2 })
+      const canvas = createCanvas(
+        Math.max(1, Math.floor(viewport.width)),
+        Math.max(1, Math.floor(viewport.height))
+      )
+      const context = canvas.getContext("2d")
+      await page.render({
+        canvasContext: context,
+        viewport,
+      }).promise
+
+      const pngBuffer: Buffer = canvas.toBuffer("image/png")
+      const result = await ocr(pngBuffer)
+      const rawText =
+        Array.isArray(result) && result[0]?.generated_text
+          ? String(result[0].generated_text)
+          : typeof result === "string"
+            ? result
+            : ""
+      pageLines.push(splitLines(normalizeExtractedText(rawText)))
+    }
+
+    await pdfDoc.destroy()
+    const text = normalizeExtractedText(pageLines.flat().join("\n"))
+    if (!text.trim()) return null
+
+    return {
+      source: "ocr-fallback",
+      text,
+      pageCount: pageLines.length,
+      pageLines,
+    }
+  } catch {
+    return null
+  }
+}
+
+function buildPdfPageRiskMap(pageLines: string[][]) {
+  return pageLines.map((lines, index) => {
+    const tokenCount = tokenizeNaturalText(lines.join(" "), {
+      minLength: 1,
+      excludeStopwords: false,
+    }).length
+    const lineCount = Math.max(1, lines.length)
+    const avgWordsPerLine = tokenCount / lineCount
+    const shortLineRatio =
+      lines.filter((line) => line.split(/\s+/).length <= 3).length / lineCount
+    const separatorDensity =
+      lines.filter((line) => /[|]{1,}|\t/.test(line)).length / lineCount
+
+    const signals: string[] = []
+    let risk = 0
+    if (avgWordsPerLine < 2.2) {
+      risk += 0.2
+      signals.push("fragmented-text")
+    }
+    if (shortLineRatio >= 0.35) {
+      risk += 0.18
+      signals.push("many-short-lines")
+    }
+    if (separatorDensity >= 0.1) {
+      risk += 0.14
+      signals.push("table-like-lines")
+    }
+
+    return {
+      page: index + 1,
+      risk: Math.min(1, Number(risk.toFixed(2))),
+      signals,
+    }
+  })
+}
+
+async function extractFromPDF(buffer: ArrayBuffer): Promise<DocumentArtifacts> {
+  const [parseCandidate, pdfjsCandidate] = await Promise.all([
+    extractPdfWithPdfParse(buffer),
+    extractPdfWithPdfJs(buffer).catch(() => null),
+  ])
+  const baseCandidates = [parseCandidate, pdfjsCandidate].filter(
+    (candidate): candidate is PdfExtractionCandidate => Boolean(candidate)
+  )
+  let best = baseCandidates[0] || parseCandidate
+  let bestScore = scorePdfExtraction(best.text)
+
+  for (const candidate of baseCandidates.slice(1)) {
+    const candidateScore = scorePdfExtraction(candidate.text)
+    if (candidateScore.score > bestScore.score) {
+      best = candidate
+      bestScore = candidateScore
+    }
+  }
+
+  if (bestScore.score < 0.32) {
+    const ocrCandidates = [
+      await extractPdfWithPortableOcr(buffer),
+      await extractPdfWithSystemOcr(buffer),
+    ].filter((candidate): candidate is PdfExtractionCandidate =>
+      Boolean(candidate)
+    )
+    for (const ocrCandidate of ocrCandidates) {
+      const ocrScore = scorePdfExtraction(ocrCandidate.text)
+      if (ocrScore.score >= bestScore.score) {
+        best = ocrCandidate
+        bestScore = ocrScore
+      }
+    }
+  }
+
+  const extractedText = normalizeExtractedText(best.text || "")
+  const lines = splitLines(extractedText)
+  const pageLines = best.pageLines.length > 0 ? best.pageLines : [lines]
+  const blocks: DocumentBlock[] = pageLines
+    .flatMap((page, pageIndex) =>
+      page.map((line) => ({
+        page: pageIndex + 1,
+        text: line,
+        kind: classifyBlockKind(line),
+      }))
+    )
+    .slice(0, 250)
+
+  const hasTableEvidence = lines.some(
+    (line) => (line.match(/\|/g) || []).length >= 2 || /\t/.test(line)
+  )
+  const readingOrderRisk = estimatePdfReadingOrderRisk(lines)
+  const pageRiskMap = buildPdfPageRiskMap(pageLines)
+  const hasMultiColumnEvidence =
+    readingOrderRisk >= 0.26 || pageRiskMap.some((entry) => entry.risk >= 0.45)
+  const hasHeaderFooterEvidence = lines.some((line) =>
+    /page\s+\d+|@|linkedin\.com|github\.com|https?:\/\//i.test(line)
+  )
+  const flagConfidence = [
+    {
+      flag: "table-evidence",
+      present: hasTableEvidence,
+      confidence: hasTableEvidence ? 0.84 : 0.74,
+      detail: hasTableEvidence
+        ? "Detected separator-heavy or tabular lines."
+        : "No strong table-like patterns detected.",
+    },
+    {
+      flag: "multi-column-evidence",
+      present: hasMultiColumnEvidence,
+      confidence: hasMultiColumnEvidence ? 0.78 : 0.7,
+      detail: hasMultiColumnEvidence
+        ? "Reading-order and page risk patterns suggest potential multi-column layout."
+        : "No dominant multi-column extraction pattern detected.",
+    },
+    {
+      flag: "header-footer-evidence",
+      present: hasHeaderFooterEvidence,
+      confidence: hasHeaderFooterEvidence ? 0.73 : 0.69,
+      detail: hasHeaderFooterEvidence
+        ? "Contact or page marker patterns may indicate repeated header/footer content."
+        : "No repeated header/footer-like markers detected.",
+    },
+  ]
+
+  return documentArtifactsSchema.parse({
+    sourceType: "pdf",
+    extractedText,
+    layout: {
+      pageCount: Math.max(best.pageCount || 1, pageLines.length || 1),
+      hasTableEvidence,
+      hasHeaderFooterEvidence,
+      hasMultiColumnEvidence,
+      readingOrderRisk,
+      averageBlocksPerPage: Number(
+        (blocks.length / Math.max(1, best.pageCount || 1)).toFixed(1)
+      ),
+      pageRiskMap,
+      flagConfidence,
+    },
+    blocks,
+  })
 }
 
 async function extractFromWord(
@@ -284,6 +823,21 @@ export async function extractResumeDocument(
         hasMultiColumnEvidence: false,
         readingOrderRisk: 0,
         averageBlocksPerPage: splitLines(text).length,
+        pageRiskMap: [{ page: 1, risk: 0, signals: [] }],
+        flagConfidence: [
+          {
+            flag: "table-evidence",
+            present: false,
+            confidence: 0.9,
+            detail: "Plain text input has no table markup signal.",
+          },
+          {
+            flag: "multi-column-evidence",
+            present: false,
+            confidence: 0.9,
+            detail: "Plain text input has no column-layout signal.",
+          },
+        ],
       },
       blocks: splitLines(text)
         .slice(0, 250)

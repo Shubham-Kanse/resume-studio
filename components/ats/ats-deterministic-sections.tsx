@@ -30,7 +30,10 @@ import {
   getSectionMetrics,
   getSpellCheckMetrics,
 } from "@/lib/ats-deterministic-metrics"
-import type { ATSNLPAnalysis } from "@/lib/ats-nlp-analysis-types"
+import type {
+  ATSBulletImpactAnalysis,
+  ATSNLPAnalysis,
+} from "@/lib/ats-nlp-analysis-types"
 import {
   extractExperienceBullets,
   getSectionBulletCounts,
@@ -262,6 +265,193 @@ function getBulletLines(text: string) {
   )
 }
 
+function getImpactGapDrivers(bullet: ATSBulletImpactAnalysis) {
+  const drivers: string[] = []
+  const signals = bullet.signals
+
+  if (signals.taskHeavy || signals.outcomeMentions === 0) {
+    drivers.push("Result is under-explained")
+  }
+  if (!signals.resultPattern) {
+    drivers.push("No explicit action-to-result connector")
+  }
+  if (signals.scopeMentions === 0) {
+    drivers.push("Scope/coverage context is thin")
+  }
+  if (!bullet.quantified) {
+    drivers.push("No measurable metric in line")
+  }
+  if (signals.passiveVoice) {
+    drivers.push("Passive voice weakens ownership")
+  }
+  if (signals.wordCount < 9 || signals.wordCount > 34) {
+    drivers.push("Length is outside optimal scanning range")
+  }
+
+  return drivers.slice(0, 3)
+}
+
+type ImpactFeedbackPoint = {
+  title: string
+  status: "strong" | "needs-work"
+  evidence: string
+  action: string
+}
+
+function buildImpactFeedbackPoints(
+  bullet: ATSBulletImpactAnalysis
+): ImpactFeedbackPoint[] {
+  const points: ImpactFeedbackPoint[] = []
+  const signals = bullet.signals
+
+  points.push({
+    title: "Ownership signal",
+    status:
+      signals.strongLeadVerb || (!!signals.leadVerb && !signals.weakLeadPhrase)
+        ? "strong"
+        : "needs-work",
+    evidence: signals.leadVerb
+      ? `Lead verb detected: "${signals.leadVerb}".`
+      : "No clear lead verb detected at bullet start.",
+    action:
+      signals.strongLeadVerb || (!!signals.leadVerb && !signals.weakLeadPhrase)
+        ? "Keep the current ownership-first opening."
+        : "Start with a stronger direct action verb that reflects what you drove.",
+  })
+
+  points.push({
+    title: "Metric strength",
+    status: bullet.quantified ? "strong" : "needs-work",
+    evidence: bullet.quantified
+      ? `${signals.metricMentions} metric signal(s) found in the bullet.`
+      : "No measurable metric signal detected.",
+    action: bullet.quantified
+      ? "Strengthen with baseline -> delta -> business effect where possible."
+      : "Add a measurable result (%, latency, revenue, cost, volume, or time).",
+  })
+
+  points.push({
+    title: "Outcome clarity",
+    status: signals.outcomeMentions > 0 ? "strong" : "needs-work",
+    evidence:
+      signals.outcomeMentions > 0
+        ? `Outcome language detected (${signals.outcomeMentions} match${signals.outcomeMentions === 1 ? "" : "es"}).`
+        : "Result language is weak or missing.",
+    action:
+      signals.outcomeMentions > 0
+        ? "Keep outcome phrasing explicit and concrete."
+        : "State what improved, reduced, increased, accelerated, or changed.",
+  })
+
+  points.push({
+    title: "Scope and context",
+    status: signals.scopeMentions > 0 ? "strong" : "needs-work",
+    evidence:
+      signals.scopeMentions > 0
+        ? `Scope signal detected (${signals.scopeMentions} context cue${signals.scopeMentions === 1 ? "" : "s"}).`
+        : "Scope context is thin (users, systems, team, process, region, etc.).",
+    action:
+      signals.scopeMentions > 0
+        ? "Keep naming where the impact landed."
+        : "Add where the impact landed: users, platform, team, operations, or process.",
+  })
+
+  points.push({
+    title: "Action-to-result flow",
+    status: signals.resultPattern ? "strong" : "needs-work",
+    evidence: signals.resultPattern
+      ? "Action-to-result connector detected."
+      : "No clear result connector detected (for example: by, resulting in, leading to).",
+    action: signals.resultPattern
+      ? "Preserve this structure for scanability."
+      : "Use a clearer action -> result link so impact is easy to scan in one pass.",
+  })
+
+  points.push({
+    title: "Readability and tone",
+    status:
+      !signals.passiveVoice && signals.wordCount >= 9 && signals.wordCount <= 34
+        ? "strong"
+        : "needs-work",
+    evidence: `${signals.wordCount} words${signals.passiveVoice ? ", passive voice detected." : ", active voice."}`,
+    action:
+      !signals.passiveVoice && signals.wordCount >= 9 && signals.wordCount <= 34
+        ? "Length and voice are in a recruiter-friendly range."
+        : "Use active voice and keep length tight enough for quick recruiter scanning.",
+  })
+
+  return points
+}
+
+function buildImpactDeductionBreakdown(
+  bullet: ATSBulletImpactAnalysis,
+  marksDeducted: number
+) {
+  const raw: Array<{ label: string; weight: number; reason: string }> = []
+  const signals = bullet.signals
+
+  if (!bullet.quantified) {
+    raw.push({
+      label: "No measurable metric",
+      weight: 1.2,
+      reason: "Impact is harder to benchmark without numeric proof.",
+    })
+  }
+  if (signals.outcomeMentions === 0) {
+    raw.push({
+      label: "Outcome under-defined",
+      weight: 1.1,
+      reason: "The result of the work is not explicit enough.",
+    })
+  }
+  if (!signals.resultPattern) {
+    raw.push({
+      label: "Weak action-to-result link",
+      weight: 0.9,
+      reason: "The sentence does not clearly connect action to effect.",
+    })
+  }
+  if (signals.scopeMentions === 0) {
+    raw.push({
+      label: "Scope/context thin",
+      weight: 0.7,
+      reason: "It does not clearly show where or for whom impact landed.",
+    })
+  }
+  if (signals.weakLeadPhrase) {
+    raw.push({
+      label: "Weak opening phrase",
+      weight: 0.6,
+      reason: "Opening language softens ownership.",
+    })
+  }
+  if (signals.passiveVoice) {
+    raw.push({
+      label: "Passive voice",
+      weight: 0.7,
+      reason: "Ownership is less direct in passive construction.",
+    })
+  }
+  if (signals.wordCount < 9 || signals.wordCount > 34) {
+    raw.push({
+      label: "Length friction",
+      weight: 0.5,
+      reason: "Line length reduces scan efficiency.",
+    })
+  }
+
+  if (marksDeducted <= 0 || raw.length === 0) return []
+
+  const totalWeight = raw.reduce((sum, item) => sum + item.weight, 0)
+  return raw
+    .map((item) => ({
+      ...item,
+      marks: (item.weight / totalWeight) * marksDeducted,
+    }))
+    .sort((a, b) => b.marks - a.marks)
+    .slice(0, 3)
+}
+
 function QuantifyingImpactSection({
   resumeContent,
   nlpAnalysis,
@@ -273,6 +463,9 @@ function QuantifyingImpactSection({
     nlpAnalysis?.quantifyingImpact.bulletAnalyses ??
     extractExperienceBullets(resumeContent).map((bullet) => ({
       bullet,
+      achievementLike: false,
+      quantified: false,
+      score: 10,
       scoreOutOfTen: 1,
       analysis: [
         "The shared NLP impact analysis has not loaded yet for this bullet.",
@@ -280,6 +473,24 @@ function QuantifyingImpactSection({
       feedback: [
         "Run the ATS analysis again if this state persists so the bullet can be scored properly.",
       ],
+      reasons: [],
+      signals: {
+        leadVerb: null,
+        wordCount: 0,
+        metricMentions: 0,
+        outcomeMentions: 0,
+        scopeMentions: 0,
+        strongLeadVerb: false,
+        weakLeadPhrase: false,
+        passiveVoice: false,
+        resultPattern: false,
+        starLike: false,
+        taskHeavy: false,
+        keywordMatches: [],
+        relevanceRatio: 0,
+        technicalEntities: [],
+        roleAlignmentTerms: [],
+      },
     }))
   const [activeBulletIndex, setActiveBulletIndex] = useState(0)
 
@@ -288,6 +499,16 @@ function QuantifyingImpactSection({
       ? 0
       : Math.min(activeBulletIndex, impactBullets.length - 1)
   const activeBullet = impactBullets[safeIndex] ?? null
+  const marksDeducted = activeBullet
+    ? Math.max(0, 10 - activeBullet.scoreOutOfTen)
+    : 0
+  const impactGapDrivers = activeBullet ? getImpactGapDrivers(activeBullet) : []
+  const impactFeedbackPoints = activeBullet
+    ? buildImpactFeedbackPoints(activeBullet)
+    : []
+  const deductionBreakdown = activeBullet
+    ? buildImpactDeductionBreakdown(activeBullet, marksDeducted)
+    : []
 
   return (
     <div className="space-y-4">
@@ -381,16 +602,98 @@ function QuantifyingImpactSection({
                             <Sparkles className="h-4 w-4 text-primary" />
                             Feedback
                           </div>
-                          <ul className="mt-4 space-y-3">
-                            {activeBullet.feedback.map((item) => (
-                              <li
-                                key={item}
-                                className="text-sm leading-6 text-muted-foreground"
-                              >
-                                {item}
-                              </li>
-                            ))}
-                          </ul>
+                          <div className="mt-3 max-h-[32rem] space-y-4 overflow-y-auto pr-1">
+                            {marksDeducted > 0 ? (
+                              <div className="flex flex-wrap gap-2">
+                                <span className="rounded-full border border-red-500/20 bg-red-500/10 px-3 py-1 text-xs text-red-100">
+                                  {marksDeducted} mark
+                                  {marksDeducted === 1 ? "" : "s"} below 10
+                                </span>
+                                {impactGapDrivers.map((reason) => (
+                                  <span
+                                    key={reason}
+                                    className="rounded-full border border-red-500/20 bg-red-500/10 px-3 py-1 text-xs text-red-100"
+                                  >
+                                    {reason}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="flex flex-wrap gap-2">
+                                <span className="rounded-full border border-green-500/20 bg-green-500/10 px-3 py-1 text-xs text-green-100">
+                                  Full impact score (10/10)
+                                </span>
+                              </div>
+                            )}
+                            <ul className="space-y-3">
+                              {marksDeducted > 0 ? (
+                                <li className="text-sm leading-6 text-red-100">
+                                  Score gap reason: this bullet is{" "}
+                                  {marksDeducted} mark
+                                  {marksDeducted === 1 ? "" : "s"} below 10 due
+                                  to the highlighted impact gaps above.
+                                </li>
+                              ) : null}
+                              {deductionBreakdown.map((item) => (
+                                <li
+                                  key={`${item.label}-${item.reason}`}
+                                  className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm leading-6 text-red-100"
+                                >
+                                  <span className="font-medium">
+                                    {item.label}
+                                  </span>{" "}
+                                  (~{item.marks.toFixed(1)} mark): {item.reason}
+                                </li>
+                              ))}
+                            </ul>
+
+                            <div className="space-y-2">
+                              {impactFeedbackPoints.map((point) => (
+                                <div
+                                  key={point.title}
+                                  className={
+                                    point.status === "strong"
+                                      ? "rounded-xl border border-green-500/20 bg-green-500/10 px-3 py-2"
+                                      : "rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2"
+                                  }
+                                >
+                                  <div className="flex items-center justify-between gap-3">
+                                    <div className="text-sm font-medium text-foreground">
+                                      {point.title}
+                                    </div>
+                                    <span
+                                      className={
+                                        point.status === "strong"
+                                          ? "rounded-full border border-green-500/30 bg-green-500/15 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-green-100"
+                                          : "rounded-full border border-red-500/30 bg-red-500/15 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-red-100"
+                                      }
+                                    >
+                                      {point.status === "strong"
+                                        ? "Strong"
+                                        : "Needs work"}
+                                    </span>
+                                  </div>
+                                  <div className="mt-1 text-xs leading-5 text-muted-foreground">
+                                    Evidence: {point.evidence}
+                                  </div>
+                                  <div className="mt-1 text-xs leading-5 text-foreground">
+                                    Fix: {point.action}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+
+                            <ul className="space-y-3">
+                              {activeBullet.feedback.map((item) => (
+                                <li
+                                  key={item}
+                                  className="text-sm leading-6 text-muted-foreground"
+                                >
+                                  {item}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
                         </div>
                       </div>
                     </section>
@@ -2259,6 +2562,259 @@ function buildSectionContent(
 
   const feedbackBullets = feedbackBySection[sectionId]
   const hideDetailsForSpellCheck = sectionId === "spell-check"
+  const weakMetricCount =
+    scoreData.evidenceSummary?.advancedSignals?.credibility?.weakMetrics ?? null
+  const strongMetricCount =
+    scoreData.evidenceSummary?.advancedSignals?.credibility?.strongMetrics ??
+    null
+  const tooShortBullets =
+    bulletLengthPanel?.tooShortCount ??
+    bullets.filter((bullet) => toWords(bullet).length < 10).length
+  const tooLongBullets =
+    bulletLengthPanel?.tooLongCount ??
+    bullets.filter((bullet) => toWords(bullet).length > 28).length
+  const repeatedVerbCount =
+    repetitionPanel?.repeatedLeadVerbs.length ?? repetitionHighlights.length
+  const repeatedBuzzwordCount =
+    buzzwordPanel?.repeatedBuzzwords.length ?? buzzwordHits.length
+
+  const dynamicFeedbackBySection: Record<ATSPanelSectionId, string[]> = {
+    "sample-cv-lines": [
+      contentLines.length >= 5
+        ? "Promote the strongest quantified line from your latest role into the first 3 visible lines."
+        : "Add at least 3 strong outcome lines so recruiters can evaluate impact quickly.",
+      quantifiedBullets.length > 0
+        ? `Reuse the pattern from your quantified bullets (${quantifiedBullets.length} found): action + scope + result.`
+        : "Add concrete scale, time, or outcome to at least one top line so it reads as evidence.",
+    ],
+    "action-verbs": [
+      repeatedLeadVerbs.length > 0
+        ? `Replace the most repeated lead verbs first (${repeatedLeadVerbs
+            .slice(0, 2)
+            .map(([verb]) => verb)
+            .join(", ")}).`
+        : "Keep rotating lead verbs across adjacent bullets to maintain scan variety.",
+      actionVerbMetrics.weakLeadCount > 0
+        ? `Rewrite ${actionVerbMetrics.weakLeadCount} weak openings with direct ownership verbs.`
+        : "Lead-verb strength looks good; preserve this while tightening weaker bullets.",
+    ],
+    "job-match": hasJobDescription
+      ? [
+          missingTerms.length > 0
+            ? `Add the top missing terms to summary, skills, and recent bullets: ${missingTerms
+                .slice(0, 4)
+                .join(", ")}.`
+            : "Keyword coverage is strong; keep terms distributed naturally across core sections.",
+          hasTargetMyCVScore && (scoreData.targetRoleScore ?? 0) < 80
+            ? `Raise Target My CV from ${scoreData.targetRoleScore ?? 0} by adding evidence-backed terms in experience bullets, not only in skills.`
+            : "Maintain term-to-evidence alignment so coverage stays credible for ATS and recruiter review.",
+        ]
+      : [
+          "Add a job description to generate role-specific keyword and relevance feedback.",
+        ],
+    "quantifying-impact": [
+      impactPanel
+        ? impactPanel.quantifiedBullets < impactPanel.totalBullets
+          ? `Quantified coverage is ${impactPanel.quantifiedBullets}/${impactPanel.totalBullets}. Quantify ${Math.max(1, Math.min(3, impactPanel.totalBullets - impactPanel.quantifiedBullets))} more high-visibility bullets in your latest role.`
+          : `Quantified coverage is ${impactPanel.quantifiedBullets}/${impactPanel.totalBullets}. Focus next on metric specificity (baseline -> outcome).`
+        : unquantifiedBullets.length > 0
+          ? `Add measurable outcomes to ${Math.min(3, unquantifiedBullets.length)} unquantified bullets first.`
+          : "Impact quantification looks healthy; preserve this density when editing.",
+      weakMetricCount !== null && strongMetricCount !== null
+        ? weakMetricCount > strongMetricCount
+          ? `Metric quality is weak-heavy (${weakMetricCount} weak vs ${strongMetricCount} strong). Upgrade weak metrics to include baseline, delta, and scope.`
+          : `Metric quality is balanced (${strongMetricCount} strong vs ${weakMetricCount} weak). Keep using specific baseline -> outcome evidence.`
+        : impactPanel?.responsibilityLikeBullets
+          ? `${impactPanel.responsibilityLikeBullets} bullets still read like responsibilities, so rewrite them as outcome statements.`
+          : "Most bullets already read outcome-oriented.",
+    ],
+    "action-verb-use": [
+      actionVerbIssueLines.length > 0
+        ? `Fix the ${Math.min(actionVerbIssueLines.length, 3)} weakest bullet openings first to lift this score fastest.`
+        : "Action-verb quality is stable; keep openings precise and ownership-first.",
+      actionVerbMetrics.strongLeadRatio < 0.65
+        ? `Increase strong lead openings (currently ${Math.round(actionVerbMetrics.strongLeadRatio * 100)}%) in recent experience bullets.`
+        : `Strong lead-verb coverage is ${Math.round(actionVerbMetrics.strongLeadRatio * 100)}%; maintain this consistency.`,
+    ],
+    accomplishments: [
+      accomplishmentMetrics.issues.length > 0
+        ? `Convert ${Math.min(accomplishmentMetrics.issues.length, 3)} duty-style bullets into result-focused bullets.`
+        : "Accomplishment orientation is strong; retain action + business outcome framing.",
+      accomplishmentMetrics.accomplishmentRatio < 0.5
+        ? `Increase accomplishment-style coverage above 50% (currently ${Math.round(
+            accomplishmentMetrics.accomplishmentRatio * 100
+          )}%).`
+        : `Accomplishment-style coverage is ${Math.round(
+            accomplishmentMetrics.accomplishmentRatio * 100
+          )}%; keep this standard.`,
+    ],
+    repetition: [
+      repeatedVerbCount > 0
+        ? `Rewrite repeated action verbs (${repeatedVerbCount} pattern${repeatedVerbCount === 1 ? "" : "s"}) before touching minor wording.`
+        : "Action-verb repetition is controlled; keep technical keyword repetition intentional.",
+      repetitionPanel?.repeatedPhrases.length
+        ? `Reduce repeated phrase patterns such as "${repetitionPanel.repeatedPhrases[0]?.phrase}".`
+        : "Phrase-level repetition looks acceptable.",
+    ],
+    length: [
+      lengthMetrics.assessment === "too-long" ||
+      lengthMetrics.assessment === "slightly-long"
+        ? "Trim lower-value bullets from older roles before editing high-impact recent bullets."
+        : lengthMetrics.assessment === "too-short" ||
+            lengthMetrics.assessment === "slightly-short"
+          ? "Add missing evidence in recent roles before adding stylistic polish."
+          : "Overall length is in a workable range; focus on evidence quality over resizing.",
+      `Current footprint: ${lengthMetrics.wordCount} words across ~${lengthMetrics.estimatedPages} page${lengthMetrics.estimatedPages === 1 ? "" : "s"}.`,
+    ],
+    "filler-words": [
+      fillerWordMetrics.issues.length > 0
+        ? `Rewrite ${Math.min(3, fillerWordMetrics.issues.length)} low-signal lines by replacing vague phrases with tools, scope, or outcomes.`
+        : "Low-signal filler language is limited; keep wording specific and concrete.",
+      fillerWordMetrics.phraseCounts.length > 0
+        ? `Start with the most repeated filler phrase: "${fillerWordMetrics.phraseCounts[0]?.phrase}".`
+        : "No frequent filler phrase clusters detected.",
+    ],
+    "total-bullet-points": [
+      experienceBulletCount > 24
+        ? `Work Experience has ${experienceBulletCount} bullets. Consolidate overlapping points to improve scan speed.`
+        : experienceBulletCount > 0 && experienceBulletCount < 8
+          ? `Work Experience has ${experienceBulletCount} bullets. Add more role-relevant evidence to avoid looking under-detailed.`
+          : "Bullet volume in Work Experience is in a healthy scan range.",
+      quantifiedBullets.length > 0
+        ? `Prioritize keeping quantified bullets (${quantifiedBullets.length}) when trimming.`
+        : "When adding bullets, include at least one measurable outcome per recent role.",
+    ],
+    "bullet-points-length": [
+      tooLongBullets > 0
+        ? `Trim ${Math.min(3, tooLongBullets)} long bullets first; keep one idea per bullet.`
+        : "Long-bullet risk is low.",
+      tooShortBullets > 0
+        ? `Expand ${Math.min(3, tooShortBullets)} short bullets with context + result so they carry enough evidence.`
+        : "Short-bullet risk is low.",
+    ],
+    sections: [
+      sectionMetrics.issues.length > 0
+        ? `Resolve section structure issues first (${sectionMetrics.issues.length} detected), starting with missing required headers.`
+        : "Section structure is ATS-safe; keep standard headings and current order.",
+      sectionMetrics.presentSections.length > 0
+        ? `Detected sections: ${sectionMetrics.presentSections.join(", ")}.`
+        : "Use standard sections: Summary, Experience, Skills, Education.",
+    ],
+    "personal-pronouns": [
+      pronounHits.length > 0
+        ? `Remove first-person pronouns (${pronounHits.reduce((sum, item) => sum + item.count, 0)} instances) from bullets and summary lines.`
+        : "Pronoun usage is clean; maintain implied ownership through action verbs.",
+      "Keep resume tone concise and achievement-focused rather than conversational.",
+    ],
+    "buzzwords-cliches": [
+      repeatedBuzzwordCount > 0
+        ? `Replace repeated buzzwords/cliches (${repeatedBuzzwordCount} signal${repeatedBuzzwordCount === 1 ? "" : "s"}) with concrete evidence.`
+        : "Buzzword risk is low; keep language evidence-first.",
+      hasJobDescription && missingTerms.length > 0
+        ? "Where possible, swap generic descriptors for missing role-specific terms backed by experience."
+        : "Prefer tools, scope, and outcomes over self-description phrases.",
+    ],
+    "active-voice": [
+      activeVoiceMetrics.issues.length > 0
+        ? `Rewrite ${Math.min(activeVoiceMetrics.issues.length, 3)} passive lines into direct action-result phrasing.`
+        : "Active voice usage is strong; preserve this style across all bullets.",
+      "Start flagged bullets with the action you drove.",
+    ],
+    consistency: [
+      consistencyMetrics.issues.length > 0
+        ? `Fix consistency issues first (${consistencyMetrics.issues.length} found), especially date and punctuation drift.`
+        : "Consistency is strong across style, punctuation, and chronology signals.",
+      consistencyMetrics.issues.find(
+        (issue) => issue.category === "punctuation"
+      )
+        ? "Use one bullet-ending punctuation style across all bullet lists."
+        : "Keep the same tense and formatting pattern across similar roles.",
+    ],
+    "date-order": [
+      dateMetrics.formatTypes.length > 1
+        ? `Standardize to one date format (currently ${dateMetrics.formatTypes.length} formats detected).`
+        : "Date format consistency looks good; keep using a single format.",
+      dateMetrics.chronologyIssues.length > 0
+        ? `Reorder ${Math.min(dateMetrics.chronologyIssues.length, 3)} chronology issue${dateMetrics.chronologyIssues.length === 1 ? "" : "s"} to maintain reverse order.`
+        : "Chronology order appears stable.",
+    ],
+    "spell-check": [
+      spellMetrics.issues.length > 0
+        ? `Fix ${Math.min(spellMetrics.issues.length, 6)} flagged spelling issues before wording refinements.`
+        : "No obvious spelling issues found in the current pass.",
+      "Prioritize corrections in headings, job titles, and skill names.",
+    ],
+  }
+
+  const dynamicFeedbackBullets = dynamicFeedbackBySection[sectionId]
+  const hasDynamicFeedback = dynamicFeedbackBullets.length > 0
+  const quantCoverageNumerator = impactPanel
+    ? impactPanel.quantifiedBullets
+    : quantifiedBullets.length
+  const quantCoverageDenominator = impactPanel
+    ? impactPanel.totalBullets
+    : quantifiedBullets.length + unquantifiedBullets.length
+  const quantifyingImpactHighlights =
+    sectionId === "quantifying-impact"
+      ? [
+          {
+            label: "Quantified",
+            value:
+              quantCoverageDenominator > 0
+                ? `${quantCoverageNumerator}/${quantCoverageDenominator}`
+                : "0/0",
+            tone:
+              quantCoverageDenominator > 0 &&
+              quantCoverageNumerator / quantCoverageDenominator >= 0.6
+                ? ("success" as const)
+                : ("danger" as const),
+          },
+          ...(strongMetricCount !== null && weakMetricCount !== null
+            ? [
+                {
+                  label: "Strong metrics",
+                  value: `${strongMetricCount}`,
+                  tone:
+                    strongMetricCount >= weakMetricCount
+                      ? ("success" as const)
+                      : ("default" as const),
+                },
+                {
+                  label: "Weak metrics",
+                  value: `${weakMetricCount}`,
+                  tone:
+                    weakMetricCount > 0
+                      ? ("danger" as const)
+                      : ("default" as const),
+                },
+              ]
+            : []),
+          ...(impactPanel && impactPanel.responsibilityLikeBullets > 0
+            ? [
+                {
+                  label: "Responsibility-like",
+                  value: `${impactPanel.responsibilityLikeBullets}`,
+                  tone: "danger" as const,
+                },
+              ]
+            : []),
+        ]
+      : []
+  const quantifyingImpactDetails =
+    sectionId === "quantifying-impact"
+      ? [
+          ...(impactPanel
+            ? [
+                `Evidence: quantified bullets ${impactPanel.quantifiedBullets}/${impactPanel.totalBullets}; achievement-like ${impactPanel.achievementLikeBullets}; responsibility-like ${impactPanel.responsibilityLikeBullets}.`,
+              ]
+            : []),
+          ...(weakMetricCount !== null && strongMetricCount !== null
+            ? [
+                `Metric quality: ${strongMetricCount} strong metrics, ${weakMetricCount} weak metrics.`,
+              ]
+            : []),
+        ]
+      : []
 
   return {
     title: base.title,
@@ -2267,26 +2823,40 @@ function buildSectionContent(
     recruiterInsights: {
       title: "Recruiter Insights",
       summary:
-        "Here is how recruiters and ATS reviewers usually think about this area in the current market. I’m keeping this grounded in common screening behavior rather than generic advice.",
+        "This is section-specific recruiter preference guidance. It explains what hiring teams typically expect to see here.",
       bullets: base.recruiter,
       details: hideDetailsForSpellCheck
         ? []
         : [
-            "The real benchmark here is whether this section helps a recruiter decide faster and with more confidence.",
-            "When a section is below market standard, recruiters rarely articulate it explicitly. They simply keep moving to the next profile.",
+            "Use this as expectation context, then apply the Feedback panel to this resume's actual issues.",
           ],
     },
     feedback: {
       title: "Feedback",
-      summary:
-        "Here is the clearest next move I would make if I were tightening this section right now. Think of this as practical editing guidance, not abstract theory.",
-      bullets: feedbackBullets,
+      summary: hasDynamicFeedback
+        ? "These section-specific actions are generated from your current resume signals and aligned to this section's score drivers."
+        : "Use these focused section actions to improve score and clarity.",
+      bullets: hasDynamicFeedback
+        ? dynamicFeedbackBullets.map((item) => ({
+            label: item,
+            tone: /\b(strong|good|clean|healthy|stable|looks good|acceptable)\b/i.test(
+              item
+            )
+              ? "default"
+              : ("danger" as const),
+          }))
+        : feedbackBullets.map((item) => ({
+            label: item,
+            tone: "danger" as const,
+          })),
+      highlights: quantifyingImpactHighlights,
       details: hideDetailsForSpellCheck
         ? []
-        : [
-            "The fastest wins usually come from fixing repeated weak patterns before polishing wording.",
-            "If you only make one pass, start with the highest-visibility lines in the latest and most relevant role.",
-          ],
+        : sectionId === "quantifying-impact"
+          ? quantifyingImpactDetails
+          : [
+              "Feedback is section-scoped and evidence-driven from current deterministic/NLP checks.",
+            ],
     },
   }
 }
@@ -2385,13 +2955,13 @@ export function renderDeterministicATSSection(
           content.analysis,
           onSelectSection
         )}
+        {renderBlock("Feedback", Sparkles, content.feedback, onSelectSection)}
         {renderBlock(
           "Recruiter Insights",
           Lightbulb,
           content.recruiterInsights,
           onSelectSection
         )}
-        {renderBlock("Feedback", Sparkles, content.feedback, onSelectSection)}
       </div>
     </div>
   )

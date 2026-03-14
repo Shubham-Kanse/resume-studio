@@ -112,10 +112,17 @@ const nextConfig = {
         ...(config.resolve.alias || {}),
         canvas: false,
       }
+      config.externals = config.externals || []
+      config.externals.push(/^@napi-rs\/canvas(?:-.+)?$/)
     }
     return config
   },
-  serverExternalPackages: ["@xenova/transformers", "onnxruntime-node", "sharp"],
+  serverExternalPackages: [
+    "@xenova/transformers",
+    "onnxruntime-node",
+    "sharp",
+    "@napi-rs/canvas",
+  ],
 }
 
 export default nextConfig

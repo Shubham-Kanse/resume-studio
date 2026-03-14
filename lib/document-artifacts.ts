@@ -25,6 +25,27 @@ export const documentLayoutSchema = z.object({
   hasMultiColumnEvidence: z.boolean().default(false),
   readingOrderRisk: z.number().min(0).max(1).default(0),
   averageBlocksPerPage: z.number().min(0).max(1000).default(0),
+  pageRiskMap: z
+    .array(
+      z.object({
+        page: z.number().int().min(1),
+        risk: z.number().min(0).max(1),
+        signals: z.array(z.string()).max(8).default([]),
+      })
+    )
+    .max(20)
+    .optional(),
+  flagConfidence: z
+    .array(
+      z.object({
+        flag: z.string().min(1).max(80),
+        present: z.boolean(),
+        confidence: z.number().min(0).max(1),
+        detail: z.string().min(1).max(300),
+      })
+    )
+    .max(20)
+    .optional(),
 })
 
 export const documentArtifactsSchema = z.object({

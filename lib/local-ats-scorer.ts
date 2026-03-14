@@ -1,3 +1,4 @@
+import { applyAtsCalibration } from "./ats-calibration"
 import {
   buildNaturalCorpusDocuments,
   NATURAL_STOPWORDS,
@@ -191,6 +192,83 @@ interface DateInfo {
   datedRoleCount: number
 }
 
+interface TimelineSignal {
+  start: number
+  end: number
+  line: string
+}
+
+interface TimelineInsights {
+  overlaps: Array<{ left: string; right: string }>
+  significantGaps: Array<{ months: number; between: string }>
+  explainedGaps: number
+}
+
+interface TenseInsights {
+  issues: Array<{ line: string; reason: string }>
+}
+
+interface SkillEvidenceInsights {
+  coverageRatio: number
+  uncoveredCoreSkills: string[]
+  coveredCoreSkills: string[]
+}
+
+interface TerminologyInsights {
+  driftTerms: Array<{ canonical: string; variants: string[] }>
+}
+
+interface ResponsibilityClusterInsights {
+  clusters: Array<{
+    name: string
+    matchedTerms: string[]
+    missingTerms: string[]
+    coverage: number
+  }>
+}
+
+interface BulletEvidenceSlot {
+  bullet: string
+  slots: {
+    action: boolean
+    tool: boolean
+    scope: boolean
+    outcome: boolean
+    timeframe: boolean
+    business: boolean
+  }
+  missing: string[]
+  score: number
+}
+
+interface BulletEvidenceInsights {
+  bullets: BulletEvidenceSlot[]
+  averageScore: number
+  missingSlotCounts: Record<string, number>
+}
+
+interface MetricQualityInsights {
+  weak: number
+  strong: number
+  examples: {
+    weak: string[]
+    strong: string[]
+  }
+}
+
+interface AdvancedSignals {
+  timeline: TimelineInsights
+  tense: TenseInsights
+  skillEvidence: SkillEvidenceInsights
+  terminology: TerminologyInsights
+  responsibilityCoverage: ResponsibilityClusterInsights | null
+  bulletEvidence: BulletEvidenceInsights
+  metricQuality: MetricQualityInsights
+  grammar: {
+    issues: Array<{ line: string; reason: string }>
+  }
+}
+
 interface BulletStats {
   total: number
   quantified: number
@@ -224,6 +302,8 @@ interface SummaryStats {
   firstPerson: boolean
   hasCoreSkills: boolean
   matchedCriticalTerms: number
+  firstTwoLineScanScore: number
+  valueDensity40Words: number
 }
 
 interface RepetitionStats {
@@ -313,7 +393,16 @@ interface DocumentStructureSignals {
   hasTableEvidence: boolean
   hasMultiColumnEvidence: boolean
   readingOrderRisk: number
+  pageRiskMap: Array<{ page: number; risk: number; signals: string[] }>
+  flagConfidence: Array<{
+    flag: string
+    present: boolean
+    confidence: number
+    detail: string
+  }>
 }
+
+type ResumeProfileMode = "auto" | "chronological" | "functional" | "hybrid"
 
 interface DeterministicEvidence {
   requiredSectionsPresent: string[]
@@ -341,6 +430,7 @@ interface DeterministicEvidence {
     managementObserved: boolean
     matchedRoleFamilies: string[]
   }
+  advancedSignals?: AdvancedSignals
 }
 
 export interface DeterministicATSResult extends ATSScoreResponse {
@@ -2057,6 +2147,8 @@ function deriveDocumentStructureSignals(
       hasTableEvidence: false,
       hasMultiColumnEvidence: false,
       readingOrderRisk: 0,
+      pageRiskMap: [],
+      flagConfidence: [],
     }
   }
 
@@ -2075,6 +2167,8 @@ function deriveDocumentStructureSignals(
     hasTableEvidence: artifacts.layout.hasTableEvidence,
     hasMultiColumnEvidence: artifacts.layout.hasMultiColumnEvidence,
     readingOrderRisk: artifacts.layout.readingOrderRisk,
+    pageRiskMap: artifacts.layout.pageRiskMap || [],
+    flagConfidence: artifacts.layout.flagConfidence || [],
   }
 }
 
@@ -2263,6 +2357,567 @@ function extractDateInfo(text: string): DateInfo {
   }
 }
 
+function extractTimelineSignals(text: string): TimelineSignal[] {
+  const lines = splitLines(text)
+  const monthMap: Record<string, number> = {
+    jan: 0,
+    january: 0,
+    feb: 1,
+    february: 1,
+    mar: 2,
+    march: 2,
+    apr: 3,
+    april: 3,
+    may: 4,
+    jun: 5,
+    june: 5,
+    jul: 6,
+    july: 6,
+    aug: 7,
+    august: 7,
+    sep: 8,
+    sept: 8,
+    september: 8,
+    oct: 9,
+    october: 9,
+    nov: 10,
+    november: 10,
+    dec: 11,
+    december: 11,
+  }
+  const toMonthIndex = (year: number, month: number) => year * 12 + month
+  const intervals: TimelineSignal[] = []
+
+  for (const line of lines) {
+    let match: RegExpExecArray | null
+
+    const numericRangePattern =
+      /\b(0?[1-9]|1[0-2])\/((?:19|20)\d{2})\s*(?:-|–|to)\s*(present|current|now|(0?[1-9]|1[0-2])\/((?:19|20)\d{2}))\b/i
+    match = numericRangePattern.exec(line)
+    if (match) {
+      const startMonth = Number(match[1] || 0) - 1
+      const startYear = Number(match[2] || 0)
+      const presentToken = match[3] || ""
+      const isPresent = /present|current|now/i.test(presentToken)
+      const endMonth = isPresent
+        ? CURRENT_MONTH_INDEX
+        : Number(match[4] || 0) - 1
+      const endYear = isPresent ? CURRENT_YEAR : Number(match[5] || 0)
+      const start = toMonthIndex(startYear, startMonth)
+      const end = toMonthIndex(endYear, endMonth)
+      if (Number.isFinite(start) && Number.isFinite(end) && end >= start) {
+        intervals.push({ start, end, line })
+      }
+      continue
+    }
+
+    const monthRangePattern =
+      /\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?\s+((?:19|20)\d{2})\s*(?:-|–|to)\s*(present|current|now|jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?\s*(((?:19|20)\d{2}))?\b/i
+    match = monthRangePattern.exec(line)
+    if (match) {
+      const startMonth = monthMap[match[1]?.toLowerCase() || ""] ?? 0
+      const startYear = Number(match[2] || 0)
+      const endToken = match[3] || ""
+      const isPresent = /present|current|now/i.test(endToken)
+      const endMonth = isPresent
+        ? CURRENT_MONTH_INDEX
+        : (monthMap[endToken.toLowerCase()] ?? 0)
+      const endYear = isPresent ? CURRENT_YEAR : Number(match[4] || 0)
+      const start = toMonthIndex(startYear, startMonth)
+      const end = toMonthIndex(endYear, endMonth)
+      if (Number.isFinite(start) && Number.isFinite(end) && end >= start) {
+        intervals.push({ start, end, line })
+      }
+      continue
+    }
+
+    const yearRangePattern =
+      /\b((?:19|20)\d{2})\s*(?:-|–|to)\s*(present|current|now|(?:19|20)\d{2})\b/i
+    match = yearRangePattern.exec(line)
+    if (match) {
+      const startYear = Number(match[1] || 0)
+      const endToken = match[2] || ""
+      const isPresent = /present|current|now/i.test(endToken)
+      const endYear = isPresent ? CURRENT_YEAR : Number(endToken)
+      const start = toMonthIndex(startYear, 0)
+      const end = toMonthIndex(endYear, isPresent ? CURRENT_MONTH_INDEX : 11)
+      if (Number.isFinite(start) && Number.isFinite(end) && end >= start) {
+        intervals.push({ start, end, line })
+      }
+    }
+  }
+
+  return intervals
+}
+
+function analyzeTimelineConsistency(
+  experienceTimelineText: string,
+  educationOrCertTimelineText = ""
+): TimelineInsights {
+  const intervals = extractTimelineSignals(experienceTimelineText).sort(
+    (left, right) => right.start - left.start
+  )
+  const coverageIntervals = extractTimelineSignals(educationOrCertTimelineText)
+
+  const overlaps: Array<{ left: string; right: string }> = []
+  const significantGaps: Array<{ months: number; between: string }> = []
+  let explainedGaps = 0
+
+  for (let index = 0; index < intervals.length - 1; index += 1) {
+    const current = intervals[index]
+    const next = intervals[index + 1]
+    if (!current || !next) continue
+
+    if (next.end >= current.start) {
+      overlaps.push({ left: current.line, right: next.line })
+      continue
+    }
+
+    const gapMonths = current.start - next.end - 1
+    if (gapMonths >= 4) {
+      const gapStart = next.end + 1
+      const gapEnd = current.start - 1
+      const explained = coverageIntervals.some(
+        (interval) => interval.start <= gapEnd && interval.end >= gapStart
+      )
+      if (explained) explainedGaps += 1
+      else {
+        significantGaps.push({
+          months: gapMonths,
+          between: `${current.line} -> ${next.line}`,
+        })
+      }
+    }
+  }
+
+  return {
+    overlaps: overlaps.slice(0, 6),
+    significantGaps: significantGaps.slice(0, 6),
+    explainedGaps,
+  }
+}
+
+function analyzeTenseConsistency(experienceText: string): TenseInsights {
+  const lines = splitLines(experienceText)
+  const issues: Array<{ line: string; reason: string }> = []
+  const presentPatterns = [
+    /\b(?:leading|driving|managing|building|creating|working|supporting|owning|lead|drive|manage|build|create|work|support|own)\b/i,
+  ]
+  const pastPatterns = [
+    /\b(?:led|drove|managed|built|created|worked|supported|owned|delivered|implemented|optimized|reduced|increased)\b/i,
+  ]
+  let activeRoleStatus: "present" | "past" | null = null
+
+  for (const line of lines) {
+    const normalized = line.toLowerCase()
+    if (
+      /\b(?:19|20)\d{2}\b/.test(normalized) &&
+      /\b(?:present|current|now)\b/i.test(normalized)
+    ) {
+      activeRoleStatus = "present"
+      continue
+    }
+    if (
+      /\b(?:19|20)\d{2}\b/.test(normalized) &&
+      /(?:-|–|to)/.test(normalized)
+    ) {
+      activeRoleStatus = "past"
+      continue
+    }
+
+    const isBulletLike =
+      /^[-*•]/.test(line) ||
+      (line.length >= 18 &&
+        !isLikelyHeadingLine(line) &&
+        !detectSectionKey(line))
+    if (!isBulletLike) continue
+    if (!activeRoleStatus) continue
+
+    const looksPresent = presentPatterns.some((pattern) =>
+      pattern.test(normalized)
+    )
+    const looksPast = pastPatterns.some((pattern) => pattern.test(normalized))
+    if (looksPresent && !looksPast && activeRoleStatus === "past") {
+      issues.push({
+        line,
+        reason:
+          "Past role bullet appears to use present tense. Use past tense for completed roles.",
+      })
+    } else if (looksPast && !looksPresent && activeRoleStatus === "present") {
+      issues.push({
+        line,
+        reason:
+          "Current role bullet appears to use past tense. Use present tense for current role where accurate.",
+      })
+    }
+    if (issues.length >= 6) break
+  }
+
+  return { issues }
+}
+
+function mapSkillEvidence(
+  skillsAnalysis: SkillsAnalysis,
+  experienceText: string
+): SkillEvidenceInsights {
+  const experienceLines = extractExperienceLines(experienceText)
+  const coreSkills = unique([
+    ...skillsAnalysis.canonicalTerms.slice(0, 20),
+    ...skillsAnalysis.items
+      .slice(0, 20)
+      .map((item) => resolveCanonicalTerm(item)),
+  ]).filter(Boolean)
+
+  if (coreSkills.length === 0) {
+    return {
+      coverageRatio: 1,
+      uncoveredCoreSkills: [],
+      coveredCoreSkills: [],
+    }
+  }
+
+  const covered: string[] = []
+  const uncovered: string[] = []
+  const experienceBlob = experienceLines.join("\n").toLowerCase()
+
+  for (const skill of coreSkills) {
+    if (containsTerm(experienceBlob, skill)) covered.push(skill)
+    else uncovered.push(skill)
+  }
+
+  return {
+    coverageRatio: covered.length / coreSkills.length,
+    uncoveredCoreSkills: uncovered.slice(0, 12),
+    coveredCoreSkills: covered.slice(0, 12),
+  }
+}
+
+function analyzeTerminologyConsistency(text: string): TerminologyInsights {
+  const normalizedText = text.toLowerCase()
+  const driftTerms: Array<{ canonical: string; variants: string[] }> = []
+
+  for (const group of KEYWORD_VARIANT_GROUPS) {
+    if (group.variants.length < 2) continue
+    const matchedVariants = unique(
+      group.variants.filter((variant) =>
+        buildTermPattern(variant).test(normalizedText)
+      )
+    )
+    if (matchedVariants.length >= 2) {
+      driftTerms.push({
+        canonical: group.canonical,
+        variants: matchedVariants.slice(0, 4),
+      })
+    }
+  }
+
+  return { driftTerms: driftTerms.slice(0, 10) }
+}
+
+function analyzeBulletEvidenceGranularity(
+  experienceText: string
+): BulletEvidenceInsights {
+  const bullets = extractExperienceLines(experienceText)
+  const items: BulletEvidenceSlot[] = bullets.map((bullet) => {
+    const line = bullet.trim()
+    const normalized = line.toLowerCase()
+    const slots = {
+      action: Boolean(
+        tokenize(normalized)[0] &&
+        STRONG_VERBS.has(tokenize(normalized)[0] || "")
+      ),
+      tool:
+        extractCanonicalTerms(line, [
+          "language",
+          "framework",
+          "cloud",
+          "devops",
+          "data",
+          "analytics",
+          "ai",
+          "security",
+          "testing",
+        ]).length > 0,
+      scope:
+        /\b(?:across|for|serving|supporting|used by|team of|users?|customers?|regions?|services?)\b/i.test(
+          normalized
+        ),
+      outcome:
+        /\b(?:improved|reduced|increased|cut|boosted|grew|saved|delivered|accelerated)\b/i.test(
+          normalized
+        ),
+      timeframe:
+        /\b(?:over|within|during|quarter|month|year|weekly|daily|in\s+\d+\s+(?:days?|weeks?|months?|years?))\b/i.test(
+          normalized
+        ),
+      business: textIncludesAny(normalized, BUSINESS_IMPACT_TERMS),
+    }
+    const missing = Object.entries(slots)
+      .filter(([, present]) => !present)
+      .map(([slot]) => slot)
+    const score = clamp((Object.values(slots).filter(Boolean).length / 6) * 100)
+    return {
+      bullet: line,
+      slots,
+      missing,
+      score,
+    }
+  })
+
+  const missingSlotCounts: Record<string, number> = {
+    action: 0,
+    tool: 0,
+    scope: 0,
+    outcome: 0,
+    timeframe: 0,
+    business: 0,
+  }
+  for (const item of items) {
+    for (const missing of item.missing) {
+      missingSlotCounts[missing] = (missingSlotCounts[missing] || 0) + 1
+    }
+  }
+
+  const averageScore =
+    items.length > 0
+      ? round(items.reduce((sum, item) => sum + item.score, 0) / items.length)
+      : 0
+
+  return {
+    bullets: items.slice(0, 30),
+    averageScore,
+    missingSlotCounts,
+  }
+}
+
+function analyzeMetricQuality(experienceText: string): MetricQualityInsights {
+  const bullets = extractExperienceLines(experienceText)
+  const weak: string[] = []
+  const strong: string[] = []
+
+  for (const bullet of bullets) {
+    const line = bullet.trim()
+    const hasAnyMetric =
+      /(\d+%|\$\s?\d|€\s?\d|£\s?\d|\b\d+(?:\.\d+)?\s?(?:k|m|b)\+?\b|\b\d+\s?(?:ms|seconds?|minutes?|hours?|days?|weeks?|months?|years?)\b)/i.test(
+        line
+      )
+    if (!hasAnyMetric) continue
+
+    const isStrong =
+      /\b(?:from|to|by|vs|versus|p95|p99|baseline|reduced.*from|increased.*from|cut.*from)\b/i.test(
+        line
+      ) && /\d/.test(line)
+
+    if (isStrong) strong.push(line)
+    else weak.push(line)
+  }
+
+  return {
+    weak: weak.length,
+    strong: strong.length,
+    examples: {
+      weak: weak.slice(0, 3),
+      strong: strong.slice(0, 3),
+    },
+  }
+}
+
+function analyzeGrammarQuality(text: string): {
+  issues: Array<{ line: string; reason: string }>
+} {
+  const lines = splitLines(text)
+  const issues: Array<{ line: string; reason: string }> = []
+
+  for (const line of lines) {
+    const normalized = line.trim()
+    if (!normalized) continue
+    if (/\b([a-z]+)\s+\1\b/i.test(normalized)) {
+      issues.push({ line: normalized, reason: "Repeated word detected." })
+      continue
+    }
+    if (/\b(?:a)\s+[aeiou]/i.test(normalized)) {
+      issues.push({
+        line: normalized,
+        reason: "Possible article mismatch ('a' before vowel sound).",
+      })
+      continue
+    }
+    if (/\b(?:an)\s+[bcdfghjklmnpqrstvwxyz]/i.test(normalized)) {
+      issues.push({
+        line: normalized,
+        reason: "Possible article mismatch ('an' before consonant sound).",
+      })
+      continue
+    }
+    if (
+      normalized.split(/\s+/).length >= 14 &&
+      !/[.!?]$/.test(normalized) &&
+      !/^[-*•]/.test(normalized)
+    ) {
+      issues.push({
+        line: normalized,
+        reason:
+          "Long sentence-like line without terminal punctuation; check readability.",
+      })
+    }
+    if (issues.length >= 8) break
+  }
+
+  return { issues }
+}
+
+const RESPONSIBILITY_CLUSTERS = [
+  {
+    name: "delivery-execution",
+    terms: ["deliver", "roadmap", "ship", "execution", "launch", "ownership"],
+  },
+  {
+    name: "analysis-insights",
+    terms: [
+      "analysis",
+      "analytics",
+      "reporting",
+      "dashboard",
+      "forecast",
+      "experimentation",
+    ],
+  },
+  {
+    name: "engineering-systems",
+    terms: [
+      "architecture",
+      "microservices",
+      "api",
+      "distributed systems",
+      "kubernetes",
+      "cloud",
+    ],
+  },
+  {
+    name: "stakeholder-leadership",
+    terms: [
+      "stakeholder",
+      "cross-functional",
+      "leadership",
+      "mentoring",
+      "influence",
+      "communication",
+    ],
+  },
+  {
+    name: "business-impact",
+    terms: ["revenue", "cost", "efficiency", "customer", "retention", "churn"],
+  },
+] as const
+
+function analyzeResponsibilityCoverage(
+  resumeContent: string,
+  jdAnalysis: JDAnalysis | null
+): ResponsibilityClusterInsights | null {
+  if (!jdAnalysis) return null
+
+  const jdBlob = [
+    ...jdAnalysis.requiredTerms,
+    ...jdAnalysis.responsibilityTerms,
+    ...jdAnalysis.titleTerms,
+  ].join(" ")
+
+  const clusters = RESPONSIBILITY_CLUSTERS.map((cluster) => {
+    const relevantTerms = cluster.terms.filter((term) =>
+      containsTerm(jdBlob, term)
+    )
+    if (relevantTerms.length === 0) {
+      return {
+        name: cluster.name,
+        matchedTerms: [] as string[],
+        missingTerms: [] as string[],
+        coverage: 1,
+      }
+    }
+
+    const matchedTerms = relevantTerms.filter((term) =>
+      containsTerm(resumeContent, term)
+    )
+    const missingTerms = relevantTerms.filter(
+      (term) => !matchedTerms.includes(term)
+    )
+
+    return {
+      name: cluster.name,
+      matchedTerms: matchedTerms.slice(0, 6),
+      missingTerms: missingTerms.slice(0, 6),
+      coverage: matchedTerms.length / relevantTerms.length,
+    }
+  })
+
+  return {
+    clusters: clusters
+      .filter(
+        (cluster) =>
+          cluster.matchedTerms.length > 0 || cluster.missingTerms.length > 0
+      )
+      .slice(0, 6),
+  }
+}
+
+function buildEvidenceGraph(params: {
+  skillsAnalysis: SkillsAnalysis
+  experienceText: string
+  jdAnalysis: JDAnalysis | null
+}): NonNullable<ATSScoreResponse["advancedInsights"]>["evidenceGraph"] {
+  const bullets = extractExperienceLines(params.experienceText)
+  const skills = unique([
+    ...params.skillsAnalysis.canonicalTerms.slice(0, 14),
+    ...params.skillsAnalysis.items
+      .slice(0, 14)
+      .map((item) => resolveCanonicalTerm(item)),
+  ]).filter(Boolean)
+
+  const responsibilityTerms = unique([
+    ...(params.jdAnalysis?.responsibilityTerms ?? []),
+    ...(params.jdAnalysis?.requiredTerms ?? []),
+  ]).slice(0, 40)
+
+  return skills
+    .map((skill) => {
+      const evidenceBullets = bullets
+        .filter((line) => containsTerm(line, skill))
+        .slice(0, 3)
+      if (evidenceBullets.length === 0) return null
+
+      const matchedResponsibilities = responsibilityTerms
+        .filter((term) =>
+          evidenceBullets.some((line) => {
+            const evidence = findNaturalTermEvidence([line], term, {
+              variants: getTermVariants(term),
+              stopwords: new Set([...NATURAL_STOPWORDS, ...STOPWORDS]),
+            })
+            return (
+              evidence.exact ||
+              evidence.stem ||
+              evidence.ngram ||
+              evidence.fuzzy
+            )
+          })
+        )
+        .slice(0, 4)
+
+      return {
+        skill,
+        evidenceBullets,
+        matchedResponsibilities,
+      }
+    })
+    .filter(
+      (
+        node
+      ): node is NonNullable<
+        ATSScoreResponse["advancedInsights"]
+      >["evidenceGraph"][number] => Boolean(node)
+    )
+    .slice(0, 12)
+}
+
 function extractExperienceLines(sectionContent: string): string[] {
   return splitLines(sectionContent).filter((line) => {
     const cleaned = line.replace(/^[-*•]\s*/, "").trim()
@@ -2432,6 +3087,8 @@ function analyzeSummary(summaryText: string): SummaryStats {
   const lines = splitLines(summaryText)
   const words = tokenize(summaryText)
   const first50Words = words.slice(0, 50).join(" ")
+  const first40Words = words.slice(0, 40).join(" ")
+  const firstTwoLines = lines.slice(0, 2).join(" ")
   const canonicalTerms = extractCanonicalTerms(
     summaryText,
     TECHNICAL_CATEGORIES
@@ -2440,6 +3097,30 @@ function analyzeSummary(summaryText: string): SummaryStats {
     containsTerm(first50Words, term)
   ).length
   const matchedCriticalTerms = canonicalTerms.length
+  const hasRoleSignal =
+    /(engineer|developer|manager|analyst|architect|scientist|consultant|specialist|administrator|designer|director)/i.test(
+      first40Words
+    )
+  const hasScopeSignal =
+    /\b(?:across|for|supporting|serving|enterprise|global|multi-?team|platform|systems?)\b/i.test(
+      first40Words
+    )
+  const hasImpactSignal =
+    /(\d+%|\$\s?\d|\b\d+(?:\.\d+)?\s?(?:k|m|b)\+?\b|\b(?:improved|reduced|increased|delivered|grew)\b)/i.test(
+      first40Words
+    )
+  const hasDomainSignal =
+    extractCanonicalTerms(first40Words, TECHNICAL_CATEGORIES).length > 0
+  const valueDensity40Words = [
+    hasRoleSignal,
+    hasScopeSignal,
+    hasImpactSignal,
+    hasDomainSignal,
+  ].filter(Boolean).length
+  const firstTwoLineScanScore = clamp(
+    (valueDensity40Words / 4) * 100 -
+      (firstTwoLines.split(/\s+/).filter(Boolean).length > 42 ? 12 : 0)
+  )
 
   return {
     lineCount: lines.length,
@@ -2463,6 +3144,8 @@ function analyzeSummary(summaryText: string): SummaryStats {
     hasCoreSkills:
       extractCanonicalTerms(summaryText, TECHNICAL_CATEGORIES).length >= 3,
     matchedCriticalTerms,
+    firstTwoLineScanScore,
+    valueDensity40Words,
   }
 }
 
@@ -3407,12 +4090,22 @@ function scoreFormatting(
   }
 }
 
+function resolveResumeProfileMode(params: {
+  requested: ResumeProfileMode
+  order: string[]
+  skillsAnalysis: SkillsAnalysis
+}): ResumeProfileMode {
+  if (params.requested !== "auto") return params.requested
+  return "functional"
+}
+
 function scoreStructure(
   sections: Partial<Record<SectionKey, SectionBlock>>,
   order: string[],
   contact: ContactInfo,
   summaryStats: SummaryStats,
   skillsAnalysis: SkillsAnalysis,
+  profileMode: ResumeProfileMode,
   structureSignals?: DocumentStructureSignals
 ): number {
   let score = 25
@@ -3441,12 +4134,23 @@ function scoreStructure(
   if (skillsAnalysis.items.length >= 15 && skillsAnalysis.items.length <= 25)
     score += 5
 
-  const preferredOrder = [
-    "professionalSummary",
-    "skills",
-    "workExperience",
-    "education",
-  ]
+  const preferredOrderByMode: Record<ResumeProfileMode, string[]> = {
+    auto: ["professionalSummary", "skills", "workExperience", "education"],
+    functional: [
+      "professionalSummary",
+      "skills",
+      "workExperience",
+      "education",
+    ],
+    chronological: [
+      "professionalSummary",
+      "workExperience",
+      "skills",
+      "education",
+    ],
+    hybrid: ["professionalSummary", "skills", "workExperience", "education"],
+  }
+  const preferredOrder = preferredOrderByMode[profileMode]
   const orderScore = preferredOrder.every((key, index) => {
     const actualIndex = order.indexOf(key)
     return actualIndex === -1 || actualIndex >= index
@@ -3731,10 +4435,16 @@ function calibrateScores(params: {
   if (missingCoreContact && missingCriticalEvidence)
     overallScore = Math.min(overallScore, 50)
 
+  const calibrated = applyAtsCalibration({
+    resumeQuality: resumeQualityScore,
+    targetRole: targetRoleScore,
+    overall: clamp(overallScore),
+  })
+
   return {
-    resumeQualityScore,
-    targetRoleScore,
-    overallScore: clamp(overallScore),
+    resumeQualityScore: calibrated.resumeQuality,
+    targetRoleScore: calibrated.targetRole,
+    overallScore: calibrated.overall,
   }
 }
 
@@ -3831,6 +4541,225 @@ function buildJobMatchArtifacts(params: {
   }
 }
 
+function buildCounterfactuals(params: {
+  score: number
+  bulletStats: BulletStats
+  timeline: TimelineInsights
+  tense: TenseInsights
+  skillEvidence: SkillEvidenceInsights
+  bulletEvidence: BulletEvidenceInsights
+  metricQuality: MetricQualityInsights
+  keywordAnalysis: KeywordAnalysis | null
+}): NonNullable<ATSScoreResponse["advancedInsights"]>["counterfactuals"] {
+  const suggestions: NonNullable<
+    ATSScoreResponse["advancedInsights"]
+  >["counterfactuals"] = []
+
+  if (
+    params.bulletStats.quantified / Math.max(1, params.bulletStats.total) <
+    0.6
+  ) {
+    suggestions.push({
+      action:
+        "Add quantified outcomes to 2-3 core experience bullets with scope and timeframe.",
+      estimatedScoreLift: 6,
+      rationale:
+        "Quantified evidence is currently underrepresented, reducing achievement credibility and ATS signal strength.",
+    })
+  }
+
+  if (params.skillEvidence.coverageRatio < 0.65) {
+    suggestions.push({
+      action:
+        "Reference top listed skills directly in experience bullets (tool + action + outcome).",
+      estimatedScoreLift: 5,
+      rationale:
+        "Skill-to-experience coverage is low, so capabilities look less verifiable to ATS and recruiters.",
+    })
+  }
+
+  if (
+    params.timeline.significantGaps.length > 0 ||
+    params.timeline.overlaps.length > 0
+  ) {
+    suggestions.push({
+      action:
+        "Clarify timeline continuity (intentional overlaps, contracts, or gap context) near affected roles.",
+      estimatedScoreLift: 4,
+      rationale:
+        "Unexplained overlaps or large gaps reduce trust in chronology consistency.",
+    })
+  }
+
+  if (params.tense.issues.length > 0) {
+    suggestions.push({
+      action:
+        "Normalize bullet tense: present for current role, past for completed roles.",
+      estimatedScoreLift: 3,
+      rationale:
+        "Mixed tense creates style inconsistency and weakens readability signals.",
+    })
+  }
+
+  if (
+    params.metricQuality.weak > params.metricQuality.strong &&
+    params.metricQuality.weak > 0
+  ) {
+    suggestions.push({
+      action:
+        "Upgrade weak metrics to baseline/delta metrics (e.g., from 120ms to 70ms p95).",
+      estimatedScoreLift: 4,
+      rationale:
+        "Current metrics are present but often lack specificity or comparative context.",
+    })
+  }
+
+  if (params.bulletEvidence.averageScore < 65) {
+    suggestions.push({
+      action:
+        "Rewrite low-granularity bullets to include missing slots (Tool, Outcome, Timeframe, Business effect).",
+      estimatedScoreLift: 5,
+      rationale:
+        "Bullet evidence granularity is below target and key evidence slots are missing.",
+    })
+  }
+
+  if (
+    params.keywordAnalysis &&
+    params.keywordAnalysis.missingByCategory.required.length > 0
+  ) {
+    suggestions.push({
+      action:
+        "Add 3-5 missing required terms naturally across summary, skills, and recent bullets where truthful.",
+      estimatedScoreLift: 5,
+      rationale:
+        "Critical required terms are currently missing or weakly represented for target role matching.",
+    })
+  }
+
+  return suggestions
+    .sort((left, right) => right.estimatedScoreLift - left.estimatedScoreLift)
+    .slice(0, 5)
+}
+
+function buildAdvancedInsights(params: {
+  overallScore: number
+  parseability: number
+  missingSections: string[]
+  bulletStats: BulletStats
+  timeline: TimelineInsights
+  tense: TenseInsights
+  skillEvidence: SkillEvidenceInsights
+  bulletEvidence: BulletEvidenceInsights
+  metricQuality: MetricQualityInsights
+  grammar: { issues: Array<{ line: string; reason: string }> }
+  terminology: TerminologyInsights
+  responsibilityCoverage: ResponsibilityClusterInsights | null
+  qualification: QualificationAlignment
+  keywordAnalysis: KeywordAnalysis | null
+  skillsAnalysis: SkillsAnalysis
+  experienceText: string
+  jdAnalysis: JDAnalysis | null
+}): ATSScoreResponse["advancedInsights"] {
+  const uncertaintyDelta = clamp(
+    4 +
+      (params.parseability < 80 ? 2 : 0) +
+      Math.min(3, params.missingSections.length) +
+      Math.min(2, params.timeline.significantGaps.length) +
+      Math.min(2, params.timeline.overlaps.length) +
+      Math.min(2, params.tense.issues.length > 0 ? 1 : 0),
+    2,
+    14
+  )
+  const confidenceScore = clamp(
+    100 -
+      Math.max(0, 82 - params.parseability) * 0.45 -
+      params.missingSections.length * 8 -
+      params.timeline.significantGaps.length * 4 -
+      params.timeline.overlaps.length * 4 -
+      (1 - params.skillEvidence.coverageRatio) * 16 -
+      params.terminology.driftTerms.length * 2 -
+      Math.max(0, params.metricQuality.strong - params.metricQuality.weak) *
+        1.2 +
+      params.grammar.issues.length * 1.5
+  )
+  const cohort =
+    params.qualification.matchedRoleFamilies[0] || "general-knowledge-worker"
+  const benchmarkTerms = unique([
+    ...(params.responsibilityCoverage?.clusters.flatMap(
+      (cluster) => cluster.matchedTerms
+    ) ?? []),
+    ...(params.keywordAnalysis?.matchedByCategory.required ?? []),
+  ]).slice(0, 8)
+
+  const percentile = clamp(
+    params.overallScore +
+      (params.parseability >= 85 ? 4 : 0) +
+      (params.skillEvidence.coverageRatio >= 0.7 ? 3 : -3) +
+      (params.timeline.significantGaps.length === 0 ? 2 : -2),
+    1,
+    99
+  )
+
+  return {
+    confidence: {
+      score: confidenceScore,
+      uncertaintyBand: {
+        lower: clamp(params.overallScore - uncertaintyDelta),
+        upper: clamp(params.overallScore + uncertaintyDelta),
+        delta: uncertaintyDelta,
+      },
+      contributors: [
+        {
+          label: "Extraction & parseability quality",
+          impact: params.parseability >= 85 ? "low" : "high",
+          detail: `Parseability signal is ${params.parseability}/100.`,
+        },
+        {
+          label: "Timeline consistency",
+          impact:
+            params.timeline.significantGaps.length > 0 ||
+            params.timeline.overlaps.length > 0
+              ? "medium"
+              : "low",
+          detail: `${params.timeline.overlaps.length} overlap(s), ${params.timeline.significantGaps.length} significant gap(s).`,
+        },
+        {
+          label: "Skill evidence traceability",
+          impact: params.skillEvidence.coverageRatio >= 0.7 ? "low" : "high",
+          detail: `${Math.round(params.skillEvidence.coverageRatio * 100)}% of core skills are evidenced in experience.`,
+        },
+        {
+          label: "Bullet evidence granularity",
+          impact: params.bulletEvidence.averageScore >= 70 ? "low" : "medium",
+          detail: `Average bullet evidence score is ${params.bulletEvidence.averageScore}/100.`,
+        },
+      ],
+    },
+    benchmark: {
+      mode: "heuristic-role-family",
+      percentile,
+      cohort,
+      comparedAgainst: benchmarkTerms,
+    },
+    counterfactuals: buildCounterfactuals({
+      score: params.overallScore,
+      bulletStats: params.bulletStats,
+      timeline: params.timeline,
+      tense: params.tense,
+      skillEvidence: params.skillEvidence,
+      bulletEvidence: params.bulletEvidence,
+      metricQuality: params.metricQuality,
+      keywordAnalysis: params.keywordAnalysis,
+    }),
+    evidenceGraph: buildEvidenceGraph({
+      skillsAnalysis: params.skillsAnalysis,
+      experienceText: params.experienceText,
+      jdAnalysis: params.jdAnalysis,
+    }),
+  }
+}
+
 function buildIssuesAndRecommendations(params: {
   hasJD: boolean
   formattingScore: number
@@ -3851,6 +4780,7 @@ function buildIssuesAndRecommendations(params: {
   dates: DateInfo
   missingSections: string[]
   missingOptionalSections: string[]
+  advancedSignals?: AdvancedSignals
 }): {
   issues: ATSIssue[]
   recommendations: ATSRecommendation[]
@@ -4200,6 +5130,67 @@ function buildIssuesAndRecommendations(params: {
     })
   }
 
+  if (params.advancedSignals?.skillEvidence.uncoveredCoreSkills.length) {
+    pushIssue({
+      severity: "medium",
+      category: "Skill Credibility",
+      issue:
+        "Several core skills are listed without clear evidence in experience bullets",
+      impact:
+        "Skill-only claims reduce credibility and can weaken ATS relevance confidence.",
+      howToFix:
+        "Add role bullets that show each critical skill in context with action and outcome.",
+      example: `Add bullets evidencing skills like ${params.advancedSignals.skillEvidence.uncoveredCoreSkills.slice(0, 3).join(", ")} using action + tool + measurable result.`,
+    })
+  }
+
+  if (
+    (params.advancedSignals?.timeline.overlaps.length || 0) > 0 ||
+    (params.advancedSignals?.timeline.significantGaps.length || 0) > 0
+  ) {
+    pushIssue({
+      severity: "medium",
+      category: "Timeline Integrity",
+      issue:
+        "Employment timeline contains overlaps or significant unexplained gaps",
+      impact:
+        "Chronology ambiguity can reduce recruiter trust and create ATS timeline warnings.",
+      howToFix:
+        "Clarify overlap intent and annotate meaningful gaps with contract, study, or transition context.",
+      example:
+        "Contract role (part-time) listed in parallel with full-time role, or short gap note such as Career Break (upskilling).",
+    })
+  }
+
+  if ((params.advancedSignals?.tense.issues.length || 0) > 0) {
+    pushIssue({
+      severity: "low",
+      category: "Tense Consistency",
+      issue: "Bullet tense is mixed across experience entries",
+      impact:
+        "Inconsistent tense weakens writing consistency and scan clarity.",
+      howToFix:
+        "Use present tense for current role bullets and past tense for completed roles.",
+      example:
+        "Current role: Lead platform modernization... | Past role: Led platform modernization...",
+    })
+  }
+
+  if ((params.advancedSignals?.grammar.issues.length || 0) > 0) {
+    pushIssue({
+      severity: "low",
+      category: "Grammar Quality",
+      issue: "Resume-style grammar issues were detected in key lines",
+      impact:
+        "Grammar slips can reduce readability and perceived polish, especially in summary and headline bullets.",
+      howToFix:
+        "Fix article/duplication issues and tighten sentence-level punctuation where needed.",
+      example:
+        params.advancedSignals?.grammar.issues[0]?.line ||
+        "Improved data quality quality across dashboards.",
+    })
+  }
+
   const severityOrder: Record<ATSIssue["severity"], number> = {
     critical: 0,
     high: 1,
@@ -4483,6 +5474,7 @@ function buildDebugAnalysis(params: {
   keywordAnalysis: KeywordAnalysis | null
   qualification: QualificationAlignment
   atsCompatibility: ATSScoreResponse["atsCompatibility"]
+  advancedSignals?: AdvancedSignals
 }): ATSScoreResponse["debugAnalysis"] {
   const sections: ATSScoreResponse["debugAnalysis"] = []
 
@@ -4523,6 +5515,26 @@ function buildDebugAnalysis(params: {
         params.summaryStats.hasCoreSkills
           ? "good"
           : "warning",
+    })
+    summaryItems.push({
+      label: "First-2-line scan",
+      detail: `${params.summaryStats.firstTwoLineScanScore}/100`,
+      suggestion:
+        params.summaryStats.firstTwoLineScanScore < 70
+          ? "Improve first two lines with role + scope + impact + domain signals."
+          : undefined,
+      severity:
+        params.summaryStats.firstTwoLineScanScore >= 70 ? "good" : "warning",
+    })
+    summaryItems.push({
+      label: "Value density (first 40 words)",
+      detail: `${params.summaryStats.valueDensity40Words}/4 critical signals`,
+      suggestion:
+        params.summaryStats.valueDensity40Words < 3
+          ? "Target at least 3 of 4 signals in first 40 words: role, scope, impact, domain."
+          : undefined,
+      severity:
+        params.summaryStats.valueDensity40Words >= 3 ? "good" : "warning",
     })
     if (params.summaryStats.hasObjectiveLanguage) {
       summaryItems.push({
@@ -4872,6 +5884,28 @@ function buildDebugAnalysis(params: {
               ? "warning"
               : "critical",
       },
+      ...(params.atsCompatibility.pageRiskMap || [])
+        .slice(0, 4)
+        .map((entry) => ({
+          label: `Page ${entry.page} risk`,
+          detail: `${Math.round(entry.risk * 100)}%${entry.signals.length ? ` (${entry.signals.join(", ")})` : ""}`,
+          severity:
+            entry.risk < 0.3
+              ? ("good" as const)
+              : entry.risk < 0.55
+                ? ("warning" as const)
+                : ("critical" as const),
+        })),
+      ...(params.atsCompatibility.flagConfidence || [])
+        .slice(0, 4)
+        .map((flag) => ({
+          label: `Flag confidence: ${flag.flag}`,
+          detail: `${flag.present ? "present" : "not present"} (${Math.round(
+            flag.confidence * 100
+          )}%)`,
+          suggestion: flag.detail,
+          severity: "info" as const,
+        })),
       ...params.atsCompatibility.issues.map((issue) => ({
         label: "Critical issue",
         detail: issue,
@@ -4892,6 +5926,133 @@ function buildDebugAnalysis(params: {
     items: compatibilityItems,
   })
 
+  if (params.advancedSignals) {
+    const advancedItems: ATSScoreResponse["debugAnalysis"][number]["items"] = []
+    const timeline = params.advancedSignals.timeline
+    const tense = params.advancedSignals.tense
+    const skillEvidence = params.advancedSignals.skillEvidence
+    const terminology = params.advancedSignals.terminology
+    const responsibility = params.advancedSignals.responsibilityCoverage
+
+    advancedItems.push({
+      label: "Skill evidence coverage",
+      detail: `${Math.round(skillEvidence.coverageRatio * 100)}%`,
+      suggestion:
+        skillEvidence.coverageRatio < 0.7
+          ? `Add concrete experience evidence for skills like ${skillEvidence.uncoveredCoreSkills
+              .slice(0, 3)
+              .join(", ")}.`
+          : undefined,
+      severity: skillEvidence.coverageRatio >= 0.7 ? "good" : "warning",
+    })
+
+    advancedItems.push({
+      label: "Timeline integrity",
+      detail: `${timeline.overlaps.length} overlap(s), ${timeline.significantGaps.length} significant gap(s), ${timeline.explainedGaps} explained gap(s)`,
+      suggestion:
+        timeline.overlaps.length > 0 || timeline.significantGaps.length > 0
+          ? "Clarify overlap intent and annotate meaningful gaps where needed."
+          : undefined,
+      severity:
+        timeline.overlaps.length === 0 && timeline.significantGaps.length === 0
+          ? "good"
+          : "warning",
+    })
+
+    advancedItems.push({
+      label: "Tense consistency",
+      detail:
+        tense.issues.length === 0
+          ? "No major mixed-tense signal detected"
+          : `${tense.issues.length} potential mixed-tense line(s)`,
+      suggestion:
+        tense.issues.length > 0
+          ? "Use present tense for current role bullets and past tense for prior roles."
+          : undefined,
+      severity: tense.issues.length === 0 ? "good" : "warning",
+    })
+
+    if (terminology.driftTerms.length > 0) {
+      advancedItems.push({
+        label: "Terminology drift",
+        detail: terminology.driftTerms
+          .slice(0, 3)
+          .map((entry) => `${entry.canonical}: ${entry.variants.join("/")}`)
+          .join("; "),
+        suggestion:
+          "Pick one canonical term (optionally define acronym once) and stay consistent.",
+        severity: "warning",
+      })
+    }
+
+    advancedItems.push({
+      label: "Bullet evidence granularity",
+      detail: `${params.advancedSignals.bulletEvidence.averageScore}/100`,
+      suggestion:
+        params.advancedSignals.bulletEvidence.averageScore < 70
+          ? "Raise bullet completeness: Action + Tool + Scope + Outcome + Timeframe + Business effect."
+          : undefined,
+      severity:
+        params.advancedSignals.bulletEvidence.averageScore >= 70
+          ? "good"
+          : "warning",
+    })
+
+    advancedItems.push({
+      label: "Metric quality tiers",
+      detail: `${params.advancedSignals.metricQuality.strong} strong / ${params.advancedSignals.metricQuality.weak} weak`,
+      suggestion:
+        params.advancedSignals.metricQuality.weak >
+        params.advancedSignals.metricQuality.strong
+          ? "Convert weak metrics into baseline/delta metrics where accurate."
+          : undefined,
+      severity:
+        params.advancedSignals.metricQuality.weak <=
+        params.advancedSignals.metricQuality.strong
+          ? "good"
+          : "warning",
+    })
+
+    if (params.advancedSignals.grammar.issues.length > 0) {
+      advancedItems.push({
+        label: "Grammar lint",
+        detail: `${params.advancedSignals.grammar.issues.length} issue(s) detected`,
+        suggestion: params.advancedSignals.grammar.issues[0]?.reason,
+        severity: "warning",
+      })
+    }
+
+    if (responsibility?.clusters.length) {
+      const weakClusters = responsibility.clusters
+        .filter((cluster) => cluster.coverage < 0.5)
+        .slice(0, 2)
+      if (weakClusters.length > 0) {
+        advancedItems.push({
+          label: "Responsibility-cluster coverage",
+          detail: weakClusters
+            .map(
+              (cluster) =>
+                `${cluster.name}: missing ${cluster.missingTerms
+                  .slice(0, 3)
+                  .join(", ")}`
+            )
+            .join("; "),
+          suggestion:
+            "Strengthen weak responsibility clusters in recent role bullets where truthful.",
+          severity: "warning",
+        })
+      }
+    }
+
+    sections.push({
+      id: "advancedInsights",
+      title: "Advanced Insights",
+      summary:
+        "These checks add timeline integrity, tense consistency, skill evidence traceability, and semantic responsibility coverage.",
+      items: advancedItems.slice(0, 6),
+    })
+  }
+
   return sections
 }
 
@@ -4907,6 +6068,7 @@ export function scoreResumeDeterministically(input: {
   resumeContent: string
   jobDescription?: string
   extractionArtifacts?: DocumentArtifacts | null
+  resumeProfileMode?: ResumeProfileMode
 }): DeterministicATSResult {
   const resumeContent = normalizeWhitespace(input.resumeContent)
   const jobDescription = normalizeWhitespace(input.jobDescription || "")
@@ -4936,6 +6098,11 @@ export function scoreResumeDeterministically(input: {
   const summaryStats = analyzeSummary(summaryText)
   const repetition = analyzeRepetition(resumeContent)
   const skillsAnalysis = analyzeSkillsSection(skillsText)
+  const activeProfileMode = resolveResumeProfileMode({
+    requested: input.resumeProfileMode || "auto",
+    order,
+    skillsAnalysis,
+  })
   const lexicalCoverage = buildResumeLexicalCoverage(resumeContent, sections)
   const bulletStats = extractBulletStats(experienceText, projectText, [])
   const summaryScore = scoreProfessionalSummary(summaryText, summaryStats)
@@ -4951,6 +6118,7 @@ export function scoreResumeDeterministically(input: {
     contact,
     summaryStats,
     skillsAnalysis,
+    activeProfileMode,
     structureSignals
   )
   const formatting = scoreFormatting(
@@ -4989,6 +6157,41 @@ export function scoreResumeDeterministically(input: {
     : createEmptyQualificationAlignment()
   const keywordAnalysis = hasJD ? jobMatchArtifacts.keywordAnalysis : null
   const keywordScore = hasJD ? jobMatchArtifacts.keywordScore : null
+  const timelineInsights = analyzeTimelineConsistency(
+    `${experienceText}\n${projectText}`,
+    `${educationText}\n${certificationText}`
+  )
+  const tenseInsights = analyzeTenseConsistency(
+    `${experienceText}\n${projectText}`
+  )
+  const skillEvidenceInsights = mapSkillEvidence(
+    skillsAnalysis,
+    `${experienceText}\n${projectText}`
+  )
+  const bulletEvidenceInsights = analyzeBulletEvidenceGranularity(
+    `${experienceText}\n${projectText}`
+  )
+  const metricQualityInsights = analyzeMetricQuality(
+    `${experienceText}\n${projectText}`
+  )
+  const terminologyInsights = analyzeTerminologyConsistency(resumeContent)
+  const grammarInsights = analyzeGrammarQuality(
+    `${summaryText}\n${experienceText}\n${projectText}`
+  )
+  const responsibilityCoverage = analyzeResponsibilityCoverage(
+    resumeContent,
+    hasJD ? jobMatchArtifacts.jdAnalysis : null
+  )
+  const advancedSignals: AdvancedSignals = {
+    timeline: timelineInsights,
+    tense: tenseInsights,
+    skillEvidence: skillEvidenceInsights,
+    bulletEvidence: bulletEvidenceInsights,
+    metricQuality: metricQualityInsights,
+    grammar: grammarInsights,
+    terminology: terminologyInsights,
+    responsibilityCoverage,
+  }
   const calibratedScores = calibrateScores({
     hasJD,
     jdAnalysis: jobMatchArtifacts.jdAnalysis,
@@ -5042,6 +6245,27 @@ export function scoreResumeDeterministically(input: {
     dates,
     missingSections,
     missingOptionalSections,
+    advancedSignals,
+  })
+
+  const advancedInsights = buildAdvancedInsights({
+    overallScore: calibratedScores.overallScore,
+    parseability: formatting.parseability,
+    missingSections,
+    bulletStats,
+    timeline: timelineInsights,
+    tense: tenseInsights,
+    skillEvidence: skillEvidenceInsights,
+    bulletEvidence: bulletEvidenceInsights,
+    metricQuality: metricQualityInsights,
+    grammar: grammarInsights,
+    terminology: terminologyInsights,
+    responsibilityCoverage,
+    qualification,
+    keywordAnalysis,
+    skillsAnalysis,
+    experienceText: `${experienceText}\n${projectText}`,
+    jdAnalysis: hasJD ? jobMatchArtifacts.jdAnalysis : null,
   })
 
   const sectionReviews = buildSectionReviews({
@@ -5071,10 +6295,13 @@ export function scoreResumeDeterministically(input: {
     skillsAnalysis,
     keywordAnalysis,
     qualification,
+    advancedSignals,
     atsCompatibility: {
       parseability: formatting.parseability,
       issues: formatting.issues,
       warnings: formatting.warnings,
+      pageRiskMap: structureSignals.pageRiskMap,
+      flagConfidence: structureSignals.flagConfidence,
     },
   })
 
@@ -5107,9 +6334,12 @@ export function scoreResumeDeterministically(input: {
       parseability: formatting.parseability,
       issues: formatting.issues,
       warnings: formatting.warnings,
+      pageRiskMap: structureSignals.pageRiskMap,
+      flagConfidence: structureSignals.flagConfidence,
     },
     keywordAnalysis: jobMatchArtifacts.keywordAnalysis,
     debugAnalysis,
+    advancedInsights,
     evidence: {
       requiredSectionsPresent: REQUIRED_SECTION_KEYS.filter(
         (key) => sections[key]
@@ -5138,6 +6368,7 @@ export function scoreResumeDeterministically(input: {
         managementObserved: false,
         matchedRoleFamilies: [],
       },
+      advancedSignals,
     },
   }
 }

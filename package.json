@@ -8,6 +8,7 @@
     "build:next": "next build",
     "bundle:check": "node scripts/check-bundle-size.mjs",
     "benchmark:ats-keywords": "node --experimental-strip-types --import ./scripts/register-test-hooks.mjs scripts/benchmark-ats-keyword-ranking.ts",
+    "calibrate:ats": "node --experimental-strip-types scripts/train-ats-calibration.mjs",
     "dev": "next dev",
     "db:migrations:list": "find supabase/migrations -maxdepth 1 -type f | sort",
     "env:check": "node scripts/validate-env.mjs",

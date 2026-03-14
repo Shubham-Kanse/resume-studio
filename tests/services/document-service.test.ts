@@ -4,6 +4,7 @@ import test from "node:test"
 import {
   buildWordArtifacts,
   extractWordBlocksFromHtml,
+  normalizeExtractedText,
 } from "@/lib/services/document-service"
 
 test("extractWordBlocksFromHtml preserves headings, bullets, and table rows", () => {
@@ -68,4 +69,37 @@ test("buildWordArtifacts marks table and multi-column risk from Word HTML", () =
   assert.equal(artifacts.layout.hasHeaderFooterEvidence, true)
   assert.ok(artifacts.layout.readingOrderRisk > 0)
   assert.ok(artifacts.blocks.some((block) => block.kind === "tableish"))
+})
+
+test("normalizeExtractedText repairs PDF-style wrapping and dehyphenates split words", () => {
+  const normalized = normalizeExtractedText(`
+    EXPERIENCE
+    Built event pipe-
+    lines for ETL workflows
+    reduced reporting latency by 35 %
+    SKILLS
+    SQL
+    Python
+  `)
+
+  const lines = normalized.split("\n")
+  assert.ok(lines.includes("EXPERIENCE"))
+  assert.ok(
+    lines.includes(
+      "Built event pipelines for ETL workflows reduced reporting latency by 35%"
+    )
+  )
+  assert.ok(lines.includes("SKILLS"))
+  assert.ok(lines.includes("SQL"))
+})
+
+test("normalizeExtractedText normalizes unicode whitespace and symbols", () => {
+  const normalized = normalizeExtractedText(
+    "Senior\u00A0Engineer\u200B\nOptimized ﬁnancial models\u00A0for scale"
+  )
+
+  assert.equal(
+    normalized,
+    "Senior Engineer\nOptimized financial models for scale"
+  )
 })
