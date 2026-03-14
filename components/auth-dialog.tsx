@@ -1,8 +1,9 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 
 import {
+  Check,
   CheckCircle2,
   Circle,
   Download,
@@ -20,6 +21,7 @@ interface AuthDialogProps {
   authLoading: boolean
   authMessage: string | null
   userEmail: string | null
+  defaultAcceptedLegal?: boolean
   isExportingData: boolean
   isDeletingAccount: boolean
   onClose: () => void
@@ -30,12 +32,26 @@ interface AuthDialogProps {
     lastName: string
     email: string
     password: string
-  }) => Promise<boolean>
+    acceptedLegal: boolean
+  }) => Promise<{ ok: boolean; reason?: "already-registered" | "error" }>
+  onOpenPrivacyPolicy: () => void
+  onOpenTermsOfService: () => void
   onExportData: () => Promise<void>
   onDeleteAccount: (confirmation: string) => Promise<void>
 }
 
 type EmailAuthMode = "signin" | "signup"
+type EmailCheckStatus =
+  | "idle"
+  | "checking"
+  | "available"
+  | "invalid"
+  | "registered"
+  | "error"
+
+function isLikelyValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
+}
 
 function PasswordRequirement({ label, met }: { label: string; met: boolean }) {
   return (
@@ -84,12 +100,15 @@ export function AuthDialog({
   authLoading,
   authMessage,
   userEmail,
+  defaultAcceptedLegal = false,
   isExportingData,
   isDeletingAccount,
   onClose,
   onGoogleAuth,
   onEmailSignIn,
   onEmailSignUp,
+  onOpenPrivacyPolicy,
+  onOpenTermsOfService,
   onExportData,
   onDeleteAccount,
 }: AuthDialogProps) {
@@ -103,6 +122,10 @@ export function AuthDialog({
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
+  const [acceptedLegal, setAcceptedLegal] = useState(defaultAcceptedLegal)
+  const [emailCheckStatus, setEmailCheckStatus] =
+    useState<EmailCheckStatus>("idle")
+  const emailCheckRequestIdRef = useRef(0)
 
   useEffect(() => {
     if (!open) {
@@ -114,8 +137,67 @@ export function AuthDialog({
       setEmail("")
       setPassword("")
       setConfirmPassword("")
+      setAcceptedLegal(defaultAcceptedLegal)
+      setEmailCheckStatus("idle")
     }
-  }, [open])
+  }, [defaultAcceptedLegal, open])
+
+  useEffect(() => {
+    if (!open || emailAuthMode !== "signup") {
+      setEmailCheckStatus("idle")
+      return
+    }
+
+    const trimmedEmail = email.trim().toLowerCase()
+    if (!trimmedEmail) {
+      setEmailCheckStatus("idle")
+      return
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      const requestId = emailCheckRequestIdRef.current + 1
+      emailCheckRequestIdRef.current = requestId
+
+      if (!isLikelyValidEmail(trimmedEmail)) {
+        setEmailCheckStatus("invalid")
+        return
+      }
+
+      setEmailCheckStatus("checking")
+      void fetch(
+        `/api/auth/check-email?email=${encodeURIComponent(trimmedEmail)}`,
+        {
+          method: "GET",
+          cache: "no-store",
+        }
+      )
+        .then(async (response) => {
+          if (emailCheckRequestIdRef.current !== requestId) return
+          if (!response.ok) {
+            setEmailCheckStatus("error")
+            return
+          }
+          const payload = (await response.json()) as {
+            status?: "registered" | "available" | "invalid"
+          }
+          if (payload.status === "registered") {
+            setEmailCheckStatus("registered")
+            return
+          }
+          if (payload.status === "available") {
+            setEmailCheckStatus("available")
+            return
+          }
+          setEmailCheckStatus("invalid")
+        })
+        .catch(() => {
+          if (emailCheckRequestIdRef.current !== requestId) return
+          setEmailCheckStatus("error")
+        })
+    }, 420)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [email, emailAuthMode, open])
 
   if (!open) return null
 
@@ -135,6 +217,11 @@ export function AuthDialog({
     (emailAuthMode === "signup" &&
       (!firstName.trim() ||
         !lastName.trim() ||
+        !acceptedLegal ||
+        emailCheckStatus === "invalid" ||
+        emailCheckStatus === "registered" ||
+        emailCheckStatus === "error" ||
+        emailCheckStatus === "checking" ||
         !isStrongPassword ||
         password !== confirmPassword))
 
@@ -148,18 +235,28 @@ export function AuthDialog({
       if (
         !trimmedFirstName ||
         !trimmedLastName ||
+        emailCheckStatus === "invalid" ||
+        emailCheckStatus === "registered" ||
+        emailCheckStatus === "error" ||
+        emailCheckStatus === "checking" ||
         !isStrongPassword ||
         password !== confirmPassword
       ) {
         return
       }
-      const didCreateAccount = await onEmailSignUp({
+      const result = await onEmailSignUp({
         firstName: trimmedFirstName,
         lastName: trimmedLastName,
         email: trimmedEmail,
         password,
+        acceptedLegal,
       })
-      if (!didCreateAccount) return
+      if (!result.ok) {
+        if (result.reason === "already-registered") {
+          setEmailCheckStatus("registered")
+        }
+        return
+      }
       setPendingConfirmationEmail(trimmedEmail)
       setEmailAuthMode("signin")
       setPassword("")
@@ -271,7 +368,10 @@ export function AuthDialog({
               <div className="inline-flex rounded-full border border-white/10 bg-black/20 p-1">
                 <button
                   type="button"
-                  onClick={() => setEmailAuthMode("signin")}
+                  onClick={() => {
+                    setEmailAuthMode("signin")
+                    setEmailCheckStatus("idle")
+                  }}
                   className={cn(
                     "rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
                     emailAuthMode === "signin"
@@ -283,7 +383,10 @@ export function AuthDialog({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setEmailAuthMode("signup")}
+                  onClick={() => {
+                    setEmailAuthMode("signup")
+                    setEmailCheckStatus("idle")
+                  }}
                   className={cn(
                     "rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
                     emailAuthMode === "signup"
@@ -329,15 +432,42 @@ export function AuthDialog({
                     />
                   </div>
                 ) : null}
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  className="h-11 w-full rounded-xl border border-white/10 bg-black/20 px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground"
-                  placeholder="Email address"
-                  autoComplete="email"
-                  spellCheck={false}
-                />
+                <div className="relative">
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(event) => {
+                      setEmail(event.target.value)
+                    }}
+                    className={cn(
+                      "h-11 w-full rounded-xl border bg-black/20 px-3 pr-9 text-sm text-foreground outline-none placeholder:text-muted-foreground",
+                      emailAuthMode === "signup" &&
+                        (emailCheckStatus === "registered" ||
+                          emailCheckStatus === "invalid")
+                        ? "border-red-400/55 text-red-100 placeholder:text-red-200/60"
+                        : "border-white/10"
+                    )}
+                    placeholder="Email address"
+                    autoComplete="email"
+                    spellCheck={false}
+                  />
+                  {emailAuthMode === "signup" &&
+                  emailCheckStatus === "checking" ? (
+                    <Loader2 className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-white/55" />
+                  ) : null}
+                </div>
+                {emailAuthMode === "signup" &&
+                (emailCheckStatus === "registered" ||
+                  emailCheckStatus === "invalid" ||
+                  emailCheckStatus === "error") ? (
+                  <p className="text-xs leading-5 text-red-300/95">
+                    {emailCheckStatus === "registered"
+                      ? "An account with this email already exists. Please sign in instead."
+                      : emailCheckStatus === "invalid"
+                        ? "Please enter a valid email address."
+                        : "Unable to verify this email right now. Please try again."}
+                  </p>
+                ) : null}
                 <input
                   type="password"
                   value={password}
@@ -359,6 +489,43 @@ export function AuthDialog({
                     placeholder="Confirm password"
                     autoComplete="new-password"
                   />
+                ) : null}
+                {emailAuthMode === "signup" ? (
+                  <div className="flex items-start gap-2 rounded-xl border border-white/10 bg-black/18 px-3 py-2.5">
+                    <button
+                      type="button"
+                      role="checkbox"
+                      aria-checked={acceptedLegal}
+                      onClick={() => setAcceptedLegal((current) => !current)}
+                      className={cn(
+                        "mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors",
+                        acceptedLegal
+                          ? "border-emerald-300/70 bg-emerald-400/20 text-emerald-100"
+                          : "border-white/25 bg-white/[0.03] text-transparent"
+                      )}
+                    >
+                      <Check className="h-3 w-3" />
+                    </button>
+                    <span className="text-xs leading-5 text-muted-foreground">
+                      I agree to the{" "}
+                      <button
+                        type="button"
+                        className="text-primary hover:text-primary/85"
+                        onClick={onOpenPrivacyPolicy}
+                      >
+                        Privacy Policy
+                      </button>{" "}
+                      and{" "}
+                      <button
+                        type="button"
+                        className="text-primary hover:text-primary/85"
+                        onClick={onOpenTermsOfService}
+                      >
+                        Terms of Service
+                      </button>
+                      .
+                    </span>
+                  </div>
                 ) : null}
                 {emailAuthMode === "signup" ? (
                   <div className="rounded-xl border border-white/10 bg-black/18 p-3">
@@ -414,6 +581,12 @@ export function AuthDialog({
                     email and password you used during sign-up.
                   </p>
                 ) : null}
+                {emailAuthMode === "signin" ? (
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    Creating a new account requires accepting Privacy Policy and
+                    Terms in the Create account tab.
+                  </p>
+                ) : null}
               </div>
             </div>
 
@@ -427,7 +600,7 @@ export function AuthDialog({
               type="button"
               variant="outline"
               className="w-full justify-center rounded-2xl border-white/8 bg-black/12 py-6 text-sm hover:bg-white/8"
-              onClick={onGoogleAuth}
+              onClick={() => void onGoogleAuth()}
               disabled={authLoading}
             >
               {authLoading ? (
@@ -437,6 +610,25 @@ export function AuthDialog({
               )}
               Continue with Google
             </Button>
+            <p className="text-xs leading-5 text-muted-foreground">
+              By continuing with Google, you agree to the{" "}
+              <button
+                type="button"
+                className="text-primary hover:text-primary/85"
+                onClick={onOpenPrivacyPolicy}
+              >
+                Privacy Policy
+              </button>{" "}
+              and{" "}
+              <button
+                type="button"
+                className="text-primary hover:text-primary/85"
+                onClick={onOpenTermsOfService}
+              >
+                Terms of Service
+              </button>
+              .
+            </p>
           </div>
         ) : (
           <div className="mt-6 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-200">

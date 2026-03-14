@@ -51,6 +51,8 @@ interface ATSScorePanelProps {
   onGetATSScore: () => void
   onRuntimeSpellMetricsChange: (value: RuntimeSpellCheckMetrics | null) => void
   onNlpAnalysisChange: (value: ATSNLPAnalysis | null) => void
+  requiresUploadConsent?: boolean
+  onUploadConsentRequired?: () => void
 }
 
 const ATS_LOADING_STEP_DURATION_MS = 880
@@ -173,6 +175,8 @@ function ATSScorePanelComponent({
   onGetATSScore,
   onRuntimeSpellMetricsChange,
   onNlpAnalysisChange,
+  requiresUploadConsent = false,
+  onUploadConsentRequired,
 }: ATSScorePanelProps) {
   const { extractResume } = useDocumentActions()
   const [activeSection, setActiveSection] =
@@ -338,6 +342,12 @@ function ATSScorePanelComponent({
   }, [nlpAnalysis, onNlpAnalysisChange, resumeContent, scoreData])
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (requiresUploadConsent) {
+      onUploadConsentRequired?.()
+      if (fileInputRef.current) fileInputRef.current.value = ""
+      return
+    }
+
     const file = e.target.files?.[0]
     if (!file) return
 
@@ -453,7 +463,14 @@ function ATSScorePanelComponent({
                       ? "border-red-500/50"
                       : "border-white/15 bg-black/8 hover:border-primary/40 hover:bg-black/12"
                 )}
-                onClick={() => !isExtracting && fileInputRef.current?.click()}
+                onClick={() => {
+                  if (isExtracting) return
+                  if (requiresUploadConsent) {
+                    onUploadConsentRequired?.()
+                    return
+                  }
+                  fileInputRef.current?.click()
+                }}
               >
                 <input
                   ref={fileInputRef}
@@ -508,6 +525,12 @@ function ATSScorePanelComponent({
               <p className="text-[11px] italic text-white/38">
                 Upload PDF for best results.
               </p>
+              {requiresUploadConsent ? (
+                <p className="text-[11px] text-amber-300/85">
+                  Please accept the Privacy Policy and Terms before uploading a
+                  resume in guest mode.
+                </p>
+              ) : null}
             </div>
 
             <div className="w-full space-y-2">

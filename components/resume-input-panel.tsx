@@ -33,6 +33,8 @@ interface ResumeInputPanelProps {
   onResumeArtifactsChange: (value: DocumentArtifacts | null) => void
   onExtraInstructionsChange: (value: string) => void
   onLockedGenerateAttempt?: () => void
+  requiresUploadConsent?: boolean
+  onUploadConsentRequired?: () => void
   resetToken?: number
 }
 
@@ -64,6 +66,8 @@ export function ResumeInputPanel({
   onResumeArtifactsChange,
   onExtraInstructionsChange,
   onLockedGenerateAttempt,
+  requiresUploadConsent = false,
+  onUploadConsentRequired,
   resetToken = 0,
 }: ResumeInputPanelProps) {
   const { extractResume } = useDocumentActions()
@@ -79,6 +83,12 @@ export function ResumeInputPanel({
   }, [resetToken])
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (requiresUploadConsent) {
+      onUploadConsentRequired?.()
+      if (fileInputRef.current) fileInputRef.current.value = ""
+      return
+    }
+
     const file = e.target.files?.[0]
     if (!file) return
 
@@ -234,7 +244,14 @@ export function ResumeInputPanel({
                   ? "border-red-500/50"
                   : "border-white/15 bg-black/8 hover:border-primary/40 hover:bg-black/12"
             }`}
-            onClick={() => !isExtracting && fileInputRef.current?.click()}
+            onClick={() => {
+              if (isExtracting) return
+              if (requiresUploadConsent) {
+                onUploadConsentRequired?.()
+                return
+              }
+              fileInputRef.current?.click()
+            }}
           >
             <input
               ref={fileInputRef}
@@ -289,6 +306,12 @@ export function ResumeInputPanel({
           <p className="text-[11px] italic text-white/38">
             Upload PDF for best results.
           </p>
+          {requiresUploadConsent ? (
+            <p className="text-[11px] text-amber-300/85">
+              Please accept the Privacy Policy and Terms before uploading a
+              resume in guest mode.
+            </p>
+          ) : null}
         </div>
 
         {mode === TRACKED_RUN_MODE.GENERATE && (

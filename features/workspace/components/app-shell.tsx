@@ -15,6 +15,7 @@ import dynamic from "next/dynamic"
 
 import {
   BriefcaseBusiness,
+  CheckCircle2,
   ChevronDown,
   FileCode2,
   Gauge,
@@ -91,6 +92,10 @@ const ATS_LOADING_MIN_DURATION_MS = 3200
 const ATS_AI_INSIGHTS_ENABLED = false
 const PLAN_SNAPSHOT_STORAGE_KEY_PREFIX = "resume-studio:plan-snapshot:"
 const WORKSPACE_DRAFT_STORAGE_KEY_PREFIX = "resume-studio:workspace-draft:"
+const LEGAL_POLICY_VERSION = "2026-03-14"
+const LEGAL_CONSENT_STORAGE_KEY_PREFIX = "resume-studio:legal-consent:"
+const LEGAL_CONSENT_PENDING_AUTH_KEY =
+  "resume-studio:pending-auth-legal-consent"
 
 type WorkspaceDraft = {
   mode: AppMode
@@ -143,6 +148,27 @@ function getPlanSnapshotStorageKey(userId: string) {
 
 function getWorkspaceDraftStorageKey(userId: string) {
   return `${WORKSPACE_DRAFT_STORAGE_KEY_PREFIX}${userId}`
+}
+
+function getLegalConsentStorageKey() {
+  return `${LEGAL_CONSENT_STORAGE_KEY_PREFIX}${LEGAL_POLICY_VERSION}`
+}
+
+function hasAcceptedLegalFromStorage() {
+  if (typeof window === "undefined") return false
+  return window.localStorage.getItem(getLegalConsentStorageKey()) === "accepted"
+}
+
+function persistLegalConsentToStorage() {
+  if (typeof window === "undefined") return
+  window.localStorage.setItem(getLegalConsentStorageKey(), "accepted")
+}
+
+function hasAcceptedLegalFromMetadata(
+  metadata: Record<string, unknown> | null | undefined
+) {
+  if (!metadata) return false
+  return metadata.legal_policy_version === LEGAL_POLICY_VERSION
 }
 
 function loadWorkspaceDraft(userId: string): WorkspaceDraft | null {
@@ -539,6 +565,106 @@ const ErrorBanner = memo(function ErrorBanner({
   )
 })
 
+const GuestConsentDialog = memo(function GuestConsentDialog({
+  open,
+  isSaving,
+  accepted,
+  onAcceptedChange,
+  onConfirm,
+  onCancel,
+  onOpenPrivacy,
+  onOpenTerms,
+}: {
+  open: boolean
+  isSaving: boolean
+  accepted: boolean
+  onAcceptedChange: (value: boolean) => void
+  onConfirm: () => void
+  onCancel: () => void
+  onOpenPrivacy: () => void
+  onOpenTerms: () => void
+}) {
+  if (!open) return null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 backdrop-blur-[6px]">
+      <div className="w-full max-w-lg rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(8,12,24,0.12),rgba(3,7,18,0.05))] p-6 shadow-[0_18px_56px_rgba(0,0,0,0.22),inset_0_1px_0_rgba(255,255,255,0.1)]">
+        <p className="text-[11px] uppercase tracking-[0.24em] text-white/45">
+          Privacy Consent
+        </p>
+        <h2 className="mt-2 text-2xl font-semibold text-foreground">
+          Confirm before upload
+        </h2>
+        <p className="mt-3 text-sm leading-6 text-muted-foreground">
+          Before uploading a resume in guest mode, please review and accept our
+          privacy and terms documents.
+        </p>
+
+        <label className="mt-5 flex items-start gap-2 rounded-xl border border-white/10 bg-black/18 px-3 py-2.5">
+          <button
+            type="button"
+            role="checkbox"
+            aria-checked={accepted}
+            onClick={() => onAcceptedChange(!accepted)}
+            className={cn(
+              "mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors",
+              accepted
+                ? "border-emerald-300/70 bg-emerald-400/20 text-emerald-100"
+                : "border-white/25 bg-white/[0.03] text-transparent"
+            )}
+          >
+            <CheckCircle2 className="h-3 w-3" />
+          </button>
+          <span className="text-xs leading-5 text-muted-foreground">
+            I agree to the{" "}
+            <button
+              type="button"
+              className="text-primary hover:text-primary/85"
+              onClick={onOpenPrivacy}
+            >
+              Privacy Policy
+            </button>{" "}
+            and{" "}
+            <button
+              type="button"
+              className="text-primary hover:text-primary/85"
+              onClick={onOpenTerms}
+            >
+              Terms of Service
+            </button>
+            .
+          </span>
+        </label>
+
+        <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
+          <Button
+            type="button"
+            variant="ghost"
+            className="rounded-xl border border-white/12 bg-black/20 text-white/80 hover:bg-white/[0.06]"
+            onClick={onCancel}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="cool"
+            className="rounded-xl"
+            onClick={onConfirm}
+            disabled={!accepted || isSaving}
+          >
+            {isSaving ? (
+              <CheckCircle2 className="h-4 w-4 animate-pulse" />
+            ) : (
+              <CheckCircle2 className="h-4 w-4" />
+            )}
+            Accept and continue
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+})
+
 const HomePanel = memo(function HomePanel({
   panelShellClass,
   onModeChange,
@@ -771,16 +897,42 @@ const DialogLayer = memo(function DialogLayer({
   authProps,
   legalProps,
   planProps,
+  guestConsentOpen,
+  isSavingGuestConsent,
+  guestConsentChecked,
+  onGuestConsentCheckedChange,
+  onConfirmGuestConsent,
+  onCancelGuestConsent,
+  onOpenPrivacy,
+  onOpenTerms,
 }: {
   authProps: AuthDialogProps
   legalProps: LegalDialogProps
   planProps: PlanDialogProps
+  guestConsentOpen: boolean
+  isSavingGuestConsent: boolean
+  guestConsentChecked: boolean
+  onGuestConsentCheckedChange: (value: boolean) => void
+  onConfirmGuestConsent: () => void
+  onCancelGuestConsent: () => void
+  onOpenPrivacy: () => void
+  onOpenTerms: () => void
 }) {
   return (
     <>
       <AuthDialog {...authProps} />
       <LegalDialog {...legalProps} />
       <PlanDialog {...planProps} />
+      <GuestConsentDialog
+        open={guestConsentOpen}
+        isSaving={isSavingGuestConsent}
+        accepted={guestConsentChecked}
+        onAcceptedChange={onGuestConsentCheckedChange}
+        onConfirm={onConfirmGuestConsent}
+        onCancel={onCancelGuestConsent}
+        onOpenPrivacy={onOpenPrivacy}
+        onOpenTerms={onOpenTerms}
+      />
     </>
   )
 })
@@ -917,6 +1069,11 @@ export default function AppShell({ initialMode }: { initialMode?: AppMode }) {
   const [supabase, setSupabase] = useState<SupabaseClient | null>(null)
   const [isSupabaseReady, setIsSupabaseReady] = useState(false)
   const [isBackgroundReady, setIsBackgroundReady] = useState(false)
+  const [hasAcceptedLegal, setHasAcceptedLegal] = useState(false)
+  const [isGuestConsentDialogOpen, setIsGuestConsentDialogOpen] =
+    useState(false)
+  const [isSavingLegalConsent, setIsSavingLegalConsent] = useState(false)
+  const [isGuestConsentChecked, setIsGuestConsentChecked] = useState(false)
   const [planSnapshot, setPlanSnapshot] = useState<PlanSnapshot>(() =>
     getGuestPlanSnapshot()
   )
@@ -1180,6 +1337,69 @@ export default function AppShell({ initialMode }: { initialMode?: AppMode }) {
       subscription.unsubscribe()
     }
   }, [isSupabaseReady, setAuthMessage, supabase])
+
+  useEffect(() => {
+    if (!session?.user) {
+      setHasAcceptedLegal(hasAcceptedLegalFromStorage())
+      return
+    }
+
+    const metadata = session.user.user_metadata as
+      | Record<string, unknown>
+      | undefined
+    const acceptedFromMetadata = hasAcceptedLegalFromMetadata(metadata ?? null)
+    const acceptedFromStorage = hasAcceptedLegalFromStorage()
+    const accepted = acceptedFromMetadata || acceptedFromStorage
+
+    setHasAcceptedLegal(accepted)
+    if (accepted) {
+      persistLegalConsentToStorage()
+    }
+  }, [session?.user])
+
+  useEffect(() => {
+    if (!supabase || !session?.user) return
+    if (!hasAcceptedLegal) return
+
+    const metadata = session.user.user_metadata as
+      | Record<string, unknown>
+      | undefined
+    if (hasAcceptedLegalFromMetadata(metadata ?? null)) return
+
+    const pending =
+      typeof window !== "undefined" &&
+      window.localStorage.getItem(LEGAL_CONSENT_PENDING_AUTH_KEY) === "1"
+    if (!pending && !hasAcceptedLegalFromStorage()) return
+
+    let cancelled = false
+    setIsSavingLegalConsent(true)
+
+    void supabase.auth
+      .updateUser({
+        data: {
+          ...(metadata ?? {}),
+          legal_policy_version: LEGAL_POLICY_VERSION,
+          legal_policy_accepted_at: new Date().toISOString(),
+        },
+      })
+      .then(({ error: updateError }) => {
+        if (cancelled) return
+        if (updateError) {
+          setAuthMessage(updateError.message)
+          return
+        }
+        if (typeof window !== "undefined") {
+          window.localStorage.removeItem(LEGAL_CONSENT_PENDING_AUTH_KEY)
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsSavingLegalConsent(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [hasAcceptedLegal, session?.user, setAuthMessage, supabase])
 
   useEffect(() => {
     let active = true
@@ -1779,6 +1999,11 @@ export default function AppShell({ initialMode }: { initialMode?: AppMode }) {
       return
     }
 
+    if (typeof window !== "undefined") {
+      persistLegalConsentToStorage()
+      window.localStorage.setItem(LEGAL_CONSENT_PENDING_AUTH_KEY, "1")
+    }
+    setHasAcceptedLegal(true)
     trackEvent("signin_started", { provider: "google" })
   }
 
@@ -1813,10 +2038,17 @@ export default function AppShell({ initialMode }: { initialMode?: AppMode }) {
     lastName: string
     email: string
     password: string
+    acceptedLegal: boolean
   }) => {
     if (!supabase) {
       setAuthMessage("Supabase is not configured yet.")
-      return false
+      return { ok: false as const, reason: "error" as const }
+    }
+    if (!input.acceptedLegal) {
+      setAuthMessage(
+        "Please accept the Privacy Policy and Terms before creating an account."
+      )
+      return { ok: false as const, reason: "error" as const }
     }
 
     setAuthLoading(true)
@@ -1839,18 +2071,46 @@ export default function AppShell({ initialMode }: { initialMode?: AppMode }) {
           last_name: input.lastName,
           full_name: fullName,
           name: fullName,
+          legal_policy_version: LEGAL_POLICY_VERSION,
+          legal_policy_accepted_at: new Date().toISOString(),
         },
       },
     })
 
+    const signedUpUser = data.user
+    const looksLikeExistingUserWithoutExplicitError =
+      !signUpError &&
+      Boolean(signedUpUser) &&
+      Array.isArray(signedUpUser?.identities) &&
+      signedUpUser.identities.length === 0
+
     if (signUpError) {
+      const normalized = signUpError.message.toLowerCase()
+      if (normalized.includes("already") && normalized.includes("registered")) {
+        setAuthLoading(false)
+        setAuthMessage(null)
+        trackEvent("signup_existing_user", { provider: "password" })
+        return { ok: false as const, reason: "already-registered" as const }
+      }
       setAuthLoading(false)
       setAuthMessage(signUpError.message)
       trackEvent("signup_failed", { provider: "password" })
-      return false
+      return { ok: false as const, reason: "error" as const }
+    }
+
+    if (looksLikeExistingUserWithoutExplicitError) {
+      setAuthLoading(false)
+      setAuthMessage(null)
+      trackEvent("signup_existing_user", {
+        provider: "password",
+        source: "obfuscated_response",
+      })
+      return { ok: false as const, reason: "already-registered" as const }
     }
 
     setAuthLoading(false)
+    persistLegalConsentToStorage()
+    setHasAcceptedLegal(true)
     setAuthMessage(
       data.session
         ? "Account created and signed in."
@@ -1860,8 +2120,27 @@ export default function AppShell({ initialMode }: { initialMode?: AppMode }) {
       provider: "password",
       session_created: Boolean(data.session),
     })
-    return true
+    return { ok: true as const }
   }
+
+  const handleRequireGuestUploadConsent = useCallback(() => {
+    if (isAuthenticated || hasAcceptedLegal) return
+    setIsGuestConsentChecked(false)
+    setIsGuestConsentDialogOpen(true)
+  }, [hasAcceptedLegal, isAuthenticated])
+
+  const handleCloseGuestConsentDialog = useCallback(() => {
+    setIsGuestConsentDialogOpen(false)
+    setIsGuestConsentChecked(false)
+  }, [])
+
+  const handleAcceptGuestConsent = useCallback(() => {
+    persistLegalConsentToStorage()
+    setHasAcceptedLegal(true)
+    setIsGuestConsentDialogOpen(false)
+    setIsGuestConsentChecked(false)
+    setAuthMessage("Privacy consent saved for this device.")
+  }, [setAuthMessage])
 
   const handleSignOut = async () => {
     if (!supabase) return
@@ -2310,6 +2589,8 @@ export default function AppShell({ initialMode }: { initialMode?: AppMode }) {
     onExtraInstructionsChange: setExtraInstructions,
     onLockedGenerateAttempt: () =>
       handleOpenPlanDialog(PREMIUM_FEATURE.AI_GENERATOR),
+    requiresUploadConsent: !isAuthenticated && !hasAcceptedLegal,
+    onUploadConsentRequired: handleRequireGuestUploadConsent,
   }
 
   const previewProps: ResumePreviewPanelProps = {
@@ -2342,6 +2623,8 @@ export default function AppShell({ initialMode }: { initialMode?: AppMode }) {
     onResumeArtifactsChange: setResumeArtifacts,
     onRuntimeSpellMetricsChange: setAtsRuntimeSpellMetrics,
     onNlpAnalysisChange: setAtsNlpAnalysis,
+    requiresUploadConsent: !isAuthenticated && !hasAcceptedLegal,
+    onUploadConsentRequired: handleRequireGuestUploadConsent,
     onGetATSScore: () => {
       const formData = new FormData()
       formData.append("jobDescription", jobDescription)
@@ -2369,12 +2652,15 @@ export default function AppShell({ initialMode }: { initialMode?: AppMode }) {
     authLoading,
     authMessage,
     userEmail,
+    defaultAcceptedLegal: hasAcceptedLegal,
     isExportingData,
     isDeletingAccount,
     onClose: handleCloseAuthDialog,
     onGoogleAuth: handleSignInWithGoogle,
     onEmailSignIn: handleEmailSignIn,
     onEmailSignUp: handleEmailSignUp,
+    onOpenPrivacyPolicy: handleOpenPrivacyDialog,
+    onOpenTermsOfService: handleOpenTermsDialog,
     onExportData: handleExportData,
     onDeleteAccount: handleDeleteAccount,
   }
@@ -2451,6 +2737,14 @@ export default function AppShell({ initialMode }: { initialMode?: AppMode }) {
         authProps={authDialogProps}
         legalProps={legalDialogProps}
         planProps={planDialogProps}
+        guestConsentOpen={isGuestConsentDialogOpen}
+        isSavingGuestConsent={isSavingLegalConsent}
+        guestConsentChecked={isGuestConsentChecked}
+        onGuestConsentCheckedChange={setIsGuestConsentChecked}
+        onConfirmGuestConsent={handleAcceptGuestConsent}
+        onCancelGuestConsent={handleCloseGuestConsentDialog}
+        onOpenPrivacy={handleOpenPrivacyDialog}
+        onOpenTerms={handleOpenTermsDialog}
       />
 
       <PageFooter
