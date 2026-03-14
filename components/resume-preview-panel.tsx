@@ -25,6 +25,7 @@ import {
   Share2,
 } from "lucide-react"
 
+import { MinimalLoadingStack } from "@/components/minimal-loading-stack"
 import { Button } from "@/components/ui/button"
 import { useDocumentActions } from "@/hooks/use-document-actions"
 import { reportClientError } from "@/lib/error-monitoring"
@@ -52,6 +53,36 @@ interface ResumePreviewPanelProps {
   statusMessage?: string
 }
 
+const LATEX_GENERATION_STEPS = [
+  "Preparing generation request...",
+  "Checking resume input...",
+  "Checking job description...",
+  "Extracting role signals...",
+  "Mapping relevant experience...",
+  "Selecting stronger bullet points...",
+  "Rewriting content for fit...",
+  "Building LaTeX structure...",
+  "Formatting final sections...",
+  "Running validation checks...",
+  "Applying final refinements...",
+  "Finalizing output...",
+]
+
+const LATEX_GENERATION_STEP_DURATIONS = [
+  520, 540, 560, 620, 660, 700, 760, 820, 860, 900, 960,
+]
+
+function getLatexGenerationStepFromStatus(statusMessage?: string) {
+  if (!statusMessage) return null
+
+  const normalized = statusMessage.toLowerCase()
+  if (normalized.includes("preparing")) return 0
+  if (normalized.includes("compiling")) return LATEX_GENERATION_STEPS.length - 1
+  if (normalized.includes("repaired")) return 10
+  if (normalized.includes("generated")) return 9
+  return null
+}
+
 function ResumePreviewPanelComponent({
   latexContent,
   editableLatex: controlledEditableLatex,
@@ -72,6 +103,7 @@ function ResumePreviewPanelComponent({
   const [pdfData, setPdfData] = useState<ArrayBuffer | null>(null)
   const [isLoadingPreview, setIsLoadingPreview] = useState(false)
   const [previewError, setPreviewError] = useState<string | null>(null)
+  const [generationStep, setGenerationStep] = useState(0)
 
   const editorRef = useRef<HTMLTextAreaElement>(null)
   const lineNumbersRef = useRef<HTMLDivElement>(null)
@@ -133,6 +165,45 @@ function ResumePreviewPanelComponent({
     setPreviewError(null)
     setPdfError(null)
   }, [controlledEditableLatex, latexContent])
+
+  useEffect(() => {
+    if (!isGenerating) {
+      setGenerationStep(0)
+      return
+    }
+
+    const statusStep = getLatexGenerationStepFromStatus(statusMessage)
+    if (statusStep !== null) {
+      setGenerationStep((current) => Math.max(current, statusStep))
+    }
+  }, [isGenerating, statusMessage])
+
+  useEffect(() => {
+    if (!isGenerating) return
+
+    let cancelled = false
+    let timeoutId: number | undefined
+
+    const advance = (stepIndex: number) => {
+      if (cancelled || stepIndex >= LATEX_GENERATION_STEPS.length - 2) return
+
+      timeoutId = window.setTimeout(() => {
+        if (cancelled) return
+        setGenerationStep((current) => {
+          const nextStep = Math.max(current, stepIndex + 1)
+          advance(nextStep)
+          return nextStep
+        })
+      }, LATEX_GENERATION_STEP_DURATIONS[stepIndex] ?? 860)
+    }
+
+    advance(generationStep)
+
+    return () => {
+      cancelled = true
+      if (timeoutId) window.clearTimeout(timeoutId)
+    }
+  }, [generationStep, isGenerating])
 
   const compilePreview = useCallback(
     async (content: string) => {
@@ -495,13 +566,11 @@ function ResumePreviewPanelComponent({
 
       <div className="flex-1 min-h-0 overflow-hidden rounded-xl border border-white/8 bg-black/10">
         {isGenerating ? (
-          <div className="flex h-full flex-col items-center justify-center p-6 text-muted-foreground">
-            <Loader2 className="mb-3 h-10 w-10 animate-spin text-primary" />
-            <p className="text-base font-medium text-foreground">
-              {statusMessage || "Generating your resume..."}
-            </p>
-            <p className="mt-1 text-sm">This may take a few moments</p>
-          </div>
+          <MinimalLoadingStack
+            title="LaTeX Generation"
+            steps={LATEX_GENERATION_STEPS}
+            activeStep={generationStep}
+          />
         ) : activeTab === "edit" ? (
           renderEditorContent()
         ) : activeTab === "preview" ? (

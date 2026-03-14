@@ -7,7 +7,7 @@ export function buildEvidenceSummary(
   return {
     requiredSectionsPresent: result.evidence.requiredSectionsPresent,
     missingSections: result.evidence.missingSections,
-    missingOptionalSections: result.evidence.missingOptionalSections,
+    missingOptionalSections: [],
     matchedKeywords: result.keyFindings.presentKeywords ?? [],
     missingKeywords: result.keyFindings.missingKeywords ?? [],
     yearsRequired: result.evidence.qualification.yearsRequired,

@@ -19,6 +19,7 @@ import {
   Minimize2,
 } from "lucide-react"
 
+import { MinimalLoadingStack } from "@/components/minimal-loading-stack"
 import { Button } from "@/components/ui/button"
 import { useDocumentActions } from "@/hooks/use-document-actions"
 import { reportClientError } from "@/lib/error-monitoring"
@@ -45,6 +46,36 @@ interface LatexSplitWorkspaceProps {
   onClose: () => void
 }
 
+const LATEX_GENERATION_STEPS = [
+  "Preparing generation request...",
+  "Checking resume input...",
+  "Checking job description...",
+  "Extracting role signals...",
+  "Mapping relevant experience...",
+  "Selecting stronger bullet points...",
+  "Rewriting content for fit...",
+  "Building LaTeX structure...",
+  "Formatting final sections...",
+  "Running validation checks...",
+  "Applying final refinements...",
+  "Finalizing output...",
+]
+
+const LATEX_GENERATION_STEP_DURATIONS = [
+  520, 540, 560, 620, 660, 700, 760, 820, 860, 900, 960,
+]
+
+function getLatexGenerationStepFromStatus(statusMessage?: string) {
+  if (!statusMessage) return null
+
+  const normalized = statusMessage.toLowerCase()
+  if (normalized.includes("preparing")) return 0
+  if (normalized.includes("compiling")) return LATEX_GENERATION_STEPS.length - 1
+  if (normalized.includes("repaired")) return 10
+  if (normalized.includes("generated")) return 9
+  return null
+}
+
 export function LatexSplitWorkspace({
   open,
   latexContent,
@@ -58,6 +89,7 @@ export function LatexSplitWorkspace({
   const [isLoadingPreview, setIsLoadingPreview] = useState(false)
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false)
   const [previewError, setPreviewError] = useState<string | null>(null)
+  const [generationStep, setGenerationStep] = useState(0)
 
   const editorRef = useRef<HTMLTextAreaElement>(null)
   const lineNumbersRef = useRef<HTMLDivElement>(null)
@@ -112,6 +144,45 @@ export function LatexSplitWorkspace({
       window.removeEventListener("keydown", handleKeyDown)
     }
   }, [onClose, open])
+
+  useEffect(() => {
+    if (!isGenerating) {
+      setGenerationStep(0)
+      return
+    }
+
+    const statusStep = getLatexGenerationStepFromStatus(statusMessage)
+    if (statusStep !== null) {
+      setGenerationStep((current) => Math.max(current, statusStep))
+    }
+  }, [isGenerating, statusMessage])
+
+  useEffect(() => {
+    if (!isGenerating) return
+
+    let cancelled = false
+    let timeoutId: number | undefined
+
+    const advance = (stepIndex: number) => {
+      if (cancelled || stepIndex >= LATEX_GENERATION_STEPS.length - 2) return
+
+      timeoutId = window.setTimeout(() => {
+        if (cancelled) return
+        setGenerationStep((current) => {
+          const nextStep = Math.max(current, stepIndex + 1)
+          advance(nextStep)
+          return nextStep
+        })
+      }, LATEX_GENERATION_STEP_DURATIONS[stepIndex] ?? 860)
+    }
+
+    advance(generationStep)
+
+    return () => {
+      cancelled = true
+      if (timeoutId) window.clearTimeout(timeoutId)
+    }
+  }, [generationStep, isGenerating])
 
   const compilePreview = useCallback(
     async (content: string) => {
@@ -229,13 +300,11 @@ export function LatexSplitWorkspace({
         <div className="grid min-h-0 flex-1 gap-4 md:grid-cols-2 md:items-stretch md:overflow-hidden">
           <div className="w-full min-w-0 rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(8,12,24,0.16),rgba(3,7,18,0.06))] p-4 shadow-[0_18px_56px_rgba(0,0,0,0.18),inset_0_1px_0_rgba(255,255,255,0.1)] backdrop-blur-sm flex min-h-0 flex-col overflow-hidden sm:rounded-[28px] sm:p-5 lg:p-6">
             {isGenerating ? (
-              <div className="flex h-full flex-col items-center justify-center p-6 text-muted-foreground">
-                <Loader2 className="mb-3 h-10 w-10 animate-spin text-primary" />
-                <p className="text-base font-medium text-foreground">
-                  {statusMessage || "Generating your resume..."}
-                </p>
-                <p className="mt-1 text-sm">This may take a few moments</p>
-              </div>
+              <MinimalLoadingStack
+                title="LaTeX Generation"
+                steps={LATEX_GENERATION_STEPS}
+                activeStep={generationStep}
+              />
             ) : (
               <div className="flex h-full min-h-0 flex-col overflow-hidden">
                 <div className="flex-shrink-0 border-b border-white/8 bg-transparent px-4 py-2">

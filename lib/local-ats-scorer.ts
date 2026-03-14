@@ -1,4 +1,14 @@
+import {
+  NATURAL_STOPWORDS,
+  findNaturalTermEvidence,
+  getNaturalSimilarity,
+  getNaturalNgramPhrases,
+  getStemmedNaturalTokens,
+  rankTermsByTfIdf,
+  tokenizeNaturalText,
+} from "./ats-natural-language"
 import { getCurrentUtcDateParts } from "./current-date"
+import { REPETITION_EXCLUSION_TERMS } from "./repetition-exclusions"
 
 import type {
   ATSIssue,
@@ -253,6 +263,11 @@ interface KeywordAnalysis extends NonNullable<
   }
   criticalMatchedTerms: string[]
   criticalMissingTerms: string[]
+  tfidfTopTerms: string[]
+  stemMatchedTerms: string[]
+  fuzzyMatchedTerms: string[]
+  matchedNgrams: string[]
+  semanticMatchPercentage: number
 }
 
 interface QualificationAlignment {
@@ -270,6 +285,25 @@ interface QualificationAlignment {
   managementRequired: boolean
   managementObserved: boolean
   matchedRoleFamilies: string[]
+}
+
+function createEmptyQualificationAlignment(): QualificationAlignment {
+  return {
+    score: 0,
+    yearsRequired: null,
+    yearsEstimated: null,
+    meetsYearsRequirement: null,
+    degreeRequirement: null,
+    meetsDegreeRequirement: null,
+    requiredCertifications: [],
+    missingCertifications: [],
+    expectedSeniority: null,
+    observedSeniority: null,
+    seniorityAligned: null,
+    managementRequired: false,
+    managementObserved: false,
+    matchedRoleFamilies: [],
+  }
 }
 
 interface DocumentStructureSignals {
@@ -1560,9 +1594,13 @@ function normalizeSimilarityToken(token: string): string {
 
 function tokenizeForSimilarity(value: string): string[] {
   return unique(
-    tokenize(value)
+    tokenizeNaturalText(value, {
+      minLength: 3,
+      stopwords: new Set([...NATURAL_STOPWORDS, ...STOPWORDS]),
+      excludeStopwords: true,
+    })
       .map((token) => normalizeSimilarityToken(token))
-      .filter((token) => token.length >= 3 && !STOPWORDS.has(token))
+      .filter((token) => token.length >= 3)
   )
 }
 
@@ -1600,7 +1638,24 @@ function countRegexMatches(text: string, pattern: RegExp): number {
 
 function resolveCanonicalTerm(termValue: string): string {
   const lookup = termValue.toLowerCase().trim()
-  return KEYWORD_ALIAS_MAP.get(lookup) || lookup
+  const directMatch = KEYWORD_ALIAS_MAP.get(lookup)
+  if (directMatch) return directMatch
+
+  let bestMatch: string | null = null
+  let bestScore = 0
+
+  for (const alias of KEYWORD_ALIAS_MAP.keys()) {
+    if (Math.abs(alias.length - lookup.length) > 3) continue
+    const score = getNaturalSimilarity(lookup, alias)
+    if (score > bestScore) {
+      bestScore = score
+      bestMatch = alias
+    }
+  }
+
+  return bestScore >= 0.94 && bestMatch
+    ? KEYWORD_ALIAS_MAP.get(bestMatch) || lookup
+    : lookup
 }
 
 function getTermVariants(termValue: string): string[] {
@@ -1689,10 +1744,23 @@ function extractCanonicalTerms(
 
 function extractTermsFromLine(line: string): string[] {
   const canonicalTerms = extractCanonicalTerms(line)
-  const rawTokens = tokenize(line).filter(
-    (token) => token.length >= 3 && !STOPWORDS.has(token) && !/^\d/.test(token)
+  const stopwords = new Set([...NATURAL_STOPWORDS, ...STOPWORDS])
+  const naturalTokens = tokenizeNaturalText(line, {
+    minLength: 3,
+    stopwords,
+    excludeStopwords: true,
+  }).filter((token) => !/^\d/.test(token))
+  const tfidfTerms = rankTermsByTfIdf(line, { limit: 8, stopwords }).map(
+    ({ token }) => token
   )
-  return unique([...canonicalTerms, ...rawTokens]).slice(0, 20)
+  const ngramTerms = getNaturalNgramPhrases(naturalTokens, [2, 3]).slice(0, 8)
+
+  return unique([
+    ...canonicalTerms,
+    ...ngramTerms,
+    ...tfidfTerms,
+    ...naturalTokens,
+  ]).slice(0, 24)
 }
 
 function isLikelyHeadingLine(line: string): boolean {
@@ -1731,6 +1799,17 @@ function detectSectionKeyFromHeading(line: string): SectionKey | null {
       if (aliasTokens.length > 0 && matchedTokens === aliasTokens.length)
         return key
       if (aliasTokens.length >= 2 && matchedTokens / aliasTokens.length >= 0.75)
+        return key
+      const aliasEvidence = findNaturalTermEvidence(
+        [normalized],
+        normalizedAlias,
+        {
+          variants: aliases as string[],
+          stopwords: new Set([...NATURAL_STOPWORDS, ...STOPWORDS]),
+          fuzzyThreshold: 0.95,
+        }
+      )
+      if (aliasEvidence.exact || aliasEvidence.stem || aliasEvidence.fuzzy)
         return key
       if (
         normalized.startsWith(`${normalizedAlias} `) ||
@@ -1777,25 +1856,15 @@ function findTermEvidenceInLines(
   lines: string[],
   termValue: string
 ): { exact: boolean; semantic: boolean } {
-  const normalizedTerm = termValue.toLowerCase().trim()
-  const termTokens = tokenizeForSimilarity(normalizedTerm)
-  if (termTokens.length === 0) return { exact: false, semantic: false }
+  const evidence = findNaturalTermEvidence(lines, termValue, {
+    variants: getTermVariants(termValue),
+    stopwords: new Set([...NATURAL_STOPWORDS, ...STOPWORDS]),
+  })
 
-  for (const line of lines) {
-    if (containsTerm(line, normalizedTerm))
-      return { exact: true, semantic: false }
+  return {
+    exact: evidence.exact,
+    semantic: evidence.stem || evidence.ngram || evidence.fuzzy,
   }
-
-  if (termTokens.length < 2) return { exact: false, semantic: false }
-
-  for (const line of lines) {
-    const lineTokens = new Set(tokenizeForSimilarity(line))
-    const overlap = termTokens.filter((token) => lineTokens.has(token)).length
-    if (overlap / termTokens.length >= 0.75)
-      return { exact: false, semantic: true }
-  }
-
-  return { exact: false, semantic: false }
 }
 
 function computeDocumentParseRisk(text: string): {
@@ -2358,24 +2427,18 @@ function extractBulletStats(
   }
 }
 
-function analyzeSummary(
-  summaryText: string,
-  jd: JDAnalysis | null
-): SummaryStats {
+function analyzeSummary(summaryText: string): SummaryStats {
   const lines = splitLines(summaryText)
   const words = tokenize(summaryText)
   const first50Words = words.slice(0, 50).join(" ")
-  const criticalTerms = unique([
-    ...(jd?.titleTerms || []),
-    ...(jd?.requiredTerms || []).slice(0, 16),
-    ...(jd?.responsibilityTerms || []).slice(0, 10),
-  ])
-  const first50KeywordMatches = criticalTerms.filter((term) =>
+  const canonicalTerms = extractCanonicalTerms(
+    summaryText,
+    TECHNICAL_CATEGORIES
+  )
+  const first50KeywordMatches = canonicalTerms.filter((term) =>
     containsTerm(first50Words, term)
   ).length
-  const matchedCriticalTerms = criticalTerms.filter((term) =>
-    containsTerm(summaryText, term)
-  ).length
+  const matchedCriticalTerms = canonicalTerms.length
 
   return {
     lineCount: lines.length,
@@ -2402,19 +2465,8 @@ function analyzeSummary(
   }
 }
 
-function analyzeRepetition(
-  text: string,
-  jd: JDAnalysis | null
-): RepetitionStats {
-  const excluded = new Set(
-    unique([
-      ...(jd?.titleTerms || []),
-      ...(jd?.requiredTerms || []),
-      ...(jd?.preferredTerms || []),
-      ...(jd?.cultureTerms || []),
-      ...(jd?.responsibilityTerms || []),
-    ]).map((term) => resolveCanonicalTerm(term))
-  )
+function analyzeRepetition(text: string): RepetitionStats {
+  const excluded = new Set(REPETITION_EXCLUSION_TERMS.map(resolveCanonicalTerm))
   const wordCounts = new Map<string, number>()
   const phraseCounts = new Map<string, number>()
 
@@ -2828,16 +2880,40 @@ function buildKeywordAnalysis(
 
   const resumeLower = resumeContent.toLowerCase()
   const resumeLines = splitLines(resumeContent)
+  const stopwords = new Set([...NATURAL_STOPWORDS, ...STOPWORDS])
+  const resumeStemTokens = getStemmedNaturalTokens(resumeContent, {
+    minLength: 2,
+    stopwords,
+    excludeStopwords: true,
+  })
+  const resumeNgrams = new Set(getNaturalNgramPhrases(resumeStemTokens, [2, 3]))
   const classify = (terms: string[]) => {
     const matched: string[] = []
     const missing: string[] = []
+    const stemMatched: string[] = []
+    const fuzzyMatched: string[] = []
+
     for (const termValue of terms) {
-      const evidence = findTermEvidenceInLines(resumeLines, termValue)
-      if (evidence.exact || evidence.semantic)
+      const evidence = findNaturalTermEvidence(resumeLines, termValue, {
+        variants: getTermVariants(termValue),
+        stopwords,
+      })
+      if (evidence.exact || evidence.stem || evidence.ngram || evidence.fuzzy) {
         matched.push(resolveCanonicalTerm(termValue))
-      else missing.push(resolveCanonicalTerm(termValue))
+        if ((evidence.stem || evidence.ngram) && !evidence.exact)
+          stemMatched.push(resolveCanonicalTerm(termValue))
+        if (evidence.fuzzy && !evidence.exact)
+          fuzzyMatched.push(resolveCanonicalTerm(termValue))
+      } else {
+        missing.push(resolveCanonicalTerm(termValue))
+      }
     }
-    return { matched: unique(matched), missing: unique(missing) }
+    return {
+      matched: unique(matched),
+      missing: unique(missing),
+      stemMatched: unique(stemMatched),
+      fuzzyMatched: unique(fuzzyMatched),
+    }
   }
 
   const title = classify(jd.titleTerms)
@@ -2870,11 +2946,22 @@ function buildKeywordAnalysis(
   for (const group of weightedTerms) {
     for (const termValue of group.terms) {
       weightedTotal += group.weight
-      if (containsTerm(resumeLower, termValue)) weightedMatched += group.weight
+      const evidence = findNaturalTermEvidence(resumeLines, termValue, {
+        variants: getTermVariants(termValue),
+        stopwords,
+      })
+      if (evidence.exact) weightedMatched += group.weight
+      else if (evidence.stem || evidence.ngram)
+        weightedMatched += group.weight * 0.9
+      else if (evidence.fuzzy) weightedMatched += group.weight * 0.72
     }
   }
 
-  const resumeTokens = tokenize(resumeLower)
+  const resumeTokens = tokenizeNaturalText(resumeLower, {
+    minLength: 2,
+    stopwords,
+    excludeStopwords: true,
+  })
   const totalTokens = resumeTokens.length || 1
   const matchedTokenOccurrences = matchedUniqueTerms.reduce(
     (sum, termValue) => sum + countOccurrences(resumeLower, termValue),
@@ -2903,6 +2990,49 @@ function buildKeywordAnalysis(
   const underusedKeywords = criticalMatchedTerms
     .filter((termValue) => countOccurrences(resumeLower, termValue) === 1)
     .slice(0, 15)
+  const stemMatchedTerms = unique([
+    ...title.stemMatched,
+    ...required.stemMatched,
+    ...preferred.stemMatched,
+    ...culture.stemMatched,
+  ])
+  const fuzzyMatchedTerms = unique([
+    ...title.fuzzyMatched,
+    ...required.fuzzyMatched,
+    ...preferred.fuzzyMatched,
+    ...culture.fuzzyMatched,
+  ])
+  const matchedNgrams = unique(
+    uniqueTerms
+      .map((termValue) =>
+        getStemmedNaturalTokens(termValue, {
+          minLength: 2,
+          stopwords,
+          excludeStopwords: true,
+        }).join(" ")
+      )
+      .filter(
+        (termValue) => termValue.length > 0 && resumeNgrams.has(termValue)
+      )
+  ).slice(0, 20)
+  const semanticMatchPercentage = clamp(
+    uniqueTerms.length > 0
+      ? ((matchedUniqueTerms.length +
+          stemMatchedTerms.length * 0.5 +
+          fuzzyMatchedTerms.length * 0.35) /
+          uniqueTerms.length) *
+          100
+      : 0
+  )
+  const tfidfTopTerms = rankTermsByTfIdf(
+    [jd.title || "", ...jd.titleTerms, ...jd.requiredTerms, resumeContent].join(
+      "\n"
+    ),
+    {
+      limit: 24,
+      stopwords,
+    }
+  ).map(({ token }) => token)
 
   const sectionText = {
     professionalSummary: getSectionText(
@@ -2992,12 +3122,16 @@ function buildKeywordAnalysis(
     },
     criticalMatchedTerms,
     criticalMissingTerms,
+    tfidfTopTerms,
+    stemMatchedTerms,
+    fuzzyMatchedTerms,
+    matchedNgrams,
+    semanticMatchPercentage,
   }
 }
 
 function scoreProfessionalSummary(
   summaryText: string,
-  jd: JDAnalysis | null,
   summaryStats: SummaryStats
 ): number {
   if (!summaryText) return 15
@@ -3019,8 +3153,6 @@ function scoreProfessionalSummary(
   else if (summaryStats.first50KeywordMatches >= 1) score += 5
   if (summaryStats.matchedCriticalTerms >= 4) score += 10
   else if (summaryStats.matchedCriticalTerms >= 2) score += 5
-  if (jd?.titleTerms.some((termValue) => containsTerm(summaryText, termValue)))
-    score += 6
   if (summaryStats.hasObjectiveLanguage) score -= 8
   if (summaryStats.firstPerson) score -= 10
 
@@ -3029,7 +3161,6 @@ function scoreProfessionalSummary(
 
 function scoreSkills(
   skillsText: string,
-  jd: JDAnalysis | null,
   skillsAnalysis: SkillsAnalysis
 ): number {
   if (!skillsText) return 15
@@ -3053,14 +3184,6 @@ function scoreSkills(
   if (skillsAnalysis.canonicalTerms.length >= 10) score += 10
   else if (skillsAnalysis.canonicalTerms.length >= 6) score += 5
 
-  if (jd?.requiredTerms.length) {
-    const matched = jd.requiredTerms.filter((termValue) =>
-      containsTerm(skillsText, termValue)
-    ).length
-    score += Math.min(20, matched * 2)
-  }
-  if (jd?.titleTerms.some((termValue) => containsTerm(skillsText, termValue)))
-    score += 5
   if (
     skillsAnalysis.genericTerms >
     Math.max(2, Math.floor(skillsAnalysis.items.length * 0.35))
@@ -3280,7 +3403,6 @@ function scoreStructure(
   contact: ContactInfo,
   summaryStats: SummaryStats,
   skillsAnalysis: SkillsAnalysis,
-  jd: JDAnalysis | null,
   structureSignals?: DocumentStructureSignals
 ): number {
   let score = 25
@@ -3321,21 +3443,14 @@ function scoreStructure(
   })
   if (orderScore) score += 5
 
-  if (jd?.optionalSections.includes("certifications")) {
-    score += sections.certifications ? 4 : -6
-  }
-  if (jd?.optionalSections.includes("projects")) {
-    score += sections.projects ? 3 : -2
-  }
-
   if (structureSignals?.hasMultiColumnEvidence) score -= 6
   if ((structureSignals?.readingOrderRisk || 0) >= 0.2) score -= 4
 
   return clamp(score)
 }
 
-function scoreEducation(educationText: string, jd: JDAnalysis | null): number {
-  if (!educationText) return jd?.degreeRequirement ? 20 : 40
+function scoreEducation(educationText: string): number {
+  if (!educationText) return 40
 
   let score = 45
   if (/\b(university|college|institute|school|academy)\b/i.test(educationText))
@@ -3352,13 +3467,6 @@ function scoreEducation(educationText: string, jd: JDAnalysis | null): number {
     score += 10
   if (/\b(gpa|honors|dean's list|distinction|cum laude)\b/i.test(educationText))
     score += 5
-
-  const degreeRequirementMet = hasDegree(
-    educationText,
-    jd?.degreeRequirement || null
-  )
-  if (degreeRequirementMet === true) score += 8
-  if (degreeRequirementMet === false) score -= 18
 
   return clamp(score)
 }
@@ -3398,6 +3506,19 @@ function scoreKeywordMatch(
     10,
     keywordAnalysis.criticalMissingTerms.length * 0.7
   )
+  const semanticBonus = Math.min(
+    10,
+    (keywordAnalysis.semanticMatchPercentage -
+      keywordAnalysis.matchPercentage) *
+      0.18
+  )
+  const ngramBonus = Math.min(6, keywordAnalysis.matchedNgrams.length * 1.2)
+  const tfidfBonus = Math.min(
+    8,
+    keywordAnalysis.tfidfTopTerms.filter((term) =>
+      containsTerm(jd.requiredTerms.join(" "), term)
+    ).length * 1.1
+  )
 
   return clamp(
     keywordAnalysis.matchPercentage * 0.62 +
@@ -3405,7 +3526,10 @@ function scoreKeywordMatch(
       placementScore +
       titleScore +
       roleFamilyScore -
-      criticalPenalty
+      criticalPenalty +
+      semanticBonus +
+      ngramBonus +
+      tfidfBonus
   )
 }
 
@@ -3582,27 +3706,108 @@ function calibrateScores(params: {
       )
     : null
 
-  let overallScore = hasJD
-    ? clamp(resumeQualityScore * 0.35 + (targetRoleScore || 0) * 0.65)
-    : resumeQualityScore
+  let overallScore = resumeQualityScore
 
   const severeParseability = formattingScore < 55
   const missingCoreContact = !contact.email || !contact.phone
-  const failedYearsGate =
-    qualification.meetsYearsRequirement === false && (keywordScore || 0) < 55
   const missingCriticalEvidence = missingRequiredSectionCount >= 2
 
   if (severeParseability) overallScore = Math.min(overallScore, 58)
   if (missingCoreContact && missingCriticalEvidence)
     overallScore = Math.min(overallScore, 50)
-  if (failedYearsGate) overallScore = Math.min(overallScore, 57)
-  if (qualification.missingCertifications.length >= 2)
-    overallScore = Math.min(overallScore, 62)
 
   return {
     resumeQualityScore,
     targetRoleScore,
     overallScore: clamp(overallScore),
+  }
+}
+
+function buildJobMatchArtifacts(params: {
+  jobDescription: string
+  resumeContent: string
+  sections: Partial<Record<SectionKey, SectionBlock>>
+  lexicalCoverage: ResumeLexicalCoverage
+  educationText: string
+  certificationText: string
+  summaryText: string
+  experienceText: string
+  dates: DateInfo
+  experienceDates: DateInfo
+  formattingScore: number
+  contentQualityScore: number
+  summaryScore: number
+  skillsScore: number
+  educationScore: number
+}) {
+  const jdAnalysis = analyzeJobDescription(params.jobDescription)
+  if (!jdAnalysis) {
+    return {
+      targetRoleScore: null,
+      keywordAnalysis: null as KeywordAnalysis | null,
+      qualification: createEmptyQualificationAlignment(),
+      missingKeywords: null as string[] | null,
+      presentKeywords: null as string[] | null,
+    }
+  }
+
+  const keywordAnalysis = buildKeywordAnalysis(
+    jdAnalysis,
+    params.resumeContent,
+    params.sections
+  )
+  const qualification = inferQualificationAlignment(
+    jdAnalysis,
+    params.educationText,
+    params.experienceDates.yearsEstimated !== null
+      ? params.experienceDates
+      : params.dates,
+    `${params.resumeContent}\n${params.certificationText}`,
+    params.lexicalCoverage,
+    params.summaryText,
+    params.experienceText
+  )
+
+  const targetRoleScore = calibrateScores({
+    hasJD: true,
+    jdAnalysis,
+    formattingScore: params.formattingScore,
+    contentQualityScore: params.contentQualityScore,
+    summaryScore: params.summaryScore,
+    skillsScore: params.skillsScore,
+    structureScore: 0,
+    educationScore: params.educationScore,
+    keywordScore: keywordAnalysis
+      ? scoreKeywordMatch(keywordAnalysis, jdAnalysis, params.lexicalCoverage)
+      : null,
+    qualificationScore: qualification.score,
+    missingRequiredSectionCount: 0,
+    contact: {
+      email: true,
+      phone: true,
+      location: true,
+      url: false,
+      linkedin: false,
+      github: false,
+      professionalEmail: true,
+    },
+    qualification,
+  }).targetRoleScore
+
+  return {
+    targetRoleScore,
+    keywordAnalysis,
+    qualification,
+    missingKeywords:
+      keywordAnalysis?.missingByCategory.required.slice(0, 20) || [],
+    presentKeywords: keywordAnalysis
+      ? unique([
+          ...(keywordAnalysis.matchedByCategory.title || []),
+          ...(keywordAnalysis.matchedByCategory.required || []),
+          ...(keywordAnalysis.matchedByCategory.preferred || []),
+          ...(keywordAnalysis.matchedByCategory.culture || []),
+        ]).slice(0, 20)
+      : [],
   }
 }
 
@@ -3681,22 +3886,6 @@ function buildIssuesAndRecommendations(params: {
     )
   }
 
-  if (
-    params.hasJD &&
-    params.keywordScore !== null &&
-    params.keywordScore >= 75
-  ) {
-    pushStrength(
-      "Job-description keyword coverage is strong across core resume sections."
-    )
-  }
-
-  if (params.hasJD && params.qualification.matchedRoleFamilies.length > 0) {
-    pushStrength(
-      "The resume language aligns with the role family implied by the target job description."
-    )
-  }
-
   if (params.missingSections.length > 0) {
     pushIssue({
       severity: "high",
@@ -3747,69 +3936,6 @@ function buildIssuesAndRecommendations(params: {
   if (params.formattingScore < 70) {
     pushWeakness(
       "Parseability signals are weaker than they should be for an ATS-safe resume."
-    )
-  }
-
-  if (
-    params.hasJD &&
-    params.keywordScore !== null &&
-    params.keywordScore < 65
-  ) {
-    const missing =
-      params.keywordAnalysis?.criticalMissingTerms.slice(0, 6) || []
-    pushIssue({
-      severity: "high",
-      category: "Keyword Match",
-      issue:
-        "The resume misses a material portion of the job's critical terminology",
-      impact:
-        "Lower keyword coverage reduces ranking in ATS search, filters, and recruiter review.",
-      howToFix:
-        "Add missing required terms where they are truthfully supported, especially in the summary, skills section, and most recent role.",
-      example: missing.length
-        ? `Add supported keywords such as: ${missing.join(", ")}`
-        : "Mirror the job's top required skills using exact supported wording.",
-    })
-    pushRecommendation({
-      priority: "high",
-      action: "Increase exact keyword alignment with the job description",
-      benefit:
-        "Raises role-fit score and improves visibility in recruiter searches.",
-      implementation:
-        "Place supported required terms in the summary, skills section, and first bullet of the most recent role.",
-    })
-    pushWeakness(
-      "Required keyword coverage is below the level expected for a strong role match."
-    )
-  }
-
-  if (
-    params.hasJD &&
-    params.keywordAnalysis &&
-    params.qualification.matchedRoleFamilies.length === 0 &&
-    params.keywordAnalysis.criticalMissingTerms.length >= 6
-  ) {
-    pushIssue({
-      severity: "high",
-      category: "Role Alignment",
-      issue: "The resume reads like a weak match for the target role family",
-      impact:
-        "ATS and recruiter review may rank the document lower when core role signals are thin or misplaced.",
-      howToFix:
-        "Reposition the resume around the target role's core tools, responsibilities, and title language where accurate.",
-      example:
-        "For a backend role, surface API, distributed systems, cloud, databases, and performance work in the summary, skills, and recent bullets.",
-    })
-    pushRecommendation({
-      priority: "high",
-      action: "Reframe the resume around the target role family",
-      benefit:
-        "Improves title alignment and increases the share of relevant evidence that ATS systems can detect.",
-      implementation:
-        "Use role-specific title language in the summary and prioritize the most relevant experience bullets first.",
-    })
-    pushWeakness(
-      "The resume does not yet project a clear role-family match for the target job."
     )
   }
 
@@ -4054,102 +4180,6 @@ function buildIssuesAndRecommendations(params: {
     })
   }
 
-  if (params.qualification.meetsYearsRequirement === false) {
-    pushIssue({
-      severity: "high",
-      category: "Qualification Alignment",
-      issue:
-        "Estimated experience appears below the job's stated years requirement",
-      impact:
-        "This can lower role-fit ranking for ATS filters and recruiter shortlist review.",
-      howToFix:
-        "Emphasize the most relevant tenure and scope, but do not overstate years of experience.",
-      example: `Role asks for ${params.qualification.yearsRequired}+ years; resume evidence currently supports about ${params.qualification.yearsEstimated ?? 0} years.`,
-    })
-    pushWeakness(
-      "Experience duration appears below the stated requirement in the job description."
-    )
-  }
-
-  if (params.qualification.seniorityAligned === false) {
-    pushIssue({
-      severity: "medium",
-      category: "Seniority Alignment",
-      issue:
-        "Resume seniority signals appear lighter than the target role level",
-      impact:
-        "Recruiters may not quickly see the leadership, ownership, or scope expected for the role.",
-      howToFix:
-        "Highlight the highest-level responsibilities you actually held, including scope, team influence, and decision-making.",
-      example: `Target role appears to be ${params.qualification.expectedSeniority}; resume currently reads closer to ${params.qualification.observedSeniority ?? "an unspecified level"}.`,
-    })
-  }
-
-  if (
-    params.qualification.managementRequired &&
-    !params.qualification.managementObserved
-  ) {
-    pushIssue({
-      severity: "high",
-      category: "Leadership Alignment",
-      issue:
-        "The job appears to require management or mentorship signals that the resume does not clearly show",
-      impact:
-        "Leadership-screening filters may score the resume below roles that emphasize people or cross-functional leadership.",
-      howToFix:
-        "Surface team leadership, mentoring, hiring, planning, or stakeholder ownership examples if they are true.",
-      example:
-        "Led cross-functional team of 9 engineers and designers to launch platform migration 6 weeks ahead of schedule.",
-    })
-  }
-
-  if (params.qualification.meetsDegreeRequirement === false) {
-    pushIssue({
-      severity: "medium",
-      category: "Education",
-      issue:
-        "The education section does not clearly show the degree level requested in the job description",
-      impact:
-        "Recruiters may not be able to confirm minimum education requirements quickly.",
-      howToFix:
-        "State the degree, institution, and completion date clearly in the education section.",
-      example: "M.S. in Computer Science, University Name, 08/2025",
-    })
-    pushWeakness(
-      "The required degree level is not clearly evidenced in the education section."
-    )
-  }
-
-  if (params.qualification.missingCertifications.length > 0) {
-    pushIssue({
-      severity: "medium",
-      category: "Certifications",
-      issue: `Required certification(s) not found: ${params.qualification.missingCertifications.join(", ")}`,
-      impact:
-        "Missing certifications can reduce role alignment when they are used as screening criteria.",
-      howToFix:
-        "Add the certification only if it has been earned, or avoid implying it if not held.",
-      example: params.qualification.missingCertifications.join(", "),
-    })
-    if (params.missingOptionalSections.includes("Certifications")) {
-      pushRecommendation({
-        priority: "medium",
-        action:
-          "Add a dedicated certifications section if relevant certifications exist",
-        benefit:
-          "Makes credential screening faster for ATS and recruiter review.",
-        implementation:
-          "Use a CERTIFICATIONS header and list each certification in plain text with issuing organization and year if available.",
-      })
-    }
-  }
-
-  if (params.missingOptionalSections.length > 0 && params.hasJD) {
-    pushWeakness(
-      `Optional role-relevant section(s) are missing: ${params.missingOptionalSections.join(", ")}.`
-    )
-  }
-
   const severityOrder: Record<ATSIssue["severity"], number> = {
     critical: 0,
     high: 1,
@@ -4197,13 +4227,11 @@ function buildSectionReviews(params: {
   keywordAnalysis: KeywordAnalysis | null
   qualification: QualificationAlignment
 }): ATSSectionReview[] {
-  const keywordReviewScore = params.hasJD
-    ? (params.keywordScore ?? 0)
-    : round(
-        params.skillsScore * 0.4 +
-          params.summaryScore * 0.2 +
-          params.contentScore * 0.4
-      )
+  const keywordReviewScore = round(
+    params.skillsScore * 0.4 +
+      params.summaryScore * 0.2 +
+      params.contentScore * 0.4
+  )
 
   return [
     {
@@ -4340,9 +4368,6 @@ function buildSectionReviews(params: {
           ? "Education is presented clearly enough for ATS verification of credentials."
           : "Education details are not yet structured clearly enough for fast requirement checking.",
       whatWorks: unique([
-        params.qualification.meetsDegreeRequirement === true
-          ? "The education section appears to satisfy the degree level requested by the role."
-          : "",
         params.educationScore >= 75
           ? "Degree, institution, and date information appear sufficiently visible."
           : "",
@@ -4351,9 +4376,6 @@ function buildSectionReviews(params: {
         params.educationScore < 75
           ? unique([
               "Ensure the degree name, institution, and date are visible in a consistent format.",
-              params.qualification.meetsDegreeRequirement === false
-                ? "Make the required degree level explicit if you have it."
-                : "",
             ]).filter(Boolean)
           : [],
       actions: [
@@ -4365,39 +4387,35 @@ function buildSectionReviews(params: {
       title: "Keyword Alignment",
       score: keywordReviewScore,
       status: classifyStatus(keywordReviewScore),
-      diagnosis: params.hasJD
-        ? "Keyword alignment is based on deterministic matching against the provided job description and critical term placement."
-        : "Without a job description, this score reflects general ATS keyword coverage in the summary, skills, and experience sections.",
+      diagnosis:
+        "This score reflects general ATS keyword coverage across the summary, skills, and experience sections, independent of any pasted job description.",
       whatWorks: unique([
-        params.keywordAnalysis && params.keywordAnalysis.matchedKeywords > 0
-          ? `Matched ${params.keywordAnalysis.matchedKeywords} job-description keyword${params.keywordAnalysis.matchedKeywords === 1 ? "" : "s"}.`
+        params.summaryStats.first50KeywordMatches >= 2
+          ? "Relevant keywords appear early in the professional summary."
           : "",
-        params.keywordAnalysis &&
-        params.keywordAnalysis.coverageBySection.professionalSummary.length > 0
-          ? "Critical keywords appear in the professional summary."
+        params.skillsAnalysis.canonicalTerms.length >= 8
+          ? "The skills section includes enough specific terms to support keyword retrieval."
           : "",
-        params.qualification.matchedRoleFamilies.length > 0
-          ? "The resume vocabulary aligns with the target role family."
+        params.contentScore >= 75
+          ? "Experience bullets reinforce technical and business terms with concrete evidence."
           : "",
       ]).filter(Boolean),
       gaps:
-        params.hasJD && (params.keywordScore ?? 0) < 75
+        keywordReviewScore < 75
           ? unique([
-              params.keywordAnalysis &&
-              params.keywordAnalysis.criticalMissingTerms.length > 0
-                ? `Add supported critical terms such as ${params.keywordAnalysis.criticalMissingTerms.slice(0, 3).join(", ")}.`
+              params.summaryStats.first50KeywordMatches < 2
+                ? "Move more relevant terms into the first 50 words of the summary."
                 : "",
-              params.keywordAnalysis &&
-              params.keywordAnalysis.coverageBySection.skills.length < 4
-                ? "Increase skills-section coverage for the role's most important terms."
+              params.skillsAnalysis.canonicalTerms.length < 8
+                ? "Add more exact tool, platform, and method names to the skills section."
                 : "",
               params.repetition.repeatedContentWords.length > 0
-                ? `Replace repeated generic wording like ${params.repetition.repeatedContentWords.slice(0, 2).join(", ")} with more role-specific terms where accurate.`
+                ? `Replace repeated generic wording like ${params.repetition.repeatedContentWords.slice(0, 2).join(", ")} with more specific terms where accurate.`
                 : "",
             ]).filter(Boolean)
           : [],
       actions: [
-        "Mirror supported role terminology exactly where the resume already has matching evidence.",
+        "Distribute specific, supported keywords across the summary, skills, and recent experience instead of concentrating them in one section.",
       ],
     },
     {
@@ -4810,16 +4828,6 @@ function buildDebugAnalysis(params: {
             : "warning",
     },
   ]
-  if (params.missingOptionalSections.length > 0) {
-    structureItems.push({
-      label: "Missing optional role-relevant sections",
-      detail: params.missingOptionalSections.join(", "),
-      suggestion:
-        "Add only the optional sections that are genuinely supported by your background.",
-      severity: "info",
-    })
-  }
-
   sections.push({
     id: "structure",
     title: "Structure Analysis",
@@ -4905,35 +4913,13 @@ export function scoreResumeDeterministically(input: {
   const contact = detectContactInfo(resumeContent)
   const dates = extractDateInfo(resumeContent)
   const experienceDates = extractDateInfo(`${experienceText}\n${projectText}`)
-  const jdAnalysis = analyzeJobDescription(jobDescription)
-  const summaryStats = analyzeSummary(summaryText, jdAnalysis)
-  const repetition = analyzeRepetition(resumeContent, jdAnalysis)
+  const summaryStats = analyzeSummary(summaryText)
+  const repetition = analyzeRepetition(resumeContent)
   const skillsAnalysis = analyzeSkillsSection(skillsText)
   const lexicalCoverage = buildResumeLexicalCoverage(resumeContent, sections)
-  const keywordAnalysis = buildKeywordAnalysis(
-    jdAnalysis,
-    resumeContent,
-    sections
-  )
-  const criticalTerms = unique([
-    ...(jdAnalysis?.titleTerms || []),
-    ...(jdAnalysis?.requiredTerms || []).slice(0, 20),
-    ...(jdAnalysis?.responsibilityTerms || []).slice(0, 10),
-  ])
-  const bulletStats = extractBulletStats(
-    experienceText,
-    projectText,
-    criticalTerms
-  )
-  const keywordScore = keywordAnalysis
-    ? scoreKeywordMatch(keywordAnalysis, jdAnalysis, lexicalCoverage)
-    : null
-  const summaryScore = scoreProfessionalSummary(
-    summaryText,
-    jdAnalysis,
-    summaryStats
-  )
-  const skillsScore = scoreSkills(skillsText, jdAnalysis, skillsAnalysis)
+  const bulletStats = extractBulletStats(experienceText, projectText, [])
+  const summaryScore = scoreProfessionalSummary(summaryText, summaryStats)
+  const skillsScore = scoreSkills(skillsText, skillsAnalysis)
   const contentQualityScore = scoreContentQuality(
     bulletStats,
     repetition,
@@ -4945,7 +4931,6 @@ export function scoreResumeDeterministically(input: {
     contact,
     summaryStats,
     skillsAnalysis,
-    jdAnalysis,
     structureSignals
   )
   const formatting = scoreFormatting(
@@ -4956,26 +4941,18 @@ export function scoreResumeDeterministically(input: {
     bulletStats,
     structureSignals
   )
-  const educationScore = scoreEducation(educationText, jdAnalysis)
-  const qualification = inferQualificationAlignment(
-    jdAnalysis,
-    educationText,
-    experienceDates.yearsEstimated !== null ? experienceDates : dates,
-    `${resumeContent}\n${certificationText}`,
-    lexicalCoverage,
-    summaryText,
-    experienceText
-  )
+  const educationScore = scoreEducation(educationText)
+  const qualification = createEmptyQualificationAlignment()
+  const keywordAnalysis = null
+  const keywordScore = null
 
   const missingSections = REQUIRED_SECTION_KEYS.filter(
     (key) => !sections[key]
   ).map((key) => titleCase(key))
-  const missingOptionalSections = (jdAnalysis?.optionalSections || [])
-    .filter((key) => !sections[key])
-    .map((key) => titleCase(key))
+  const missingOptionalSections: string[] = []
   const calibratedScores = calibrateScores({
-    hasJD,
-    jdAnalysis,
+    hasJD: false,
+    jdAnalysis: null,
     formattingScore: formatting.score,
     contentQualityScore,
     summaryScore,
@@ -4983,10 +4960,28 @@ export function scoreResumeDeterministically(input: {
     structureScore,
     educationScore,
     keywordScore,
-    qualificationScore: qualification.score,
+    qualificationScore: 0,
     missingRequiredSectionCount: missingSections.length,
     contact,
     qualification,
+  })
+
+  const jobMatchArtifacts = buildJobMatchArtifacts({
+    jobDescription,
+    resumeContent,
+    sections,
+    lexicalCoverage,
+    educationText,
+    certificationText,
+    summaryText,
+    experienceText,
+    dates,
+    experienceDates,
+    formattingScore: formatting.score,
+    contentQualityScore,
+    summaryScore,
+    skillsScore,
+    educationScore,
   })
 
   const derived = buildIssuesAndRecommendations({
@@ -5046,33 +5041,24 @@ export function scoreResumeDeterministically(input: {
   })
 
   return {
-    analysisMode: hasJD ? "resume-with-jd" : "resume-only",
+    analysisMode: "resume-only",
     resumeQualityScore: calibratedScores.resumeQualityScore,
-    targetRoleScore: calibratedScores.targetRoleScore,
+    targetRoleScore: jobMatchArtifacts.targetRoleScore,
     overallScore: calibratedScores.overallScore,
     categoryScores: {
-      keywordMatch: hasJD ? { score: keywordScore || 0, maxScore: 100 } : null,
+      keywordMatch: null,
       formatting: { score: formatting.score, maxScore: 100 },
       contentQuality: { score: contentQualityScore, maxScore: 100 },
       professionalSummary: { score: summaryScore, maxScore: 100 },
       skills: { score: skillsScore, maxScore: 100 },
-      structure: hasJD ? null : { score: structureScore, maxScore: 100 },
+      structure: { score: structureScore, maxScore: 100 },
     },
     rating: buildRating(calibratedScores.overallScore),
     keyFindings: {
       strengths: derived.strengths,
       weaknesses: derived.weaknesses,
-      missingKeywords: hasJD
-        ? keywordAnalysis?.missingByCategory.required.slice(0, 20) || []
-        : null,
-      presentKeywords: hasJD
-        ? unique([
-            ...(keywordAnalysis?.matchedByCategory.title || []),
-            ...(keywordAnalysis?.matchedByCategory.required || []),
-            ...(keywordAnalysis?.matchedByCategory.preferred || []),
-            ...(keywordAnalysis?.matchedByCategory.culture || []),
-          ]).slice(0, 20)
-        : null,
+      missingKeywords: hasJD ? jobMatchArtifacts.missingKeywords : null,
+      presentKeywords: hasJD ? jobMatchArtifacts.presentKeywords : null,
     },
     detailedIssues: derived.issues,
     recommendations: derived.recommendations,
@@ -5082,35 +5068,35 @@ export function scoreResumeDeterministically(input: {
       issues: formatting.issues,
       warnings: formatting.warnings,
     },
-    keywordAnalysis,
+    keywordAnalysis: jobMatchArtifacts.keywordAnalysis,
     debugAnalysis,
     evidence: {
       requiredSectionsPresent: REQUIRED_SECTION_KEYS.filter(
         (key) => sections[key]
       ).map((key) => titleCase(key)),
       missingSections,
-      missingOptionalSections,
+      missingOptionalSections: [],
       contact,
       dates,
       bullets: bulletStats,
       summary: summaryStats,
       repetition,
-      jd: jdAnalysis,
+      jd: null,
       lexicalCoverage,
       qualification: {
-        yearsRequired: qualification.yearsRequired,
-        yearsEstimated: qualification.yearsEstimated,
-        meetsYearsRequirement: qualification.meetsYearsRequirement,
-        degreeRequirement: qualification.degreeRequirement,
-        meetsDegreeRequirement: qualification.meetsDegreeRequirement,
-        requiredCertifications: qualification.requiredCertifications,
-        missingCertifications: qualification.missingCertifications,
-        expectedSeniority: qualification.expectedSeniority,
-        observedSeniority: qualification.observedSeniority,
-        seniorityAligned: qualification.seniorityAligned,
-        managementRequired: qualification.managementRequired,
-        managementObserved: qualification.managementObserved,
-        matchedRoleFamilies: qualification.matchedRoleFamilies,
+        yearsRequired: null,
+        yearsEstimated: null,
+        meetsYearsRequirement: null,
+        degreeRequirement: null,
+        meetsDegreeRequirement: null,
+        requiredCertifications: [],
+        missingCertifications: [],
+        expectedSeniority: null,
+        observedSeniority: null,
+        seniorityAligned: null,
+        managementRequired: false,
+        managementObserved: false,
+        matchedRoleFamilies: [],
       },
     },
   }

@@ -174,7 +174,7 @@ function getThemeDefinition(
 
   return {
     clearColor: 0x000000,
-    opacityClassName: "opacity-80",
+    opacityClassName: "opacity-60",
     createMaterial: ({ width, height }) =>
       new THREE.RawShaderMaterial({
         vertexShader: `
@@ -196,15 +196,10 @@ function getThemeDefinition(
 
             float d = length(p) * distortion;
 
-            float rx = p.x * (1.0 + d);
-            float gx = p.x;
-            float bx = p.x * (1.0 - d);
+            float waveX = p.x * (1.0 + d * 0.15);
+            float intensity = 0.038 / abs(p.y + sin((waveX + time) * xScale) * yScale);
 
-            float r = 0.05 / abs(p.y + sin((rx + time) * xScale) * yScale);
-            float g = 0.05 / abs(p.y + sin((gx + time) * xScale) * yScale);
-            float b = 0.05 / abs(p.y + sin((bx + time) * xScale) * yScale);
-
-            gl_FragColor = vec4(r, g, b, 1.0);
+            gl_FragColor = vec4(vec3(intensity), 1.0);
           }
         `,
         uniforms: {
@@ -259,8 +254,8 @@ function WebGLShaderComponent({
     let previousTime = performance.now()
     let lastRenderTime = 0
     let animationRunning = false
-    const maxPixelRatio = 1.35
-    const frameIntervalMs = 1000 / 30
+    const maxPixelRatio = 1
+    const frameIntervalMs = 1000 / 24
 
     const handleResize = () => {
       if (!refs.renderer || !refs.material) return
@@ -415,7 +410,7 @@ function WebGLShaderComponent({
     <canvas
       ref={canvasRef}
       aria-hidden="true"
-      className={`pointer-events-none fixed inset-0 block h-full w-full blur-[7px] transition-opacity duration-500 ${themeDefinition.opacityClassName}`}
+      className={`pointer-events-none fixed inset-0 block h-full w-full ${theme === "current" ? "blur-[20px]" : "blur-[7px]"} transition-opacity duration-500 ${themeDefinition.opacityClassName}`}
     />
   )
 }

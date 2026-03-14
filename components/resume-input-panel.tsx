@@ -251,7 +251,7 @@ export function ResumeInputPanel({
               <div className="flex items-center justify-center gap-2">
                 <Loader2 className="w-4 h-4 text-primary animate-spin" />
                 <span className="text-foreground text-sm">
-                  Extracting text from {uploadedFile?.name}...
+                  Uploading {uploadedFile?.name || "resume file"}...
                 </span>
               </div>
             ) : displayFileName ? (
@@ -285,6 +285,10 @@ export function ResumeInputPanel({
           {extractionError && (
             <p className="text-red-400 text-xs">{extractionError}</p>
           )}
+
+          <p className="text-[11px] italic text-white/38">
+            Upload PDF for best results.
+          </p>
         </div>
 
         {mode === TRACKED_RUN_MODE.GENERATE && (

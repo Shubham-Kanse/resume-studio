@@ -51,6 +51,11 @@ export interface ATSScoreResponse {
       projects: string[]
       certifications: string[]
     }
+    tfidfTopTerms?: string[]
+    stemMatchedTerms?: string[]
+    fuzzyMatchedTerms?: string[]
+    matchedNgrams?: string[]
+    semanticMatchPercentage?: number
   } | null
   evidenceSummary?: {
     requiredSectionsPresent: string[]

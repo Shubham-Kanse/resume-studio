@@ -4,6 +4,7 @@ import {
   memo,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type ComponentProps,
@@ -16,11 +17,11 @@ import {
   BriefcaseBusiness,
   ChevronDown,
   FileCode2,
+  Gauge,
   Gem,
   House,
   LayoutDashboard,
   LogOut,
-  Target,
   UserRound,
 } from "lucide-react"
 
@@ -47,10 +48,14 @@ import {
 import { useUIState } from "@/features/workspace/hooks/use-ui-state"
 import { useWorkspacePersistence } from "@/features/workspace/hooks/use-workspace-persistence"
 import {
-  APP_MODE,
-  useWorkspaceState,
   type AppMode,
+  useWorkspaceState,
 } from "@/features/workspace/hooks/use-workspace-state"
+import {
+  APP_MODE,
+  WORKSPACE_MODE_COOKIE_NAME,
+  coerceAppMode,
+} from "@/features/workspace/workspace-mode"
 import { trackEvent } from "@/lib/analytics"
 import {
   clearServerSession,
@@ -73,12 +78,28 @@ import {
   type TrackedRunRecord,
 } from "@/lib/tracked-runs"
 import { cn } from "@/lib/utils"
+import type { ATSScoreResponse } from "@/types/ats"
 
 import type { Session, SupabaseClient } from "@supabase/supabase-js"
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
-const ATS_LOADING_MIN_DURATION_MS = 11000
+const ATS_LOADING_MIN_DURATION_MS = 3200
+const ATS_AI_INSIGHTS_ENABLED = false
 const PLAN_SNAPSHOT_STORAGE_KEY_PREFIX = "resume-studio:plan-snapshot:"
+const WORKSPACE_DRAFT_STORAGE_KEY_PREFIX = "resume-studio:workspace-draft:"
+
+type WorkspaceDraft = {
+  mode: AppMode
+  jobDescription: string
+  resumeContent: string
+  resumeFileName: string
+  resumeFileMimeType: string
+  resumeFileDataUrl: string
+  extraInstructions: string
+  latexContent: string
+  editableLatexContent: string
+  atsScore: ATSScoreResponse | null
+}
 
 function readBlobAsDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -112,6 +133,65 @@ function buildGeneratedPdfFileName(
 
 function getPlanSnapshotStorageKey(userId: string) {
   return `${PLAN_SNAPSHOT_STORAGE_KEY_PREFIX}${userId}`
+}
+
+function getWorkspaceDraftStorageKey(userId: string) {
+  return `${WORKSPACE_DRAFT_STORAGE_KEY_PREFIX}${userId}`
+}
+
+function loadWorkspaceDraft(userId: string): WorkspaceDraft | null {
+  if (typeof window === "undefined") return null
+
+  const raw = window.localStorage.getItem(getWorkspaceDraftStorageKey(userId))
+  if (!raw) return null
+
+  try {
+    const parsed = JSON.parse(raw) as Partial<WorkspaceDraft>
+    if (!parsed || typeof parsed !== "object") return null
+
+    const mode = coerceAppMode(parsed.mode)
+
+    return {
+      mode,
+      jobDescription:
+        typeof parsed.jobDescription === "string" ? parsed.jobDescription : "",
+      resumeContent:
+        typeof parsed.resumeContent === "string" ? parsed.resumeContent : "",
+      resumeFileName:
+        typeof parsed.resumeFileName === "string" ? parsed.resumeFileName : "",
+      resumeFileMimeType:
+        typeof parsed.resumeFileMimeType === "string"
+          ? parsed.resumeFileMimeType
+          : "",
+      resumeFileDataUrl:
+        typeof parsed.resumeFileDataUrl === "string"
+          ? parsed.resumeFileDataUrl
+          : "",
+      extraInstructions:
+        typeof parsed.extraInstructions === "string"
+          ? parsed.extraInstructions
+          : "",
+      latexContent:
+        typeof parsed.latexContent === "string" ? parsed.latexContent : "",
+      editableLatexContent:
+        typeof parsed.editableLatexContent === "string"
+          ? parsed.editableLatexContent
+          : "",
+      atsScore:
+        (parsed.atsScore as ATSScoreResponse | null | undefined) ?? null,
+    }
+  } catch {
+    return null
+  }
+}
+
+function persistWorkspaceDraft(userId: string, draft: WorkspaceDraft) {
+  if (typeof window === "undefined") return
+
+  window.localStorage.setItem(
+    getWorkspaceDraftStorageKey(userId),
+    JSON.stringify(draft)
+  )
 }
 
 function loadCachedPlanSnapshot(userId: string): PlanSnapshot | null {
@@ -327,7 +407,7 @@ const PageHeader = memo(function PageHeader({
                 : "opacity-60 saturate-50 shadow-none hover:opacity-100"
             )}
           >
-            <Target className="h-4 w-4" />
+            <Gauge className="h-4 w-4" />
             <span className="text-xs font-medium sm:text-sm">ATS Score</span>
           </Button>
           <Button
@@ -496,7 +576,7 @@ const HomePanel = memo(function HomePanel({
             onClick={() => onModeChange(TRACKED_RUN_MODE.ATS_SCORE)}
             className="h-11 rounded-full px-6 text-sm"
           >
-            <Target className="h-4 w-4" />
+            <Gauge className="h-4 w-4" />
             Get ATS Score
           </Button>
         </div>
@@ -584,8 +664,26 @@ const MainContent = memo(function MainContent({
             <JobApplicationsPanel {...trackerProps} />
           </ErrorBoundary>
         </div>
+      ) : mode === TRACKED_RUN_MODE.ATS_SCORE ? (
+        <div
+          ref={outputPanelRef}
+          className={cn(panelShellClass, "md:basis-auto md:flex-auto")}
+        >
+          <ErrorBoundary
+            context="ats-score-panel"
+            fallbackTitle="ATS results unavailable"
+            fallbackMessage="The ATS results panel failed to render. Reload this section to continue."
+          >
+            <ATSScorePanel {...atsProps} />
+          </ErrorBoundary>
+        </div>
       ) : (
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 md:flex-row md:items-stretch md:overflow-hidden">
+        <div
+          className={cn(
+            "flex min-h-0 min-w-0 flex-1 flex-col gap-4 md:items-stretch md:overflow-hidden",
+            "md:flex-row"
+          )}
+        >
           <div className={panelShellClass}>
             <ErrorBoundary
               context="resume-input-panel"
@@ -597,23 +695,13 @@ const MainContent = memo(function MainContent({
           </div>
 
           <div ref={outputPanelRef} className={panelShellClass}>
-            {mode === TRACKED_RUN_MODE.GENERATE ? (
-              <ErrorBoundary
-                context="resume-preview-panel"
-                fallbackTitle="Preview unavailable"
-                fallbackMessage="The resume preview failed to render. You can reload just this panel."
-              >
-                <ResumePreviewPanel {...previewProps} />
-              </ErrorBoundary>
-            ) : (
-              <ErrorBoundary
-                context="ats-score-panel"
-                fallbackTitle="ATS results unavailable"
-                fallbackMessage="The ATS results panel failed to render. Reload this section to continue."
-              >
-                <ATSScorePanel {...atsProps} />
-              </ErrorBoundary>
-            )}
+            <ErrorBoundary
+              context="resume-preview-panel"
+              fallbackTitle="Preview unavailable"
+              fallbackMessage="The resume preview failed to render. You can reload just this panel."
+            >
+              <ResumePreviewPanel {...previewProps} />
+            </ErrorBoundary>
           </div>
         </div>
       )}
@@ -728,7 +816,7 @@ const PageFooter = memo(function PageFooter({
   )
 })
 
-export default function AppShell() {
+export default function AppShell({ initialMode }: { initialMode?: AppMode }) {
   const atsRequestIdRef = useRef(0)
   const outputPanelRef = useRef<HTMLDivElement>(null)
   const savedAtsRunIdRef = useRef<string | null>(null)
@@ -769,7 +857,7 @@ export default function AppShell() {
     setIsLoadingInsights,
     hasLoadedAIInsights,
     setHasLoadedAIInsights,
-  } = useWorkspaceState()
+  } = useWorkspaceState(coerceAppMode(initialMode))
   const [session, setSession] = useState<Session | null>(null)
   const [supabase, setSupabase] = useState<SupabaseClient | null>(null)
   const [isSupabaseReady, setIsSupabaseReady] = useState(false)
@@ -808,6 +896,9 @@ export default function AppShell() {
   const isSplitWorkspaceActive =
     mode === TRACKED_RUN_MODE.GENERATE && isSplitWorkspaceOpen
   const isAuthenticated = Boolean(session?.user?.id)
+  const hasRestoredWorkspaceRef = useRef(false)
+  const hasLoadedWorkspaceDraftRef = useRef(false)
+  const [isWorkspaceRestoreReady, setIsWorkspaceRestoreReady] = useState(false)
   const authAvailable = Boolean(supabase)
   const userEmail = session?.user?.email ?? null
   const entitlements =
@@ -882,6 +973,12 @@ export default function AppShell() {
     const timer = window.setTimeout(() => setError(null), 4500)
     return () => window.clearTimeout(timer)
   }, [error, setError])
+
+  useEffect(() => {
+    if (typeof document === "undefined") return
+
+    document.cookie = `${WORKSPACE_MODE_COOKIE_NAME}=${encodeURIComponent(mode)}; Path=/; Max-Age=31536000; SameSite=Lax`
+  }, [mode])
 
   useEffect(() => {
     void preloadResumeInputPanel()
@@ -1117,10 +1214,106 @@ export default function AppShell() {
     null
 
   useEffect(() => {
-    if (!session?.user?.id) {
+    if (!authLoading && !session?.user?.id) {
       savedAtsRunIdRef.current = null
+      hasRestoredWorkspaceRef.current = false
+      hasLoadedWorkspaceDraftRef.current = false
+      setIsWorkspaceRestoreReady(true)
     }
-  }, [session?.user?.id])
+  }, [authLoading, session?.user?.id])
+
+  useEffect(() => {
+    if (authLoading) {
+      setIsWorkspaceRestoreReady(false)
+      return
+    }
+
+    if (!session?.user?.id) {
+      setIsWorkspaceRestoreReady(true)
+      return
+    }
+
+    if (!hasLoadedWorkspaceDraftRef.current) return
+    setIsWorkspaceRestoreReady(true)
+  }, [authLoading, session?.user?.id])
+
+  useLayoutEffect(() => {
+    if (!session?.user?.id) return
+    if (hasLoadedWorkspaceDraftRef.current) return
+
+    hasLoadedWorkspaceDraftRef.current = true
+    const draft = loadWorkspaceDraft(session.user.id)
+    if (!draft) return
+
+    setMode(draft.mode)
+    setJobDescription(draft.jobDescription)
+    setResumeContent(draft.resumeContent)
+    setResumeFileName(draft.resumeFileName)
+    setResumeFileMimeType(draft.resumeFileMimeType)
+    setResumeFileDataUrl(draft.resumeFileDataUrl)
+    setExtraInstructions(draft.extraInstructions)
+    setLatexContent(draft.latexContent)
+    setEditableLatexContent(draft.editableLatexContent)
+    setAtsScore(draft.atsScore)
+    setHasLoadedAIInsights(
+      Boolean(draft.mode === TRACKED_RUN_MODE.ATS_SCORE && draft.atsScore)
+    )
+    setIsLoadingInsights(false)
+    setIsGenerating(false)
+    setIsScoring(false)
+    setStatusMessage("")
+    setError(null)
+    hasRestoredWorkspaceRef.current = true
+    setIsWorkspaceRestoreReady(true)
+  }, [
+    session?.user?.id,
+    setAtsScore,
+    setEditableLatexContent,
+    setError,
+    setExtraInstructions,
+    setHasLoadedAIInsights,
+    setIsGenerating,
+    setIsLoadingInsights,
+    setIsScoring,
+    setJobDescription,
+    setLatexContent,
+    setMode,
+    setResumeContent,
+    setResumeFileDataUrl,
+    setResumeFileMimeType,
+    setResumeFileName,
+    setStatusMessage,
+  ])
+
+  useEffect(() => {
+    if (!session?.user?.id) return
+    if (!hasLoadedWorkspaceDraftRef.current) return
+
+    persistWorkspaceDraft(session.user.id, {
+      mode,
+      jobDescription,
+      resumeContent,
+      resumeFileName,
+      resumeFileMimeType,
+      resumeFileDataUrl,
+      extraInstructions,
+      latexContent,
+      editableLatexContent,
+      atsScore,
+    })
+  }, [
+    atsScore,
+    editableLatexContent,
+    extraInstructions,
+    jobDescription,
+    latexContent,
+    mode,
+    resumeContent,
+    resumeFileDataUrl,
+    resumeFileMimeType,
+    resumeFileName,
+    session?.user?.id,
+  ])
 
   const prefetchATSInsights = async (
     input: {
@@ -1131,7 +1324,11 @@ export default function AppShell() {
     },
     requestId: number
   ) => {
-    if (!entitlements.canUseAiInsights || !session?.access_token) {
+    if (
+      !ATS_AI_INSIGHTS_ENABLED ||
+      !entitlements.canUseAiInsights ||
+      !session?.access_token
+    ) {
       setIsLoadingInsights(false)
       return
     }
@@ -1392,7 +1589,11 @@ export default function AppShell() {
         }
       }
 
-      if (entitlements.canUseAiInsights && session?.access_token) {
+      if (
+        ATS_AI_INSIGHTS_ENABLED &&
+        entitlements.canUseAiInsights &&
+        session?.access_token
+      ) {
         void prefetchATSInsights(
           { ...input, extractionArtifacts: resumeArtifacts },
           requestId
@@ -1401,7 +1602,8 @@ export default function AppShell() {
 
       trackEvent("ats_scored", {
         authenticated: Boolean(session?.user?.id),
-        ai_insights_available: entitlements.canUseAiInsights,
+        ai_insights_available:
+          ATS_AI_INSIGHTS_ENABLED && entitlements.canUseAiInsights,
       })
     } catch (scoringError) {
       reportClientError(scoringError, "ats-score")
@@ -1609,32 +1811,109 @@ export default function AppShell() {
     }
   }
 
-  const handleLoadRunFromDashboard = (run: TrackedRunRecord) => {
-    setMode(run.mode)
-    setJobDescription(run.job_description ?? "")
-    setResumeContent(run.resume_content)
-    setResumeFileName(
-      run.resume_file_name ?? extractTrackedRunFileName(run.label) ?? ""
+  const handleLoadRunFromDashboard = useCallback(
+    (run: TrackedRunRecord) => {
+      setMode(run.mode)
+      setJobDescription(run.job_description ?? "")
+      setResumeContent(run.resume_content)
+      setResumeFileName(
+        run.resume_file_name ?? extractTrackedRunFileName(run.label) ?? ""
+      )
+      setResumeFileMimeType(run.resume_file_mime_type ?? "")
+      setResumeFileDataUrl(run.resume_file_data_url ?? "")
+      setResumeArtifacts(null)
+      setExtraInstructions(run.extra_instructions ?? "")
+      setLatexContent(
+        run.mode === TRACKED_RUN_MODE.GENERATE ? (run.latex_content ?? "") : ""
+      )
+      setAtsScore(
+        run.mode === TRACKED_RUN_MODE.ATS_SCORE ? run.ats_score : null
+      )
+      setHasLoadedAIInsights(
+        Boolean(run.mode === TRACKED_RUN_MODE.ATS_SCORE && run.ats_score)
+      )
+      setIsLoadingInsights(false)
+      setIsGenerating(false)
+      setIsScoring(false)
+      setStatusMessage("")
+      setError(null)
+      savedAtsRunIdRef.current =
+        run.mode === TRACKED_RUN_MODE.ATS_SCORE ? run.id : null
+      scrollToOutputOnMobile()
+    },
+    [
+      setMode,
+      setJobDescription,
+      setResumeContent,
+      setResumeFileName,
+      setResumeFileMimeType,
+      setResumeFileDataUrl,
+      setResumeArtifacts,
+      setExtraInstructions,
+      setLatexContent,
+      setAtsScore,
+      setHasLoadedAIInsights,
+      setIsLoadingInsights,
+      setIsGenerating,
+      setIsScoring,
+      setStatusMessage,
+      setError,
+    ]
+  )
+
+  useEffect(() => {
+    if (!session?.user?.id) return
+    if (historyLoading) return
+    if (hasRestoredWorkspaceRef.current) return
+    if (historyItems.length === 0) return
+
+    const workspaceHasUserState = Boolean(
+      jobDescription.trim() ||
+      resumeContent.trim() ||
+      extraInstructions.trim() ||
+      latexContent.trim() ||
+      editableLatexContent.trim() ||
+      atsScore
     )
-    setResumeFileMimeType(run.resume_file_mime_type ?? "")
-    setResumeFileDataUrl(run.resume_file_data_url ?? "")
-    setResumeArtifacts(null)
-    setExtraInstructions(run.extra_instructions ?? "")
-    setLatexContent(
-      run.mode === TRACKED_RUN_MODE.GENERATE ? (run.latex_content ?? "") : ""
-    )
-    setAtsScore(run.mode === TRACKED_RUN_MODE.ATS_SCORE ? run.ats_score : null)
-    setHasLoadedAIInsights(
-      Boolean(run.mode === TRACKED_RUN_MODE.ATS_SCORE && run.ats_score)
-    )
+
+    hasRestoredWorkspaceRef.current = true
+
+    if (workspaceHasUserState) return
+
+    const selectedRun =
+      historyItems.find((item) => item.id === selectedHistoryRunId) ??
+      historyItems[0]
+
+    if (!selectedRun) return
+
+    handleLoadRunFromDashboard(selectedRun)
+  }, [
+    atsScore,
+    editableLatexContent,
+    extraInstructions,
+    handleLoadRunFromDashboard,
+    historyItems,
+    historyLoading,
+    jobDescription,
+    latexContent,
+    resumeContent,
+    selectedHistoryRunId,
+    session?.user?.id,
+  ])
+
+  const handleRescoreCV = () => {
+    setAtsScore(null)
+    setHasLoadedAIInsights(false)
     setIsLoadingInsights(false)
-    setIsGenerating(false)
     setIsScoring(false)
+    setResumeContent("")
+    setResumeFileName("")
+    setResumeFileMimeType("")
+    setResumeFileDataUrl("")
+    setResumeArtifacts(null)
     setStatusMessage("")
     setError(null)
-    savedAtsRunIdRef.current =
-      run.mode === TRACKED_RUN_MODE.ATS_SCORE ? run.id : null
-    scrollToOutputOnMobile()
+    savedAtsRunIdRef.current = null
   }
 
   const handleDeleteRun = async (runId: string) => {
@@ -1912,11 +2191,31 @@ export default function AppShell() {
 
   const atsProps: ATSScorePanelProps = {
     scoreData: atsScore,
+    resumeContent,
+    jobDescription,
+    resumeFileName,
     isLoading: isScoring,
     isLoadingInsights,
     hasLoadedAIInsights,
-    canUseAiInsights: entitlements.canUseAiInsights,
+    canUseAiInsights: ATS_AI_INSIGHTS_ENABLED && entitlements.canUseAiInsights,
     onUpgradeToPro: () => handleOpenPlanDialog(PREMIUM_FEATURE.AI_ATS_INSIGHTS),
+    onRescoreMyCV: handleRescoreCV,
+    onJobDescriptionChange: setJobDescription,
+    onResumeContentChange: setResumeContent,
+    onResumeFileNameChange: setResumeFileName,
+    onResumeFileMimeTypeChange: setResumeFileMimeType,
+    onResumeFileDataUrlChange: setResumeFileDataUrl,
+    onResumeArtifactsChange: setResumeArtifacts,
+    onGetATSScore: () => {
+      const formData = new FormData()
+      formData.append("jobDescription", jobDescription)
+      formData.append("resumeContent", resumeContent)
+      if (extraInstructions.trim()) {
+        formData.append("extraInstructions", extraInstructions)
+      }
+
+      void handleATSScore(formData)
+    },
   }
 
   const splitProps: LatexSplitWorkspaceProps = {
@@ -1959,6 +2258,10 @@ export default function AppShell() {
     onClose: handleClosePlanDialog,
     onOpenAuth: handleOpenAuthDialog,
     onBillingAction: handleBillingAction,
+  }
+
+  if (!isWorkspaceRestoreReady) {
+    return null
   }
 
   return (
