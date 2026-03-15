@@ -30,6 +30,19 @@ type AuroraMaterial = ShaderLikeMaterial & {
   }
 }
 
+type NebulaMaterial = ShaderLikeMaterial & {
+  uniforms: ShaderLikeMaterial["uniforms"] & {
+    time: { value: number }
+    resolution: { value: { set: (width: number, height: number) => void } }
+  }
+}
+
+type StillMaterial = ShaderLikeMaterial & {
+  uniforms: ShaderLikeMaterial["uniforms"] & {
+    resolution: { value: { set: (width: number, height: number) => void } }
+  }
+}
+
 type SceneLike = {
   add: (mesh: MeshLike) => void
   remove: (mesh: MeshLike) => void
@@ -76,6 +89,78 @@ function getThemeDefinition(
   theme: BackgroundTheme,
   _size: { width: number; height: number }
 ): ThemeDefinition {
+  if (theme === "black") {
+    return {
+      clearColor: 0x000000,
+      opacityClassName: "opacity-100",
+      createMaterial: ({ width, height }) =>
+        new THREE.RawShaderMaterial({
+          vertexShader: `
+            attribute vec3 position;
+            void main() {
+              gl_Position = vec4(position, 1.0);
+            }
+          `,
+          fragmentShader: `
+            precision highp float;
+            void main() {
+              gl_FragColor = vec4(vec3(0.0), 1.0);
+            }
+          `,
+          uniforms: {
+            resolution: { value: new THREE.Vector2(width, height) },
+          },
+          side: THREE.DoubleSide,
+        }) as StillMaterial,
+      onResize: (_material, _width, _height) => {},
+    }
+  }
+
+  if (theme === "still") {
+    return {
+      clearColor: 0x030712,
+      opacityClassName: "opacity-95",
+      createMaterial: ({ width, height }) =>
+        new THREE.RawShaderMaterial({
+          vertexShader: `
+            attribute vec3 position;
+            void main() {
+              gl_Position = vec4(position, 1.0);
+            }
+          `,
+          fragmentShader: `
+            precision highp float;
+            uniform vec2 resolution;
+
+            void main() {
+              vec2 uv = gl_FragCoord.xy / resolution.xy;
+              vec2 p = uv - 0.5;
+              p.x *= resolution.x / resolution.y;
+
+              vec3 top = vec3(0.04, 0.07, 0.14);
+              vec3 bottom = vec3(0.01, 0.02, 0.06);
+              vec3 base = mix(top, bottom, smoothstep(0.0, 1.0, uv.y));
+
+              float vignette = smoothstep(1.25, 0.15, length(p));
+              vec3 color = base * vignette;
+
+              gl_FragColor = vec4(color, 1.0);
+            }
+          `,
+          uniforms: {
+            resolution: { value: new THREE.Vector2(width, height) },
+          },
+          side: THREE.DoubleSide,
+        }) as StillMaterial,
+      onResize: (material, width, height) => {
+        ;(material as StillMaterial).uniforms.resolution.value.set(
+          width,
+          height
+        )
+      },
+    }
+  }
+
   if (theme === "aurora") {
     return {
       clearColor: 0x000000,
@@ -168,6 +253,102 @@ function getThemeDefinition(
       },
       onFrame: (material, deltaSeconds) => {
         ;(material as AuroraMaterial).uniforms.time.value += deltaSeconds
+      },
+    }
+  }
+
+  if (theme === "nebula") {
+    return {
+      clearColor: 0x000000,
+      opacityClassName: "opacity-80",
+      createMaterial: ({ width, height }) =>
+        new THREE.RawShaderMaterial({
+          vertexShader: `
+            attribute vec3 position;
+            void main() {
+              gl_Position = vec4(position, 1.0);
+            }
+          `,
+          fragmentShader: `
+            precision highp float;
+            uniform vec2 resolution;
+            uniform float time;
+
+            float hash(vec2 p) {
+              return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+            }
+
+            float noise(vec2 p) {
+              vec2 i = floor(p);
+              vec2 f = fract(p);
+              vec2 u = f * f * (3.0 - 2.0 * f);
+              return mix(
+                mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x),
+                mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x),
+                u.y
+              );
+            }
+
+            float fbm(vec2 p) {
+              float value = 0.0;
+              float amp = 0.55;
+              value += amp * noise(p);
+              p = p * 2.03 + vec2(3.1, 1.7);
+              amp *= 0.5;
+              value += amp * noise(p);
+              p = p * 2.01 + vec2(7.4, 2.6);
+              amp *= 0.5;
+              value += amp * noise(p);
+              p = p * 2.02 + vec2(5.9, 8.3);
+              amp *= 0.5;
+              value += amp * noise(p);
+              return value;
+            }
+
+            void main() {
+              vec2 uv = gl_FragCoord.xy / resolution.xy;
+              vec2 p = uv - 0.5;
+              p.x *= resolution.x / resolution.y;
+
+              float t = time * 0.08;
+              float cloudA = fbm(vec2(p.x * 2.1 + t, p.y * 1.9 - t * 0.6));
+              float cloudB = fbm(vec2(p.x * 3.0 - t * 0.5, p.y * 2.6 + t));
+              float cloud = smoothstep(0.25, 0.95, cloudA * 0.7 + cloudB * 0.55);
+
+              float dust = fbm(vec2(p.x * 6.2 + t * 1.4, p.y * 6.0 - t * 0.8));
+              float stars = step(0.9965, hash(floor(uv * resolution.xy * 0.45)));
+              float twinkle = 0.45 + 0.55 * sin(time * 1.6 + p.x * 18.0 + p.y * 21.0);
+              stars *= twinkle;
+
+              vec3 deep = vec3(0.03, 0.06, 0.15);
+              vec3 cyan = vec3(0.06, 0.48, 0.72);
+              vec3 rose = vec3(0.52, 0.18, 0.46);
+
+              vec3 nebula = mix(deep, cyan, cloudA);
+              nebula = mix(nebula, rose, cloudB * 0.55);
+              nebula += dust * 0.08;
+
+              float vignette = smoothstep(1.25, 0.12, length(p));
+              vec3 color = nebula * (0.42 + cloud * 0.7) * vignette;
+              color += vec3(stars) * 0.9;
+
+              gl_FragColor = vec4(color, 1.0);
+            }
+          `,
+          uniforms: {
+            resolution: { value: new THREE.Vector2(width, height) },
+            time: { value: 0 },
+          },
+          side: THREE.DoubleSide,
+        }) as NebulaMaterial,
+      onResize: (material, width, height) => {
+        ;(material as NebulaMaterial).uniforms.resolution.value.set(
+          width,
+          height
+        )
+      },
+      onFrame: (material, deltaSeconds) => {
+        ;(material as NebulaMaterial).uniforms.time.value += deltaSeconds
       },
     }
   }
@@ -410,7 +591,7 @@ function WebGLShaderComponent({
     <canvas
       ref={canvasRef}
       aria-hidden="true"
-      className={`pointer-events-none fixed inset-0 block h-full w-full ${theme === "current" ? "blur-[20px]" : "blur-[7px]"} transition-opacity duration-500 ${themeDefinition.opacityClassName}`}
+      className={`pointer-events-none fixed inset-0 block h-full w-full ${theme === "current" ? "blur-[20px]" : theme === "nebula" ? "blur-[8px]" : theme === "still" || theme === "black" ? "blur-[0px]" : "blur-[7px]"} transition-opacity duration-500 ${themeDefinition.opacityClassName}`}
     />
   )
 }

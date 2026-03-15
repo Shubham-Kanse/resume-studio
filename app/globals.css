@@ -56,6 +56,15 @@
   --input: oklch(0.17 0.02 142);
 }
 
+[data-theme-color="blue"] {
+  --primary: oklch(0.66 0.14 252);
+  --primary-foreground: oklch(0.05 0 0);
+  --ring: oklch(0.66 0.14 252);
+  --accent: oklch(0.2 0.05 252);
+  --border: oklch(0.24 0.03 252);
+  --input: oklch(0.17 0.025 252);
+}
+
 [data-theme-color="purple"] {
   --primary: oklch(0.72 0.2 312);
   --primary-foreground: oklch(0.05 0 0);

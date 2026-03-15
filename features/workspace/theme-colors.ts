@@ -2,6 +2,7 @@ export const THEME_COLOR_STORAGE_KEY = "resume-studio:theme-color"
 
 export const THEME_COLORS = [
   { id: "green", label: "Green" },
+  { id: "blue", label: "Blue" },
   { id: "purple", label: "Purple" },
   { id: "white", label: "White" },
 ] as const

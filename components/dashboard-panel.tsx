@@ -412,7 +412,7 @@ function DashboardPanelComponent({
                         type="button"
                         variant="outline"
                         size="sm"
-                        className="rounded-full px-4"
+                        className="rounded-full px-4 !bg-transparent !shadow-none !backdrop-blur-none hover:!bg-white/[0.05]"
                         onClick={() => onLoadRun(selectedRun)}
                       >
                         Open in workspace
@@ -422,7 +422,7 @@ function DashboardPanelComponent({
                         type="button"
                         variant="outline"
                         size="sm"
-                        className="rounded-full px-4"
+                        className="rounded-full px-4 !bg-transparent !shadow-none !backdrop-blur-none hover:!bg-white/[0.05]"
                         onClick={downloadResumeFile}
                         disabled={!selectedRun.resume_file_data_url}
                       >

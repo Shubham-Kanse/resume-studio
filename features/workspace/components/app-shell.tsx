@@ -383,7 +383,7 @@ const PageHeader = memo(function PageHeader({
         <div className="flex items-stretch gap-2">
           <Button
             type="button"
-            variant={mode === APP_MODE.HOME ? "cool" : "outline"}
+            variant={mode === APP_MODE.HOME ? "cool" : "ghost"}
             size="sm"
             aria-pressed={mode === APP_MODE.HOME}
             onClick={() => onModeChange(APP_MODE.HOME)}
@@ -391,14 +391,14 @@ const PageHeader = memo(function PageHeader({
               "flex-1 rounded-full px-3 text-xs sm:flex-none sm:px-3 sm:text-sm",
               mode === APP_MODE.HOME
                 ? "shadow-[0_10px_24px_color-mix(in_oklab,var(--primary)_28%,transparent)]"
-                : "border-white/14 bg-black/18 text-white/75 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] hover:border-white/20 hover:bg-black/28 hover:text-white"
+                : "!bg-transparent border border-white/14 text-white/75 shadow-none hover:border-white/22 hover:bg-white/[0.05] hover:text-white"
             )}
           >
             <House className="h-4 w-4" />
           </Button>
           <Button
             type="button"
-            variant={mode === APP_MODE.DASHBOARD ? "cool" : "outline"}
+            variant={mode === APP_MODE.DASHBOARD ? "cool" : "ghost"}
             size="sm"
             aria-pressed={mode === APP_MODE.DASHBOARD}
             onClick={() => onModeChange(APP_MODE.DASHBOARD)}
@@ -406,7 +406,7 @@ const PageHeader = memo(function PageHeader({
               "flex-1 rounded-full px-3 text-xs sm:flex-none sm:px-4 sm:text-sm",
               mode === APP_MODE.DASHBOARD
                 ? "shadow-[0_10px_24px_color-mix(in_oklab,var(--primary)_28%,transparent)]"
-                : "border-white/14 bg-black/18 text-white/75 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] hover:border-white/20 hover:bg-black/28 hover:text-white"
+                : "!bg-transparent border border-white/14 text-white/75 shadow-none hover:border-white/22 hover:bg-white/[0.05] hover:text-white"
             )}
           >
             <LayoutDashboard className="h-4 w-4" />
@@ -414,7 +414,7 @@ const PageHeader = memo(function PageHeader({
           </Button>
           <Button
             type="button"
-            variant={mode === TRACKED_RUN_MODE.GENERATE ? "cool" : "outline"}
+            variant={mode === TRACKED_RUN_MODE.GENERATE ? "cool" : "ghost"}
             size="sm"
             aria-pressed={mode === TRACKED_RUN_MODE.GENERATE}
             onClick={() => onModeChange(TRACKED_RUN_MODE.GENERATE)}
@@ -422,7 +422,7 @@ const PageHeader = memo(function PageHeader({
               "flex-1 rounded-full px-3 text-xs sm:flex-none sm:px-4 sm:text-sm",
               mode === TRACKED_RUN_MODE.GENERATE
                 ? "shadow-[0_10px_24px_color-mix(in_oklab,var(--primary)_28%,transparent)]"
-                : "border-white/14 bg-black/18 text-white/75 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] hover:border-white/20 hover:bg-black/28 hover:text-white"
+                : "!bg-transparent border border-white/14 text-white/75 shadow-none hover:border-white/22 hover:bg-white/[0.05] hover:text-white"
             )}
           >
             <FileCode2 className="h-4 w-4" />
@@ -432,7 +432,7 @@ const PageHeader = memo(function PageHeader({
           </Button>
           <Button
             type="button"
-            variant={mode === TRACKED_RUN_MODE.ATS_SCORE ? "cool" : "outline"}
+            variant={mode === TRACKED_RUN_MODE.ATS_SCORE ? "cool" : "ghost"}
             size="sm"
             aria-pressed={mode === TRACKED_RUN_MODE.ATS_SCORE}
             onClick={() => onModeChange(TRACKED_RUN_MODE.ATS_SCORE)}
@@ -440,7 +440,7 @@ const PageHeader = memo(function PageHeader({
               "flex-1 rounded-full px-3 text-xs sm:flex-none sm:px-4 sm:text-sm",
               mode === TRACKED_RUN_MODE.ATS_SCORE
                 ? "shadow-[0_10px_24px_color-mix(in_oklab,var(--primary)_28%,transparent)]"
-                : "border-white/14 bg-black/18 text-white/75 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] hover:border-white/20 hover:bg-black/28 hover:text-white"
+                : "!bg-transparent border border-white/14 text-white/75 shadow-none hover:border-white/22 hover:bg-white/[0.05] hover:text-white"
             )}
           >
             <Gauge className="h-4 w-4" />
@@ -448,7 +448,7 @@ const PageHeader = memo(function PageHeader({
           </Button>
           <Button
             type="button"
-            variant={mode === APP_MODE.JOB_TRACKER ? "cool" : "outline"}
+            variant={mode === APP_MODE.JOB_TRACKER ? "cool" : "ghost"}
             size="sm"
             aria-pressed={mode === APP_MODE.JOB_TRACKER}
             onClick={() => onModeChange(APP_MODE.JOB_TRACKER)}
@@ -456,7 +456,7 @@ const PageHeader = memo(function PageHeader({
               "flex-1 rounded-full px-3 text-xs sm:flex-none sm:px-4 sm:text-sm",
               mode === APP_MODE.JOB_TRACKER
                 ? "shadow-[0_10px_24px_color-mix(in_oklab,var(--primary)_28%,transparent)]"
-                : "border-white/14 bg-black/18 text-white/75 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] hover:border-white/20 hover:bg-black/28 hover:text-white"
+                : "!bg-transparent border border-white/14 text-white/75 shadow-none hover:border-white/22 hover:bg-white/[0.05] hover:text-white"
             )}
           >
             <BriefcaseBusiness className="h-4 w-4" />
