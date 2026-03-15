@@ -130,9 +130,9 @@ const SCORE_BAND_STYLES: Record<
     ring: "rgba(245, 158, 11, 0.9)",
   },
   green: {
-    text: "text-green-500",
-    bar: "bg-green-500",
-    ring: "rgba(34, 197, 94, 0.9)",
+    text: "text-primary",
+    bar: "bg-primary",
+    ring: "var(--primary)",
   },
 }
 

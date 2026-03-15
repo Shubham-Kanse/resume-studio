@@ -47,6 +47,33 @@
   --ring: oklch(0.7 0.15 142);
 }
 
+[data-theme-color="green"] {
+  --primary: oklch(0.7 0.15 142);
+  --primary-foreground: oklch(0.05 0 0);
+  --ring: oklch(0.7 0.15 142);
+  --accent: oklch(0.2 0.05 142);
+  --border: oklch(0.24 0.03 142);
+  --input: oklch(0.17 0.02 142);
+}
+
+[data-theme-color="purple"] {
+  --primary: oklch(0.72 0.2 312);
+  --primary-foreground: oklch(0.05 0 0);
+  --ring: oklch(0.72 0.2 312);
+  --accent: oklch(0.2 0.08 312);
+  --border: oklch(0.24 0.05 312);
+  --input: oklch(0.17 0.04 312);
+}
+
+[data-theme-color="white"] {
+  --primary: oklch(0.98 0 0);
+  --primary-foreground: oklch(0.05 0 0);
+  --ring: oklch(0.98 0 0);
+  --accent: oklch(0.2 0 0);
+  --border: oklch(0.3 0 0);
+  --input: oklch(0.2 0 0);
+}
+
 @theme inline {
   --font-sans: var(--font-geist-sans, ui-sans-serif, system-ui, sans-serif);
   --font-mono: var(--font-geist-mono, ui-monospace, SFMono-Regular, monospace);

@@ -4,7 +4,6 @@ import { memo, useEffect, useMemo, useRef, useState } from "react"
 
 import { formatDistanceToNow } from "date-fns"
 import {
-  BarChart3,
   Calendar,
   Check,
   ChevronRight,
@@ -12,7 +11,6 @@ import {
   Download,
   FileCode2,
   FileText,
-  History,
   Loader2,
   Search,
   Sparkles,
@@ -22,6 +20,7 @@ import {
   X,
 } from "lucide-react"
 
+import { renderATSSection } from "@/components/ats/ats-panel-sections"
 import { Button } from "@/components/ui/button"
 import { extractTrackedRunFileName } from "@/lib/tracked-runs"
 import type { TrackedRunRecord } from "@/lib/tracked-runs"
@@ -46,16 +45,6 @@ interface DashboardPanelProps {
 type HistoryFilter = "all" | "generate" | "ats-score"
 type CopiedField = "jobDescription" | "latex" | null
 
-function initialsFromUser(name: string | null, email: string | null) {
-  const source = name?.trim() || email?.trim() || "RS"
-  const parts = source.split(/[\s@._-]+/).filter(Boolean)
-
-  if (parts.length === 0) return "RS"
-  if (parts.length === 1) return (parts[0] || "RS").slice(0, 2).toUpperCase()
-
-  return `${parts[0]?.[0] || "R"}${parts[1]?.[0] || "S"}`.toUpperCase()
-}
-
 function displayText(text: string | null | undefined) {
   const value = (text || "").trim()
   return value || "Not available"
@@ -76,8 +65,6 @@ function getTrackedRunDisplayAtsScore(run: TrackedRunRecord) {
 function DashboardPanelComponent({
   authAvailable,
   isAuthenticated,
-  userEmail,
-  userName,
   storageNotice,
   historyItems,
   historyLoading,
@@ -130,30 +117,10 @@ function DashboardPanelComponent({
     filteredHistoryItems.find((item) => item.id === selectedRunId) ??
     filteredHistoryItems[0] ??
     null
-  const generatedRuns = historyItems.filter((item) => item.mode === "generate")
-  const atsRuns = historyItems.filter((item) => item.mode === "ats-score")
-  const scoredAtsRuns = atsRuns.filter((item) => item.ats_score)
   const selectedFileName = selectedRun
     ? selectedRun.resume_file_name ||
       extractTrackedRunFileName(selectedRun.label)
     : null
-  const avgAtsScore =
-    scoredAtsRuns.length > 0
-      ? Math.round(
-          (() => {
-            const resolvedScores = scoredAtsRuns
-              .map((item) => getTrackedRunDisplayAtsScore(item))
-              .filter((score): score is number => score !== null)
-
-            if (resolvedScores.length === 0) return 0
-
-            return (
-              resolvedScores.reduce((sum, score) => sum + score, 0) /
-              resolvedScores.length
-            )
-          })()
-        )
-      : null
 
   useEffect(() => {
     if (!pendingDeleteRunId) return
@@ -246,91 +213,35 @@ function DashboardPanelComponent({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="mb-4">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-          <div className="min-w-0">
-            <h2 className="text-xl font-bold text-foreground">Dashboard</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Review account details, past resume generations, saved LaTeX
-              outputs, and ATS score history.
-            </p>
-          </div>
-
-          <section className="w-full max-w-xl rounded-2xl border border-white/8 bg-black/12 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] xl:w-[26rem] xl:flex-shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-white/5 text-sm font-semibold text-foreground">
-                {initialsFromUser(userName, userEmail)}
-              </div>
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-foreground">
-                  {userName || "Resume Studio User"}
-                </p>
-                <p className="truncate text-xs text-muted-foreground">
-                  {userEmail}
-                </p>
-              </div>
-            </div>
-          </section>
+        <div className="min-w-0">
+          <h2 className="text-xl font-bold text-foreground">Dashboard</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            View saved resumes, ATS checks, and recent activity.
+          </p>
         </div>
-
-        {storageNotice ? (
-          <div className="mt-3 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
-            {storageNotice}
-          </div>
-        ) : null}
       </div>
 
-      <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[340px_minmax(0,1fr)]">
+      {storageNotice ? (
+        <div className="mb-4 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+          {storageNotice}
+        </div>
+      ) : null}
+
+      <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
         <div className="flex min-h-0 flex-col gap-4">
-          <section className="grid grid-cols-2 gap-3">
-            <div className="rounded-2xl border border-white/8 bg-black/12 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
-              <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-white/40">
+          <section className="flex min-h-0 flex-1 flex-col rounded-xl border border-white/8 bg-black/10 p-3">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-xs uppercase tracking-[0.14em] text-white/55">
                 <FileCode2 className="h-3.5 w-3.5 text-primary" />
-                Resumes
-              </div>
-              <p className="mt-2 text-[2rem] leading-none font-semibold text-foreground">
-                {generatedRuns.length}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-white/8 bg-black/12 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
-              <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-white/40">
-                <Target className="h-3.5 w-3.5 text-primary" />
-                ATS Checks
-              </div>
-              <p className="mt-2 text-[2rem] leading-none font-semibold text-foreground">
-                {atsRuns.length}
-              </p>
-            </div>
-            <div className="col-span-2 rounded-2xl border border-white/8 bg-black/12 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
-              <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-white/40">
-                <BarChart3 className="h-3.5 w-3.5 text-primary" />
-                Average ATS
-              </div>
-              <p className="mt-2 text-[2rem] leading-none font-semibold text-foreground">
-                {avgAtsScore ?? "--"}
-              </p>
-            </div>
-          </section>
-
-          <section className="flex min-h-0 flex-1 flex-col rounded-2xl border border-white/8 bg-black/12 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
-            <div className="mb-3 flex items-center gap-2">
-              <History className="h-4 w-4 text-primary" />
-              <h3 className="text-sm font-semibold text-foreground">
                 Saved history
-              </h3>
+              </div>
+              <span className="text-[11px] text-muted-foreground">
+                {filteredHistoryItems.length}/{historyItems.length}
+              </span>
             </div>
 
-            <div className="mb-3 rounded-2xl border border-white/8 bg-white/[0.02] px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.18em] text-white/42">
-                  <Search className="h-3.5 w-3.5 text-primary" />
-                  Search
-                </div>
-                <span className="text-[11px] text-muted-foreground">
-                  {filteredHistoryItems.length}/{historyItems.length}
-                </span>
-              </div>
-
-              <div className="mb-2 flex flex-wrap items-center gap-1.5">
+            <div className="mb-3 space-y-2.5 rounded-xl border border-white/8 bg-white/[0.02] p-2.5">
+              <div className="flex flex-wrap items-center gap-1.5">
                 {(
                   [
                     ["all", "All"],
@@ -346,7 +257,7 @@ function DashboardPanelComponent({
                     className={cn(
                       "rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors",
                       historyFilter === value
-                        ? "border-primary/35 bg-primary/12 text-primary shadow-[0_8px_24px_rgba(34,197,94,0.12)]"
+                        ? "border-primary/30 bg-primary/10 text-primary"
                         : "border-white/10 bg-transparent text-muted-foreground hover:border-white/18 hover:text-foreground"
                     )}
                   >
@@ -373,7 +284,7 @@ function DashboardPanelComponent({
                   type="text"
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Search saved runs..."
+                  placeholder="Search runs..."
                   aria-label="Search saved history"
                   className="h-9 w-full rounded-full border border-white/12 bg-black/20 pl-9 pr-3 text-[13px] text-foreground outline-none transition-colors placeholder:text-white/30 focus:border-primary/35 focus:bg-white/[0.04]"
                 />
@@ -416,10 +327,10 @@ function DashboardPanelComponent({
                         }
                       }}
                       className={cn(
-                        "w-full rounded-2xl border px-3 py-2.5 text-left transition-colors outline-none",
+                        "w-full rounded-xl border px-3 py-2.5 text-left transition-colors outline-none",
                         active
-                          ? "border-white/12 bg-white/[0.05] shadow-[0_10px_24px_rgba(0,0,0,0.18)]"
-                          : "border-white/8 bg-black/8 hover:border-white/15 hover:bg-white/[0.04]"
+                          ? "border-primary/28 bg-primary/8"
+                          : "border-white/8 bg-black/8 hover:border-white/15 hover:bg-white/[0.03]"
                       )}
                     >
                       <div className="flex items-start justify-between gap-3">
@@ -476,10 +387,10 @@ function DashboardPanelComponent({
           </section>
         </div>
 
-        <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-white/8 bg-black/12 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+        <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-white/8 bg-black/10 p-4">
           {selectedRun ? (
             <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
-              <div className="border-b border-white/8 pb-4">
+              <div className="border-b border-white/8 pb-3">
                 <div>
                   <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-white/40">
                     {selectedRun.mode === "generate" ? (
@@ -499,7 +410,7 @@ function DashboardPanelComponent({
                     <div className="flex flex-wrap items-center gap-2 xl:justify-end">
                       <Button
                         type="button"
-                        variant="cool"
+                        variant="outline"
                         size="sm"
                         className="rounded-full px-4"
                         onClick={() => onLoadRun(selectedRun)}
@@ -530,13 +441,20 @@ function DashboardPanelComponent({
                         ATS {getTrackedRunDisplayAtsScore(selectedRun) ?? "--"}
                       </span>
                     ) : null}
+                    {selectedRun.ats_score &&
+                    selectedRun.ats_score.targetRoleScore !== null &&
+                    selectedRun.ats_score.targetRoleScore !== undefined ? (
+                      <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-1 font-medium text-primary">
+                        Target {selectedRun.ats_score.targetRoleScore}
+                      </span>
+                    ) : null}
                   </div>
                 </div>
               </div>
 
               {selectedRun.mode === "generate" ? (
                 <div className="scrollbar-dark mt-4 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-1">
-                  <div className="rounded-2xl border border-white/8 bg-black/10 p-4">
+                  <div className="rounded-xl border border-white/8 bg-black/8 p-4">
                     <div className="mb-2 flex items-center justify-between gap-3">
                       <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
                         <FileText className="h-4 w-4 text-primary" />
@@ -596,7 +514,7 @@ function DashboardPanelComponent({
                     </div>
                   ) : null}
 
-                  <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-white/8 bg-black/10 p-4">
+                  <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-white/8 bg-black/8 p-4">
                     <div className="mb-2 flex items-center justify-between gap-3">
                       <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
                         <FileCode2 className="h-4 w-4 text-primary" />
@@ -644,7 +562,7 @@ function DashboardPanelComponent({
               ) : (
                 <div className="scrollbar-dark mt-4 min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
                   <div className="space-y-4">
-                    <div className="rounded-2xl border border-white/8 bg-black/10 p-4">
+                    <div className="rounded-xl border border-white/8 bg-black/8 p-4">
                       <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-foreground">
                         <FileText className="h-4 w-4 text-primary" />
                         Job description
@@ -657,7 +575,7 @@ function DashboardPanelComponent({
                     </div>
                   </div>
                   {selectedRun.extra_instructions ? (
-                    <div className="rounded-2xl border border-white/8 bg-black/10 p-4">
+                    <div className="rounded-xl border border-white/8 bg-black/8 p-4">
                       <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-foreground">
                         <Sparkles className="h-4 w-4 text-primary" />
                         Additional info
@@ -671,54 +589,14 @@ function DashboardPanelComponent({
                   ) : null}
 
                   {selectedRun.ats_score ? (
-                    <div className="space-y-4">
-                      <div className="grid gap-4 md:grid-cols-2">
-                        <div className="rounded-2xl border border-white/8 bg-black/10 p-4">
-                          <div className="text-xs uppercase tracking-[0.18em] text-white/40">
-                            ATS Score
-                          </div>
-                          <div className="mt-3 text-3xl font-semibold text-foreground">
-                            {getTrackedRunDisplayAtsScore(selectedRun) ?? "--"}
-                          </div>
-                        </div>
-                        <div className="rounded-2xl border border-white/8 bg-black/10 p-4">
-                          <div className="text-xs uppercase tracking-[0.18em] text-white/40">
-                            Target role
-                          </div>
-                          <div className="mt-3 text-3xl font-semibold text-foreground">
-                            {selectedRun.ats_score.targetRoleScore ?? "--"}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="grid gap-4 xl:grid-cols-2">
-                        <div className="rounded-2xl border border-white/8 bg-black/10 p-4">
-                          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
-                            <Target className="h-4 w-4 text-primary" />
-                            Strengths
-                          </div>
-                          <ul className="space-y-2 text-sm text-muted-foreground">
-                            {selectedRun.ats_score.keyFindings.strengths
-                              .slice(0, 5)
-                              .map((item, index) => (
-                                <li key={`${item}-${index}`}>• {item}</li>
-                              ))}
-                          </ul>
-                        </div>
-                        <div className="rounded-2xl border border-white/8 bg-black/10 p-4">
-                          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
-                            <BarChart3 className="h-4 w-4 text-primary" />
-                            Weaknesses
-                          </div>
-                          <ul className="space-y-2 text-sm text-muted-foreground">
-                            {selectedRun.ats_score.keyFindings.weaknesses
-                              .slice(0, 5)
-                              .map((item, index) => (
-                                <li key={`${item}-${index}`}>• {item}</li>
-                              ))}
-                          </ul>
-                        </div>
-                      </div>
+                    <div className="rounded-xl border border-white/8 bg-black/8 p-4">
+                      {renderATSSection("breakdown", {
+                        scoreData: selectedRun.ats_score,
+                        resumeContent: selectedRun.resume_content ?? "",
+                        jobDescription: selectedRun.job_description ?? "",
+                        nlpAnalysis: null,
+                        spellMetrics: null,
+                      })}
                     </div>
                   ) : (
                     <div className="rounded-2xl border border-white/8 bg-black/10 p-4 text-sm text-muted-foreground">

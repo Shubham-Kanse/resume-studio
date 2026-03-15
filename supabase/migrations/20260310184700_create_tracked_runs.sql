@@ -26,6 +26,7 @@ create index if not exists tracked_runs_user_created_at_idx
 create or replace function public.set_tracked_runs_updated_at()
 returns trigger
 language plpgsql
+set search_path = public
 as $$
 begin
   new.updated_at = timezone('utc', now());

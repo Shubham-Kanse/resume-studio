@@ -7,12 +7,18 @@ import {
   CheckCircle2,
   Circle,
   Download,
+  Gem,
   Loader2,
+  LogOut,
   Trash2,
   X,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import {
+  SUBSCRIPTION_PLAN,
+  type PlanSnapshot,
+} from "@/features/subscription/types"
 import { cn } from "@/lib/utils"
 
 interface AuthDialogProps {
@@ -21,6 +27,7 @@ interface AuthDialogProps {
   authLoading: boolean
   authMessage: string | null
   userEmail: string | null
+  currentPlan: PlanSnapshot["plan"]
   defaultAcceptedLegal?: boolean
   isExportingData: boolean
   isDeletingAccount: boolean
@@ -36,8 +43,10 @@ interface AuthDialogProps {
   }) => Promise<{ ok: boolean; reason?: "already-registered" | "error" }>
   onOpenPrivacyPolicy: () => void
   onOpenTermsOfService: () => void
+  onOpenPlans: () => void
   onExportData: () => Promise<void>
   onDeleteAccount: (confirmation: string) => Promise<void>
+  onSignOut: () => Promise<void>
 }
 
 type EmailAuthMode = "signin" | "signup"
@@ -100,6 +109,7 @@ export function AuthDialog({
   authLoading,
   authMessage,
   userEmail,
+  currentPlan,
   defaultAcceptedLegal = false,
   isExportingData,
   isDeletingAccount,
@@ -109,10 +119,13 @@ export function AuthDialog({
   onEmailSignUp,
   onOpenPrivacyPolicy,
   onOpenTermsOfService,
+  onOpenPlans,
   onExportData,
   onDeleteAccount,
+  onSignOut,
 }: AuthDialogProps) {
   const [deleteConfirmation, setDeleteConfirmation] = useState("")
+  const [isDeleteSectionOpen, setIsDeleteSectionOpen] = useState(false)
   const [emailAuthMode, setEmailAuthMode] = useState<EmailAuthMode>("signin")
   const [pendingConfirmationEmail, setPendingConfirmationEmail] = useState<
     string | null
@@ -130,6 +143,7 @@ export function AuthDialog({
   useEffect(() => {
     if (!open) {
       setDeleteConfirmation("")
+      setIsDeleteSectionOpen(false)
       setEmailAuthMode("signin")
       setPendingConfirmationEmail(null)
       setFirstName("")
@@ -304,6 +318,35 @@ export function AuthDialog({
               <Button
                 type="button"
                 variant="outline"
+                className={cn(
+                  "w-full justify-center rounded-2xl py-6 text-sm",
+                  currentPlan === SUBSCRIPTION_PLAN.PRO
+                    ? "border-sky-400/24 bg-transparent text-sky-100 hover:border-sky-400/40 hover:bg-sky-500/12 hover:text-sky-50"
+                    : "border-sky-400/22 bg-sky-500/12 text-sky-100 hover:bg-sky-500/18"
+                )}
+                onClick={onOpenPlans}
+                disabled={isExportingData || isDeletingAccount}
+              >
+                <Gem className="h-4 w-4" />
+                {currentPlan === SUBSCRIPTION_PLAN.PRO
+                  ? "Pro member"
+                  : "Upgrade to Pro"}
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full justify-center rounded-2xl border-white/8 bg-black/12 py-6 text-sm hover:bg-white/8"
+                onClick={() => void onSignOut()}
+                disabled={isExportingData || isDeletingAccount}
+              >
+                <LogOut className="h-4 w-4" />
+                Sign out
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
                 className="w-full justify-center rounded-2xl border-white/8 bg-black/12 py-6 text-sm hover:bg-white/8"
                 onClick={() => void onExportData()}
                 disabled={isExportingData || isDeletingAccount}
@@ -316,49 +359,65 @@ export function AuthDialog({
                 Export my data
               </Button>
 
-              <div className="rounded-2xl border border-red-500/18 bg-red-500/8 p-4">
-                <div className="flex items-center gap-2 text-sm font-medium text-red-200">
-                  <Trash2 className="h-4 w-4" />
-                  Delete account
-                </div>
-                <p className="mt-2 text-sm leading-6 text-red-100/75">
-                  This permanently removes your account and deletes cloud-saved
-                  history and job tracker data.
-                </p>
-                <div className="mt-3">
-                  <input
-                    type="text"
-                    value={deleteConfirmation}
-                    onChange={(event) =>
-                      setDeleteConfirmation(event.target.value.toUpperCase())
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full justify-center rounded-2xl border-red-400/20 bg-red-500/10 py-6 text-sm text-red-100 hover:bg-red-500/16"
+                onClick={() => setIsDeleteSectionOpen((current) => !current)}
+                disabled={isExportingData || isDeletingAccount}
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete account
+              </Button>
+
+              <div
+                className={cn(
+                  "overflow-hidden transition-all duration-300 ease-out",
+                  isDeleteSectionOpen
+                    ? "max-h-80 opacity-100"
+                    : "max-h-0 opacity-0"
+                )}
+              >
+                <div className="rounded-2xl border border-red-500/18 bg-red-500/8 p-4">
+                  <p className="text-sm leading-6 text-red-100/75">
+                    This permanently removes your account and deletes
+                    cloud-saved history and job tracker data.
+                  </p>
+                  <div className="mt-3">
+                    <input
+                      type="text"
+                      value={deleteConfirmation}
+                      onChange={(event) =>
+                        setDeleteConfirmation(event.target.value.toUpperCase())
+                      }
+                      className="h-11 w-full rounded-xl border border-white/10 bg-black/20 px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                      placeholder="Type DELETE to confirm"
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className={cn(
+                      "mt-3 w-full justify-center rounded-2xl border-red-400/20 bg-red-500/10 py-6 text-sm text-red-100 hover:bg-red-500/16",
+                      deleteConfirmation !== "DELETE" && "opacity-70"
+                    )}
+                    onClick={() => void onDeleteAccount(deleteConfirmation)}
+                    disabled={
+                      isDeletingAccount ||
+                      isExportingData ||
+                      deleteConfirmation !== "DELETE"
                     }
-                    className="h-11 w-full rounded-xl border border-white/10 bg-black/20 px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground"
-                    placeholder="Type DELETE to confirm"
-                    autoComplete="off"
-                    spellCheck={false}
-                  />
+                  >
+                    {isDeletingAccount ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
+                    Permanently delete account
+                  </Button>
                 </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className={cn(
-                    "mt-3 w-full justify-center rounded-2xl border-red-400/20 bg-red-500/10 py-6 text-sm text-red-100 hover:bg-red-500/16",
-                    deleteConfirmation !== "DELETE" && "opacity-70"
-                  )}
-                  onClick={() => void onDeleteAccount(deleteConfirmation)}
-                  disabled={
-                    isDeletingAccount ||
-                    isExportingData ||
-                    deleteConfirmation !== "DELETE"
-                  }
-                >
-                  {isDeletingAccount ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Trash2 className="h-4 w-4" />
-                  )}
-                  Permanently delete account
-                </Button>
               </div>
             </div>
           </>

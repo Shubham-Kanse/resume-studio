@@ -25,6 +25,7 @@ create unique index if not exists user_subscriptions_provider_customer_id_idx
 create or replace function public.set_user_subscriptions_updated_at()
 returns trigger
 language plpgsql
+set search_path = public
 as $$
 begin
   new.updated_at = timezone('utc', now());

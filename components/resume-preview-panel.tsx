@@ -554,7 +554,7 @@ function ResumePreviewPanelComponent({
             className={cn(
               "rounded-full px-4 whitespace-nowrap",
               activeTab === key
-                ? "shadow-[0_10px_24px_rgba(34,197,94,0.24)]"
+                ? "shadow-[0_10px_24px_color-mix(in_oklab,var(--primary)_24%,transparent)]"
                 : "border-white/8 bg-black/12 text-muted-foreground hover:bg-white/8 hover:text-foreground"
             )}
           >
@@ -623,7 +623,7 @@ function ResumePreviewPanelComponent({
           onClick={convertToPDF}
           disabled={!currentContent || isGenerating || convertingToPDF}
           variant="cool"
-          className="flex-1 rounded-2xl py-5 font-semibold shadow-[0_18px_40px_rgba(34,197,94,0.2)]"
+          className="flex-1 rounded-2xl py-5 font-semibold shadow-[0_18px_40px_color-mix(in_oklab,var(--primary)_20%,transparent)]"
         >
           {convertingToPDF ? (
             <>

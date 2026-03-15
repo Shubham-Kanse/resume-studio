@@ -81,7 +81,7 @@ export function MinimalLoadingStack({
                         className={cn(
                           "absolute rounded-full transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]",
                           isCurrent
-                            ? "bg-primary shadow-[0_0_10px_rgba(34,197,94,0.35)]"
+                            ? "bg-primary shadow-[0_0_10px_color-mix(in_oklab,var(--primary)_35%,transparent)]"
                             : "bg-white/28",
                           showTick
                             ? "h-1 w-1 scale-[0.35] opacity-0"

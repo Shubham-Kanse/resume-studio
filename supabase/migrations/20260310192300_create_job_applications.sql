@@ -24,6 +24,7 @@ create index if not exists job_applications_user_applied_on_idx
 create or replace function public.set_job_applications_updated_at()
 returns trigger
 language plpgsql
+set search_path = public
 as $$
 begin
   new.updated_at = timezone('utc', now());

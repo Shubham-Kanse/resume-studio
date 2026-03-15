@@ -562,7 +562,7 @@ function ATSScorePanelComponent({
                   disabled={!resumeContent.trim() || isExtracting}
                   variant="cool"
                   size="lg"
-                  className="w-full rounded-2xl py-6 text-sm font-semibold tracking-[0.01em] shadow-[0_18px_40px_rgba(34,197,94,0.2)] hover:scale-[1.01] disabled:hover:scale-100"
+                  className="w-full rounded-2xl py-6 text-sm font-semibold tracking-[0.01em] shadow-[0_18px_40px_color-mix(in_oklab,var(--primary)_20%,transparent)] hover:scale-[1.01] disabled:hover:scale-100"
                 >
                   <Gauge className="w-5 h-5" />
                   Get ATS Score
@@ -667,8 +667,8 @@ function ATSScorePanelComponent({
                         ? "text-amber-500"
                         : navScore !== null && navScore >= 9
                           ? isActive
-                            ? "text-green-500"
-                            : "text-green-500"
+                            ? "text-primary"
+                            : "text-primary"
                           : navScore !== null && navScore >= 6
                             ? isActive
                               ? "text-amber-500"
@@ -686,7 +686,7 @@ function ATSScorePanelComponent({
                           className={cn(
                             "flex w-full items-center justify-between gap-3 rounded-2xl border px-3 py-2.5 text-left text-sm transition-colors",
                             isActive
-                              ? "border-primary/35 bg-primary/12 text-primary shadow-[0_8px_24px_rgba(34,197,94,0.12)]"
+                              ? "border-primary/35 bg-primary/12 text-primary shadow-[0_8px_24px_color-mix(in_oklab,var(--primary)_12%,transparent)]"
                               : "border-white/10 bg-transparent text-muted-foreground hover:border-white/18 hover:bg-white/[0.03] hover:text-foreground"
                           )}
                         >

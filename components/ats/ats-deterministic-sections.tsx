@@ -132,13 +132,13 @@ function useAnimatedNumber(
 }
 
 function getScoreRingColor(score: number) {
-  if (score >= 90) return "rgba(34, 197, 94, 0.9)"
+  if (score >= 90) return "var(--primary)"
   if (score >= 60) return "rgba(245, 158, 11, 0.9)"
   return "rgba(239, 68, 68, 0.9)"
 }
 
 function getScoreTextColor(score: number) {
-  if (score >= 90) return "text-green-500"
+  if (score >= 90) return "text-primary"
   if (score >= 60) return "text-amber-500"
   return "text-red-500"
 }
@@ -620,7 +620,7 @@ function QuantifyingImpactSection({
                               </div>
                             ) : (
                               <div className="flex flex-wrap gap-2">
-                                <span className="rounded-full border border-green-500/20 bg-green-500/10 px-3 py-1 text-xs text-green-100">
+                                <span className="rounded-full border border-primary/25 bg-primary/15 px-3 py-1 text-xs text-primary">
                                   Full impact score (10/10)
                                 </span>
                               </div>
@@ -653,7 +653,7 @@ function QuantifyingImpactSection({
                                   key={point.title}
                                   className={
                                     point.status === "strong"
-                                      ? "rounded-xl border border-green-500/20 bg-green-500/10 px-3 py-2"
+                                      ? "rounded-xl border border-primary/25 bg-primary/15 px-3 py-2"
                                       : "rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2"
                                   }
                                 >
@@ -664,7 +664,7 @@ function QuantifyingImpactSection({
                                     <span
                                       className={
                                         point.status === "strong"
-                                          ? "rounded-full border border-green-500/30 bg-green-500/15 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-green-100"
+                                          ? "rounded-full border border-primary/30 bg-primary/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-primary"
                                           : "rounded-full border border-red-500/30 bg-red-500/15 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-red-100"
                                       }
                                     >
@@ -1080,7 +1080,7 @@ function renderBlock(
                 item.tone === "danger"
                   ? "rounded-full border border-red-500/20 bg-red-500/10 px-3 py-1 text-xs text-red-100"
                   : item.tone === "success"
-                    ? "rounded-full border border-green-500/20 bg-green-500/10 px-3 py-1 text-xs text-green-100"
+                    ? "rounded-full border border-primary/25 bg-primary/15 px-3 py-1 text-xs text-primary"
                     : "rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-foreground"
               }
             >
@@ -1093,7 +1093,7 @@ function renderBlock(
                       item.tone === "danger"
                         ? "text-red-200/80"
                         : item.tone === "success"
-                          ? "text-green-200/80"
+                          ? "text-primary/80"
                           : "text-muted-foreground"
                     }
                   >
@@ -1345,7 +1345,7 @@ function renderHighlightedJobDescription(
                 className={cn(
                   "rounded-full px-2 py-0.5",
                   match.tone === "found"
-                    ? "bg-green-500/12 text-green-100"
+                    ? "bg-primary/15 text-primary"
                     : "bg-amber-500/12 text-amber-100"
                 )}
               >

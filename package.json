@@ -11,6 +11,7 @@
     "calibrate:ats": "node --experimental-strip-types scripts/train-ats-calibration.mjs",
     "dev": "next dev",
     "db:migrations:list": "find supabase/migrations -maxdepth 1 -type f | sort",
+    "db:migrations:apply": "./scripts/apply-supabase-migrations.sh",
     "env:check": "node scripts/validate-env.mjs",
     "format": "prettier . --write",
     "format:check": "prettier . --check",

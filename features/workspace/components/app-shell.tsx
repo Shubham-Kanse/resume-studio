@@ -19,10 +19,8 @@ import {
   ChevronDown,
   FileCode2,
   Gauge,
-  Gem,
   House,
   LayoutDashboard,
-  LogOut,
   UserRound,
 } from "lucide-react"
 
@@ -53,6 +51,10 @@ import {
   type AppMode,
   useWorkspaceState,
 } from "@/features/workspace/hooks/use-workspace-state"
+import {
+  THEME_COLORS,
+  type ThemeColor,
+} from "@/features/workspace/theme-colors"
 import {
   APP_MODE,
   WORKSPACE_MODE_COOKIE_NAME,
@@ -362,8 +364,6 @@ const PageHeader = memo(function PageHeader({
   pageContainerClass,
   onModeChange,
   onOpenAuth,
-  onOpenPlans,
-  onSignOut,
 }: {
   mode: AppMode
   userEmail: string | null
@@ -371,8 +371,6 @@ const PageHeader = memo(function PageHeader({
   pageContainerClass: string
   onModeChange: (mode: AppMode) => void
   onOpenAuth: () => void
-  onOpenPlans: () => void
-  onSignOut: () => Promise<void>
 }) {
   return (
     <div
@@ -385,31 +383,30 @@ const PageHeader = memo(function PageHeader({
         <div className="flex items-stretch gap-2">
           <Button
             type="button"
-            variant="cool"
+            variant={mode === APP_MODE.HOME ? "cool" : "outline"}
             size="sm"
             aria-pressed={mode === APP_MODE.HOME}
             onClick={() => onModeChange(APP_MODE.HOME)}
             className={cn(
-              "flex-1 rounded-full px-3 text-xs sm:flex-none sm:px-4 sm:text-sm",
+              "flex-1 rounded-full px-3 text-xs sm:flex-none sm:px-3 sm:text-sm",
               mode === APP_MODE.HOME
-                ? "shadow-[0_10px_24px_rgba(34,197,94,0.28)]"
-                : "opacity-60 saturate-50 shadow-none hover:opacity-100"
+                ? "shadow-[0_10px_24px_color-mix(in_oklab,var(--primary)_28%,transparent)]"
+                : "border-white/14 bg-black/18 text-white/75 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] hover:border-white/20 hover:bg-black/28 hover:text-white"
             )}
           >
             <House className="h-4 w-4" />
-            <span className="text-xs font-medium sm:text-sm">Home</span>
           </Button>
           <Button
             type="button"
-            variant="cool"
+            variant={mode === APP_MODE.DASHBOARD ? "cool" : "outline"}
             size="sm"
             aria-pressed={mode === APP_MODE.DASHBOARD}
             onClick={() => onModeChange(APP_MODE.DASHBOARD)}
             className={cn(
               "flex-1 rounded-full px-3 text-xs sm:flex-none sm:px-4 sm:text-sm",
               mode === APP_MODE.DASHBOARD
-                ? "shadow-[0_10px_24px_rgba(34,197,94,0.28)]"
-                : "opacity-60 saturate-50 shadow-none hover:opacity-100"
+                ? "shadow-[0_10px_24px_color-mix(in_oklab,var(--primary)_28%,transparent)]"
+                : "border-white/14 bg-black/18 text-white/75 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] hover:border-white/20 hover:bg-black/28 hover:text-white"
             )}
           >
             <LayoutDashboard className="h-4 w-4" />
@@ -417,15 +414,15 @@ const PageHeader = memo(function PageHeader({
           </Button>
           <Button
             type="button"
-            variant="cool"
+            variant={mode === TRACKED_RUN_MODE.GENERATE ? "cool" : "outline"}
             size="sm"
             aria-pressed={mode === TRACKED_RUN_MODE.GENERATE}
             onClick={() => onModeChange(TRACKED_RUN_MODE.GENERATE)}
             className={cn(
               "flex-1 rounded-full px-3 text-xs sm:flex-none sm:px-4 sm:text-sm",
               mode === TRACKED_RUN_MODE.GENERATE
-                ? "shadow-[0_10px_24px_rgba(34,197,94,0.28)]"
-                : "opacity-60 saturate-50 shadow-none hover:opacity-100"
+                ? "shadow-[0_10px_24px_color-mix(in_oklab,var(--primary)_28%,transparent)]"
+                : "border-white/14 bg-black/18 text-white/75 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] hover:border-white/20 hover:bg-black/28 hover:text-white"
             )}
           >
             <FileCode2 className="h-4 w-4" />
@@ -435,15 +432,15 @@ const PageHeader = memo(function PageHeader({
           </Button>
           <Button
             type="button"
-            variant="cool"
+            variant={mode === TRACKED_RUN_MODE.ATS_SCORE ? "cool" : "outline"}
             size="sm"
             aria-pressed={mode === TRACKED_RUN_MODE.ATS_SCORE}
             onClick={() => onModeChange(TRACKED_RUN_MODE.ATS_SCORE)}
             className={cn(
               "flex-1 rounded-full px-3 text-xs sm:flex-none sm:px-4 sm:text-sm",
               mode === TRACKED_RUN_MODE.ATS_SCORE
-                ? "shadow-[0_10px_24px_rgba(34,197,94,0.28)]"
-                : "opacity-60 saturate-50 shadow-none hover:opacity-100"
+                ? "shadow-[0_10px_24px_color-mix(in_oklab,var(--primary)_28%,transparent)]"
+                : "border-white/14 bg-black/18 text-white/75 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] hover:border-white/20 hover:bg-black/28 hover:text-white"
             )}
           >
             <Gauge className="h-4 w-4" />
@@ -451,15 +448,15 @@ const PageHeader = memo(function PageHeader({
           </Button>
           <Button
             type="button"
-            variant="cool"
+            variant={mode === APP_MODE.JOB_TRACKER ? "cool" : "outline"}
             size="sm"
             aria-pressed={mode === APP_MODE.JOB_TRACKER}
             onClick={() => onModeChange(APP_MODE.JOB_TRACKER)}
             className={cn(
               "flex-1 rounded-full px-3 text-xs sm:flex-none sm:px-4 sm:text-sm",
               mode === APP_MODE.JOB_TRACKER
-                ? "shadow-[0_10px_24px_rgba(34,197,94,0.28)]"
-                : "opacity-60 saturate-50 shadow-none hover:opacity-100"
+                ? "shadow-[0_10px_24px_color-mix(in_oklab,var(--primary)_28%,transparent)]"
+                : "border-white/14 bg-black/18 text-white/75 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] hover:border-white/20 hover:bg-black/28 hover:text-white"
             )}
           >
             <BriefcaseBusiness className="h-4 w-4" />
@@ -470,44 +467,23 @@ const PageHeader = memo(function PageHeader({
 
       <div className="w-full rounded-full border border-white/12 bg-black/25 p-1.5 shadow-[0_14px_40px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-xl md:w-fit">
         <div className="flex items-stretch gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={onOpenPlans}
-            className={cn(
-              "flex-1 rounded-full px-3 text-xs sm:flex-none sm:px-4 sm:text-sm",
-              currentPlan === SUBSCRIPTION_PLAN.PRO
-                ? "border-sky-400/25 bg-sky-500/12 text-sky-50 hover:bg-sky-500/18"
-                : "border-sky-400/25 bg-sky-500/12 text-sky-50 hover:bg-sky-500/18"
-            )}
-          >
-            <Gem className="h-4 w-4" />
-            <span className="text-xs font-medium sm:text-sm">
-              {currentPlan === SUBSCRIPTION_PLAN.PRO ? "Pro" : "Upgrade"}
-            </span>
-          </Button>
           {userEmail ? (
             <>
               <Button
                 type="button"
-                variant="cool"
+                variant={
+                  currentPlan === SUBSCRIPTION_PLAN.PRO ? "outline" : "cool"
+                }
                 size="sm"
                 onClick={onOpenAuth}
-                className="flex-1 rounded-full px-3 text-xs shadow-[0_10px_24px_rgba(34,197,94,0.28)] sm:flex-none sm:px-4 sm:text-sm"
+                className={cn(
+                  "flex-1 rounded-full px-3 text-xs sm:flex-none sm:px-3 sm:text-sm",
+                  currentPlan === SUBSCRIPTION_PLAN.PRO
+                    ? "border-sky-400/28 bg-sky-500/16 text-sky-50 shadow-[0_10px_24px_rgba(14,165,233,0.24)] hover:bg-sky-500/24"
+                    : "shadow-[0_10px_24px_color-mix(in_oklab,var(--primary)_28%,transparent)]"
+                )}
               >
                 <UserRound className="h-4 w-4" />
-                <span className="text-xs font-medium sm:text-sm">Account</span>
-              </Button>
-              <Button
-                type="button"
-                variant="cool"
-                size="sm"
-                onClick={() => void onSignOut()}
-                className="flex-1 rounded-full px-3 text-xs shadow-[0_10px_24px_rgba(34,197,94,0.28)] sm:flex-none sm:px-4 sm:text-sm"
-              >
-                <LogOut className="h-4 w-4" />
-                <span className="text-xs font-medium sm:text-sm">Logout</span>
               </Button>
             </>
           ) : (
@@ -516,7 +492,7 @@ const PageHeader = memo(function PageHeader({
               variant="cool"
               size="sm"
               onClick={onOpenAuth}
-              className="flex-1 rounded-full px-3 text-xs shadow-[0_10px_24px_rgba(34,197,94,0.28)] sm:flex-none sm:px-4 sm:text-sm"
+              className="flex-1 rounded-full px-3 text-xs shadow-[0_10px_24px_color-mix(in_oklab,var(--primary)_28%,transparent)] sm:flex-none sm:px-4 sm:text-sm"
             >
               <span className="text-xs font-medium sm:text-sm">Login</span>
             </Button>
@@ -940,15 +916,19 @@ const DialogLayer = memo(function DialogLayer({
 const PageFooter = memo(function PageFooter({
   hidden,
   backgroundTheme,
+  themeColor,
   onOpenPrivacy,
   onOpenTerms,
-  onThemeChange,
+  onBackgroundThemeChange,
+  onThemeColorChange,
 }: {
   hidden: boolean
   backgroundTheme: BackgroundTheme
+  themeColor: ThemeColor
   onOpenPrivacy: () => void
   onOpenTerms: () => void
-  onThemeChange: (theme: BackgroundTheme) => void
+  onBackgroundThemeChange: (theme: BackgroundTheme) => void
+  onThemeColorChange: (themeColor: ThemeColor) => void
 }) {
   if (hidden) return null
 
@@ -984,7 +964,47 @@ const PageFooter = memo(function PageFooter({
               <button
                 key={theme.id}
                 type="button"
-                onClick={() => onThemeChange(theme.id)}
+                onMouseDown={(event) => {
+                  event.preventDefault()
+                  onBackgroundThemeChange(theme.id)
+                }}
+                onClick={() => onBackgroundThemeChange(theme.id)}
+                className={cn(
+                  "flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-[11px] transition-colors",
+                  active
+                    ? "bg-white/10 text-white"
+                    : "text-white/55 hover:bg-white/6 hover:text-white/80"
+                )}
+              >
+                <span>{theme.label}</span>
+                <span className="text-[10px] uppercase tracking-[0.18em] text-white/30">
+                  {active ? "Live" : "Theme"}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      </details>
+      <span className="text-white/14">•</span>
+      <details className="group relative">
+        <summary className="list-none">
+          <span className="inline-flex cursor-pointer items-center gap-1.5 text-[11px] text-white/45 transition-colors hover:text-white/70">
+            Theme Color
+            <ChevronDown className="h-3.5 w-3.5 transition-transform duration-200 group-open:rotate-180" />
+          </span>
+        </summary>
+        <div className="absolute bottom-[calc(100%+0.6rem)] right-0 min-w-40 rounded-2xl border border-white/8 bg-[linear-gradient(180deg,rgba(8,12,24,0.1),rgba(3,7,18,0.03))] p-1.5 shadow-[0_18px_56px_rgba(0,0,0,0.18),inset_0_1px_0_rgba(255,255,255,0.1)] backdrop-blur-sm">
+          {THEME_COLORS.map((theme) => {
+            const active = themeColor === theme.id
+            return (
+              <button
+                key={theme.id}
+                type="button"
+                onMouseDown={(event) => {
+                  event.preventDefault()
+                  onThemeColorChange(theme.id)
+                }}
+                onClick={() => onThemeColorChange(theme.id)}
                 className={cn(
                   "flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-[11px] transition-colors",
                   active
@@ -1100,6 +1120,8 @@ export default function AppShell({ initialMode }: { initialMode?: AppMode }) {
     setIsSplitWorkspaceOpen,
     backgroundTheme,
     setBackgroundTheme,
+    themeColor,
+    setThemeColor,
   } = useUIState()
   const pageContainerClass =
     "mx-auto w-full max-w-[1680px] px-4 sm:px-6 lg:px-10 xl:px-12"
@@ -2510,6 +2532,13 @@ export default function AppShell({ initialMode }: { initialMode?: AppMode }) {
     [setBackgroundTheme]
   )
 
+  const handleThemeColorChange = useCallback(
+    (nextThemeColor: ThemeColor) => {
+      setThemeColor(nextThemeColor)
+    },
+    [setThemeColor]
+  )
+
   const handleDismissError = useCallback(() => {
     setError(null)
   }, [setError])
@@ -2652,6 +2681,7 @@ export default function AppShell({ initialMode }: { initialMode?: AppMode }) {
     authLoading,
     authMessage,
     userEmail,
+    currentPlan: planSnapshot.plan,
     defaultAcceptedLegal: hasAcceptedLegal,
     isExportingData,
     isDeletingAccount,
@@ -2661,8 +2691,10 @@ export default function AppShell({ initialMode }: { initialMode?: AppMode }) {
     onEmailSignUp: handleEmailSignUp,
     onOpenPrivacyPolicy: handleOpenPrivacyDialog,
     onOpenTermsOfService: handleOpenTermsDialog,
+    onOpenPlans: () => handleOpenPlanDialog(),
     onExportData: handleExportData,
     onDeleteAccount: handleDeleteAccount,
+    onSignOut: handleSignOut,
   }
 
   const legalDialogProps: LegalDialogProps = {
@@ -2710,8 +2742,6 @@ export default function AppShell({ initialMode }: { initialMode?: AppMode }) {
             pageContainerClass={pageContainerClass}
             onModeChange={handleModeChange}
             onOpenAuth={handleOpenAuthDialog}
-            onOpenPlans={() => handleOpenPlanDialog()}
-            onSignOut={handleSignOut}
           />
 
           <ErrorBanner error={error} onDismiss={handleDismissError} />
@@ -2750,9 +2780,11 @@ export default function AppShell({ initialMode }: { initialMode?: AppMode }) {
       <PageFooter
         hidden={isSplitWorkspaceActive}
         backgroundTheme={backgroundTheme}
+        themeColor={themeColor}
         onOpenPrivacy={handleOpenPrivacyDialog}
         onOpenTerms={handleOpenTermsDialog}
-        onThemeChange={handleBackgroundThemeChange}
+        onBackgroundThemeChange={handleBackgroundThemeChange}
+        onThemeColorChange={handleThemeColorChange}
       />
     </div>
   )

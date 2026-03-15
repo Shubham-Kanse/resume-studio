@@ -7,6 +7,11 @@ import {
   BACKGROUND_THEMES,
   type BackgroundTheme,
 } from "@/features/workspace/background-themes"
+import {
+  isThemeColor,
+  THEME_COLOR_STORAGE_KEY,
+  type ThemeColor,
+} from "@/features/workspace/theme-colors"
 
 export function useUIState() {
   const [authMessage, setAuthMessage] = useState<string | null>(null)
@@ -23,6 +28,7 @@ export function useUIState() {
   const [isSplitWorkspaceOpen, setIsSplitWorkspaceOpen] = useState(false)
   const [backgroundTheme, setBackgroundTheme] =
     useState<BackgroundTheme>("aurora")
+  const [themeColor, setThemeColor] = useState<ThemeColor>("green")
 
   useEffect(() => {
     if (!authMessage) return
@@ -52,6 +58,22 @@ export function useUIState() {
     )
   }, [backgroundTheme])
 
+  useEffect(() => {
+    const storedThemeColor =
+      typeof window !== "undefined"
+        ? window.localStorage.getItem(THEME_COLOR_STORAGE_KEY)
+        : null
+    if (isThemeColor(storedThemeColor)) {
+      setThemeColor(storedThemeColor)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    window.localStorage.setItem(THEME_COLOR_STORAGE_KEY, themeColor)
+    document.documentElement.setAttribute("data-theme-color", themeColor)
+  }, [themeColor])
+
   return {
     authMessage,
     setAuthMessage,
@@ -73,5 +95,7 @@ export function useUIState() {
     setIsSplitWorkspaceOpen,
     backgroundTheme,
     setBackgroundTheme,
+    themeColor,
+    setThemeColor,
   }
 }

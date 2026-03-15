@@ -473,7 +473,7 @@ function JobApplicationsPanelComponent({
                   className={cn(
                     "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
                     stageFilter === "all"
-                      ? "border-primary/35 bg-primary/12 text-primary shadow-[0_8px_24px_rgba(34,197,94,0.12)]"
+                      ? "border-primary/35 bg-primary/12 text-primary shadow-[0_8px_24px_color-mix(in_oklab,var(--primary)_12%,transparent)]"
                       : "border-white/12 bg-black/20 text-muted-foreground hover:border-white/20 hover:text-foreground"
                   )}
                 >
@@ -488,7 +488,7 @@ function JobApplicationsPanelComponent({
                     className={cn(
                       "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
                       stageFilter === stage
-                        ? "border-primary/35 bg-primary/12 text-primary shadow-[0_8px_24px_rgba(34,197,94,0.12)]"
+                        ? "border-primary/35 bg-primary/12 text-primary shadow-[0_8px_24px_color-mix(in_oklab,var(--primary)_12%,transparent)]"
                         : "border-white/12 bg-black/20 text-muted-foreground hover:border-white/20 hover:text-foreground"
                     )}
                   >

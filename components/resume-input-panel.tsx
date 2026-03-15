@@ -357,7 +357,7 @@ export function ResumeInputPanel({
           disabled={!isValid || isGenerating || isExtracting}
           variant="cool"
           size="lg"
-          className="w-full rounded-2xl py-6 text-sm font-semibold tracking-[0.01em] shadow-[0_18px_40px_rgba(34,197,94,0.2)] hover:scale-[1.01] disabled:hover:scale-100"
+          className="w-full rounded-2xl py-6 text-sm font-semibold tracking-[0.01em] shadow-[0_18px_40px_color-mix(in_oklab,var(--primary)_20%,transparent)] hover:scale-[1.01] disabled:hover:scale-100"
         >
           {isGenerating ? (
             <>
